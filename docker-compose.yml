@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: agoals-db
+    environment:
+      POSTGRES_DB: agoals
+      POSTGRES_USER: agoals
+      POSTGRES_PASSWORD: agoals_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - agoals-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agoals -d agoals"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  agoals-db-data:

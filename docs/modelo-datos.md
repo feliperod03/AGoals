@@ -1,0 +1,40 @@
+# Modelo de datos
+
+Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicial.sql`.
+
+## Entidades
+| Entidad | Para qué sirve |
+|---|---|
+| Usuario | Dueño de todos los datos (`usuario_id` en cada tabla) |
+| Tarea | Actividad de agenda, paso de proyecto o subobjetivo. Jerárquica (`padre_id`) |
+| Proyecto | Agrupa tareas e ideas. Jerárquico. Pertenece como máximo a un Objetivo |
+| Objetivo | Meta con prioridad, subobjetivos (jerárquico) e ideas |
+| Idea | Libre, o ligada a un proyecto o a un objetivo (no a ambos) |
+| Evento | Cita o compromiso con fecha-hora de inicio y fin |
+| Recordatorio | Aviso de una tarea o de un evento (o suelto), por canal APP o CORREO |
+
+## Enums (texto en la base de datos)
+- Prioridad: BAJA, MEDIA, ALTA
+- Estado (tarea, proyecto, objetivo): PENDIENTE, EN_PROGRESO, EN_PAUSA, CANCELADO, HECHO
+- EstadoIdea: PLANTEADA, CONCLUIDA
+- Canal: APP, CORREO
+
+## Relaciones (cardinalidad)
+- Usuario 1 — 0..n Tarea, Proyecto, Objetivo, Idea, Evento, Recordatorio
+- Tarea 0..1 padre — 0..n subtareas
+- Proyecto 0..1 padre — 0..n subproyectos
+- Objetivo 0..1 padre — 0..n subobjetivos
+- Proyecto 0..1 — 0..n Tarea
+- Objetivo 0..1 — 0..n Tarea
+- Objetivo 0..1 — 0..n Proyecto
+- Proyecto 0..1 — 0..n Idea
+- Objetivo 0..1 — 0..n Idea
+- Tarea 0..1 — 0..1 Recordatorio
+- Evento 0..1 — 0..1 Recordatorio
+
+## Reglas de negocio
+- Tarea sin `fecha` = pendiente sin agendar. Las pendientes de proyecto sin fecha alimentan la "recomendación".
+- `hora_inicio` exige `fecha`; `hora_fin` exige `hora_inicio` y debe ser posterior.
+- Posponer una tarea: aumenta `veces_pospuesta` y cambia `fecha` (por defecto al día siguiente).
+- Una idea pasa a CONCLUIDA con `conclusion` y `fecha_cierre`, y queda como registro (trazabilidad).
+- Borrar un proyecto u objetivo no borra sus tareas ni ideas: quedan sueltas (`SET NULL`). Borrar un padre jerárquico borra su subárbol.
