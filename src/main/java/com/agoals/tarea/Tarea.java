@@ -1,5 +1,8 @@
 package com.agoals.tarea;
 
+import com.agoals.common.Estado;
+import com.agoals.common.Prioridad;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,6 +31,10 @@ public class Tarea {
 
 	@Column(name = "padre_id")
 	private Long padreId;
+
+	// Id simple (sin @ManyToOne): el módulo tarea no conoce la entidad Proyecto.
+	@Column(name = "proyecto_id")
+	private Long proyectoId;
 
 	@Column(nullable = false, length = 200)
 	private String titulo;
@@ -68,6 +75,9 @@ public class Tarea {
 
 	public Long getPadreId() { return padreId; }
 	public void setPadreId(Long padreId) { this.padreId = padreId; }
+
+	public Long getProyectoId() { return proyectoId; }
+	public void setProyectoId(Long proyectoId) { this.proyectoId = proyectoId; }
 
 	public String getTitulo() { return titulo; }
 	public void setTitulo(String titulo) { this.titulo = titulo; }

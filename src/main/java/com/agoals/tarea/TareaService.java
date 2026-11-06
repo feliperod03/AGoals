@@ -1,5 +1,7 @@
 package com.agoals.tarea;
 
+import com.agoals.common.Estado;
+
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
@@ -111,6 +113,29 @@ public class TareaService {
 		return aRespuesta(repository.save(tarea));
 	}
 
+	// --- Soporte para el módulo proyecto ---
+	// Estos métodos NO validan que el proyecto exista: lo hace quien llama (ProyectoService).
+	// La FK de la base queda como red de seguridad.
+
+	/** Asigna la tarea a un proyecto, o la deja sin proyecto si proyectoId es null. */
+	public TareaResponse asignarProyecto(Long tareaId, Long proyectoId) {
+		Tarea tarea = buscar(tareaId);
+		tarea.setProyectoId(proyectoId);
+		return aRespuesta(repository.save(tarea));
+	}
+
+	@Transactional(readOnly = true)
+	public List<TareaResponse> listarPorProyecto(Long proyectoId) {
+		return repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(USUARIO_ID, proyectoId).stream()
+				.map(this::aRespuesta)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public boolean existenTareasDelProyecto(Long proyectoId) {
+		return repository.existsByUsuarioIdAndProyectoId(USUARIO_ID, proyectoId);
+	}
+
 	private Tarea buscar(Long id) {
 		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
 				.orElseThrow(() -> new TareaNoEncontradaException(id));
@@ -150,7 +175,7 @@ public class TareaService {
 
 	private TareaResponse aRespuesta(Tarea t) {
 		return new TareaResponse(t.getId(), t.getTitulo(), t.getDescripcion(), t.getEstado(),
-				t.getPrioridad(), t.getFecha(), t.getHoraInicio(), t.getHoraFin(), t.getPadreId(),
+				t.getPrioridad(), t.getFecha(), t.getHoraInicio(), t.getHoraFin(), t.getPadreId(), t.getProyectoId(),
 				t.getVecesPospuesta(), t.getFechaCreacion());
 	}
 }

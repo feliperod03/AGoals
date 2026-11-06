@@ -1,5 +1,8 @@
 package com.agoals.tarea;
 
+import com.agoals.common.Estado;
+import com.agoals.common.Prioridad;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -19,6 +22,9 @@ class TareaRepositoryTest {
 
 	@Autowired
 	TareaRepository repository;
+
+	@Autowired
+	jakarta.persistence.EntityManager em;
 
 	private Tarea nueva(String titulo) {
 		Tarea t = new Tarea();
@@ -63,6 +69,31 @@ class TareaRepositoryTest {
 				.extracting(Tarea::getTitulo)
 				.containsExactly("temprano", "tarde", "suelta");
 		assertThat(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(2L, dia)).isEmpty();
+	}
+
+	@Test
+	void unProyectoIdInexistenteViolaLaFk() {
+		Tarea t = nueva("huérfana");
+		t.setProyectoId(999_999L);
+
+		assertThatThrownBy(() -> repository.saveAndFlush(t)).isInstanceOf(Exception.class);
+	}
+
+	@Test
+	void buscaYDetectaTareasPorProyecto() {
+		// El módulo proyecto todavía no está en este tramo: se inserta la fila con SQL nativo.
+		Long proyectoId = ((Number) em.createNativeQuery(
+				"INSERT INTO proyecto (usuario_id, nombre) VALUES (1, 'p') RETURNING id").getSingleResult())
+				.longValue();
+		Tarea dentro = nueva("dentro");
+		dentro.setProyectoId(proyectoId);
+		repository.saveAndFlush(dentro);
+		repository.saveAndFlush(nueva("suelta"));
+
+		assertThat(repository.existsByUsuarioIdAndProyectoId(1L, proyectoId)).isTrue();
+		assertThat(repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(1L, proyectoId))
+				.extracting(Tarea::getTitulo).containsExactly("dentro");
+		assertThat(repository.existsByUsuarioIdAndProyectoId(2L, proyectoId)).isFalse();
 	}
 
 	@Test

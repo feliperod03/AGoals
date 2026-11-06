@@ -1,7 +1,7 @@
 package com.agoals.tarea.dto;
 
-import com.agoals.tarea.Estado;
-import com.agoals.tarea.Prioridad;
+import com.agoals.common.Estado;
+import com.agoals.common.Prioridad;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 

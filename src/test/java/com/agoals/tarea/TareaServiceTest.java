@@ -1,5 +1,8 @@
 package com.agoals.tarea;
 
+import com.agoals.common.Estado;
+import com.agoals.common.Prioridad;
+
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
@@ -367,5 +370,56 @@ class TareaServiceTest {
 		assertThatThrownBy(() -> service.posponer(1L, new PosponerRequest(DIA.minusDays(1))))
 				.isInstanceOf(TareaInvalidaException.class);
 		verify(repository, never()).save(any());
+	}
+
+	// ---- Soporte para proyecto ----
+
+	@Test
+	void asignarProyectoGuardaElProyectoIdYLoDevuelve() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		TareaResponse r = service.asignarProyecto(1L, 7L);
+
+		assertThat(t.getProyectoId()).isEqualTo(7L);
+		assertThat(r.proyectoId()).isEqualTo(7L);
+	}
+
+	@Test
+	void asignarProyectoNullDejaLaTareaSinProyecto() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		t.setProyectoId(7L);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.asignarProyecto(1L, null).proyectoId()).isNull();
+	}
+
+	@Test
+	void asignarProyectoAUnaTareaInexistenteFalla() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.asignarProyecto(1L, 7L)).isInstanceOf(TareaNoEncontradaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void listarPorProyectoDevuelveLasTareasDelRepository() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		t.setProyectoId(7L);
+		when(repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID, 7L))
+				.thenReturn(List.of(t));
+
+		assertThat(service.listarPorProyecto(7L)).extracting(TareaResponse::proyectoId).containsExactly(7L);
+	}
+
+	@Test
+	void existenTareasDelProyectoDelegaEnElRepository() {
+		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 7L)).thenReturn(true);
+		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 8L)).thenReturn(false);
+
+		assertThat(service.existenTareasDelProyecto(7L)).isTrue();
+		assertThat(service.existenTareasDelProyecto(8L)).isFalse();
 	}
 }
