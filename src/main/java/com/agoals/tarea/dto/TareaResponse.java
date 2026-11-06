@@ -18,6 +18,7 @@ public record TareaResponse(
 		LocalTime horaFin,
 		Long padreId,
 		Long proyectoId,
+		Long objetivoId,
 		int vecesPospuesta,
 		OffsetDateTime fechaCreacion) {
 }

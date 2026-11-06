@@ -43,7 +43,7 @@ class TareaControllerTest {
 	TareaService service;
 
 	private static TareaResponse respuesta(Long id, String titulo) {
-		return new TareaResponse(id, titulo, null, Estado.PENDIENTE, null, null, null, null, null, null, 0, null);
+		return new TareaResponse(id, titulo, null, Estado.PENDIENTE, null, null, null, null, null, null, null, 0, null);
 	}
 
 	@Test
@@ -165,7 +165,7 @@ class TareaControllerTest {
 	@Test
 	void patchHechaDevuelve200() throws Exception {
 		when(service.marcarHecha(1L)).thenReturn(
-				new TareaResponse(1L, "a", null, Estado.HECHO, null, null, null, null, null, null, 0, null));
+				new TareaResponse(1L, "a", null, Estado.HECHO, null, null, null, null, null, null, null, 0, null));
 
 		mvc.perform(patch("/api/tareas/1/hecha"))
 				.andExpect(status().isOk())
@@ -192,7 +192,7 @@ class TareaControllerTest {
 	void patchPosponerSinBodyDevuelve200() throws Exception {
 		LocalDate manana = LocalDate.of(2026, 11, 7);
 		when(service.posponer(eq(1L), isNull())).thenReturn(
-				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, manana, null, null, null, null, 1, null));
+				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, manana, null, null, null, null, null, 1, null));
 
 		mvc.perform(patch("/api/tareas/1/posponer"))
 				.andExpect(status().isOk())
@@ -204,7 +204,7 @@ class TareaControllerTest {
 	void patchPosponerConFechaDevuelve200() throws Exception {
 		LocalDate destino = LocalDate.of(2026, 11, 20);
 		when(service.posponer(eq(1L), eq(new PosponerRequest(destino)))).thenReturn(
-				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, destino, null, null, null, null, 1, null));
+				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, destino, null, null, null, null, null, 1, null));
 
 		mvc.perform(patch("/api/tareas/1/posponer").contentType(MediaType.APPLICATION_JSON)
 						.content("{\"fecha\":\"2026-11-20\"}"))

@@ -64,7 +64,7 @@ class ProyectoServiceTest {
 	}
 
 	private static TareaResponse tareaEn(Long proyectoId) {
-		return new TareaResponse(5L, "t", null, Estado.PENDIENTE, null, null, null, null, null, proyectoId, 0, null);
+		return new TareaResponse(5L, "t", null, Estado.PENDIENTE, null, null, null, null, null, proyectoId, null, 0, null);
 	}
 
 	// ---- Crear ----
@@ -281,6 +281,17 @@ class ProyectoServiceTest {
 		service.eliminar(1L);
 
 		verify(repository).delete(p);
+	}
+
+	// ---- Soporte para objetivo ----
+
+	@Test
+	void existenProyectosDelObjetivoDelegaEnElRepository() {
+		when(repository.existsByObjetivoIdAndUsuarioId(3L, U)).thenReturn(true);
+		when(repository.existsByObjetivoIdAndUsuarioId(4L, U)).thenReturn(false);
+
+		assertThat(service.existenProyectosDelObjetivo(3L)).isTrue();
+		assertThat(service.existenProyectosDelObjetivo(4L)).isFalse();
 	}
 
 	// ---- Tareas del proyecto ----

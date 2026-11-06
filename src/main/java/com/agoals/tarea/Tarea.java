@@ -32,9 +32,12 @@ public class Tarea {
 	@Column(name = "padre_id")
 	private Long padreId;
 
-	// Id simple (sin @ManyToOne): el módulo tarea no conoce la entidad Proyecto.
+	// Ids simples (sin @ManyToOne): el módulo tarea no conoce las entidades Proyecto ni Objetivo.
 	@Column(name = "proyecto_id")
 	private Long proyectoId;
+
+	@Column(name = "objetivo_id")
+	private Long objetivoId;
 
 	@Column(nullable = false, length = 200)
 	private String titulo;
@@ -78,6 +81,9 @@ public class Tarea {
 
 	public Long getProyectoId() { return proyectoId; }
 	public void setProyectoId(Long proyectoId) { this.proyectoId = proyectoId; }
+
+	public Long getObjetivoId() { return objetivoId; }
+	public void setObjetivoId(Long objetivoId) { this.objetivoId = objetivoId; }
 
 	public String getTitulo() { return titulo; }
 	public void setTitulo(String titulo) { this.titulo = titulo; }

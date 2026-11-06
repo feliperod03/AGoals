@@ -36,6 +36,11 @@ Reglas:
 5. El esquema se cambia SOLO con migraciones Flyway nuevas (`V2__...sql`, `V3__...sql`). Nunca editar una migración ya aplicada.
 6. Hibernate está en `ddl-auto=validate`: las entidades deben coincidir con el esquema.
 
+Dependencias entre módulos (en un solo sentido, sin ciclos de beans):
+- `proyecto → tarea`: `TareaService` no conoce a `ProyectoService`; los métodos de tarea para proyecto/objetivo no validan que existan, lo hace quien llama.
+- `proyecto ↔ objetivo` sería circular (Proyecto valida que su `objetivoId` exista; Objetivo necesita saber si tiene proyectos para el 409 al borrar). Se resuelve con `ObjetivoConsultaService`: un service de solo lectura (`validarExiste`) que usa únicamente `ObjetivoRepository`. Así `ProyectoService → ObjetivoConsultaService` y `ObjetivoService → ProyectoService`, sin ciclo.
+- Las comprobaciones de jerarquía (padre existente, sin ciclos) están en `common.Jerarquia`; cada módulo pasa cómo buscar y qué excepción lanzar.
+
 ## Modelo de datos
 Ver `docs/modelo-datos.md` (entidades, relaciones, enums y reglas) y la migración `src/main/resources/db/migration/V1__esquema_inicial.sql`.
 Resumen de la idea central: una sola entidad `Tarea` cubre actividad de agenda, paso de proyecto y subobjetivo.

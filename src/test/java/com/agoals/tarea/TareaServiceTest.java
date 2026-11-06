@@ -415,6 +415,57 @@ class TareaServiceTest {
 	}
 
 	@Test
+	void asignarObjetivoGuardaElObjetivoIdSinTocarElProyecto() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		t.setProyectoId(7L);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		TareaResponse r = service.asignarObjetivo(1L, 3L);
+
+		assertThat(t.getObjetivoId()).isEqualTo(3L);
+		assertThat(r.objetivoId()).isEqualTo(3L);
+		assertThat(r.proyectoId()).isEqualTo(7L);
+	}
+
+	@Test
+	void asignarObjetivoNullDejaLaTareaSinObjetivo() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		t.setObjetivoId(3L);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.asignarObjetivo(1L, null).objetivoId()).isNull();
+	}
+
+	@Test
+	void asignarObjetivoAUnaTareaInexistenteFalla() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.asignarObjetivo(1L, 3L)).isInstanceOf(TareaNoEncontradaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void listarPorObjetivoDevuelveLasTareasDelRepository() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		t.setObjetivoId(3L);
+		when(repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID, 3L))
+				.thenReturn(List.of(t));
+
+		assertThat(service.listarPorObjetivo(3L)).extracting(TareaResponse::objetivoId).containsExactly(3L);
+	}
+
+	@Test
+	void existenTareasDelObjetivoDelegaEnElRepository() {
+		when(repository.existsByUsuarioIdAndObjetivoId(TareaService.USUARIO_ID, 3L)).thenReturn(true);
+		when(repository.existsByUsuarioIdAndObjetivoId(TareaService.USUARIO_ID, 4L)).thenReturn(false);
+
+		assertThat(service.existenTareasDelObjetivo(3L)).isTrue();
+		assertThat(service.existenTareasDelObjetivo(4L)).isFalse();
+	}
+
+	@Test
 	void existenTareasDelProyectoDelegaEnElRepository() {
 		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 7L)).thenReturn(true);
 		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 8L)).thenReturn(false);

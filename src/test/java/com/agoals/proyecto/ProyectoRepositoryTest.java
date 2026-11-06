@@ -75,6 +75,19 @@ class ProyectoRepositoryTest {
 	}
 
 	@Test
+	void existsByObjetivoIdDetectaProyectosDelObjetivo() {
+		Long obj = objetivo();
+		Long otroObj = objetivo();
+		Proyecto p = nuevo("del objetivo");
+		p.setObjetivoId(obj);
+		repository.saveAndFlush(p);
+
+		assertThat(repository.existsByObjetivoIdAndUsuarioId(obj, 1L)).isTrue();
+		assertThat(repository.existsByObjetivoIdAndUsuarioId(otroObj, 1L)).isFalse();
+		assertThat(repository.existsByObjetivoIdAndUsuarioId(obj, 2L)).isFalse();
+	}
+
+	@Test
 	void filtraPorEstadoYObjetivoEnLasCuatroCombinaciones() {
 		Long obj = objetivo();
 		Long otroObj = objetivo();

@@ -97,6 +97,31 @@ class TareaRepositoryTest {
 	}
 
 	@Test
+	void buscaYDetectaTareasPorObjetivo() {
+		// El módulo objetivo todavía no está en este tramo: se inserta la fila con SQL nativo.
+		Long objetivoId = ((Number) em.createNativeQuery(
+				"INSERT INTO objetivo (usuario_id, nombre) VALUES (1, 'o') RETURNING id").getSingleResult())
+				.longValue();
+		Tarea dentro = nueva("dentro");
+		dentro.setObjetivoId(objetivoId);
+		repository.saveAndFlush(dentro);
+		repository.saveAndFlush(nueva("suelta"));
+
+		assertThat(repository.existsByUsuarioIdAndObjetivoId(1L, objetivoId)).isTrue();
+		assertThat(repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(1L, objetivoId))
+				.extracting(Tarea::getTitulo).containsExactly("dentro");
+		assertThat(repository.existsByUsuarioIdAndObjetivoId(2L, objetivoId)).isFalse();
+	}
+
+	@Test
+	void unObjetivoIdInexistenteViolaLaFk() {
+		Tarea t = nueva("huérfana");
+		t.setObjetivoId(999_999L);
+
+		assertThatThrownBy(() -> repository.saveAndFlush(t)).isInstanceOf(Exception.class);
+	}
+
+	@Test
 	void laBaseRechazaHoraSinFecha() {
 		Tarea t = nueva("invalida");
 		t.setHoraInicio(LocalTime.of(9, 0));

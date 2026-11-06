@@ -48,6 +48,12 @@ public class ProyectoService {
 				.toList();
 	}
 
+	/** Soporte para ObjetivoService (409 al borrar un objetivo que tiene proyectos). */
+	@Transactional(readOnly = true)
+	public boolean existenProyectosDelObjetivo(Long objetivoId) {
+		return repository.existsByObjetivoIdAndUsuarioId(objetivoId, USUARIO_ID);
+	}
+
 	public ProyectoResponse actualizar(Long id, ProyectoRequest request) {
 		Proyecto proyecto = buscar(id);
 		validar(request, id);

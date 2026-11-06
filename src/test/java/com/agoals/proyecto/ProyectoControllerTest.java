@@ -46,7 +46,7 @@ class ProyectoControllerTest {
 	}
 
 	private static TareaResponse tarea(Long id, Long proyectoId) {
-		return new TareaResponse(id, "t", null, Estado.PENDIENTE, null, null, null, null, null, proyectoId, 0, null);
+		return new TareaResponse(id, "t", null, Estado.PENDIENTE, null, null, null, null, null, proyectoId, null, 0, null);
 	}
 
 	// ---- Crear ----

@@ -14,6 +14,8 @@ public interface ProyectoRepository extends JpaRepository<Proyecto, Long> {
 
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
+	boolean existsByObjetivoIdAndUsuarioId(Long objetivoId, Long usuarioId);
+
 	// Filtros opcionales: un parámetro null significa "no filtrar por este campo".
 	@Query("""
 			SELECT p FROM Proyecto p
