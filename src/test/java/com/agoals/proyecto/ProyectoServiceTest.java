@@ -2,6 +2,8 @@ package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
+import com.agoals.objetivo.ObjetivoConsultaService;
+import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaService;
@@ -12,7 +14,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,6 +38,9 @@ class ProyectoServiceTest {
 
 	@Mock
 	TareaService tareaService;
+
+	@Mock
+	ObjetivoConsultaService objetivoConsultaService;
 
 	@InjectMocks
 	ProyectoService service;
@@ -111,21 +116,54 @@ class ProyectoServiceTest {
 	}
 
 	@Test
-	void crearConObjetivoInexistenteSeTraduceA400() {
-		when(repository.saveAndFlush(any(Proyecto.class))).thenThrow(new DataIntegrityViolationException("fk"));
+	void crearConObjetivoExistenteLoValidaYLoGuarda() {
+		when(repository.saveAndFlush(any(Proyecto.class))).thenAnswer(inv -> inv.getArgument(0));
 
-		assertThatThrownBy(() -> service.crear(request(null, 77L)))
-				.isInstanceOf(ProyectoInvalidoException.class)
-				.hasMessageContaining("objetivo")
-				.hasMessageContaining("77");
+		ProyectoResponse r = service.crear(request(null, 3L));
+
+		verify(objetivoConsultaService).validarExiste(3L);
+		assertThat(r.objetivoId()).isEqualTo(3L);
 	}
 
 	@Test
-	void unaViolacionDeIntegridadSinObjetivoNoSeDisfraza() {
-		when(repository.saveAndFlush(any(Proyecto.class))).thenThrow(new DataIntegrityViolationException("otra"));
+	void crearConObjetivoInexistenteDa400YNoGuarda() {
+		doThrow(new ObjetivoInvalidoException("El objetivo no existe: 77"))
+				.when(objetivoConsultaService).validarExiste(77L);
 
-		assertThatThrownBy(() -> service.crear(request(null, null)))
-				.isInstanceOf(DataIntegrityViolationException.class);
+		assertThatThrownBy(() -> service.crear(request(null, 77L)))
+				.isInstanceOf(ObjetivoInvalidoException.class)
+				.hasMessage("El objetivo no existe: 77");
+		verify(repository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void crearSinObjetivoNoConsultaObjetivos() {
+		when(repository.saveAndFlush(any(Proyecto.class))).thenAnswer(inv -> inv.getArgument(0));
+
+		service.crear(request(null, null));
+
+		verifyNoInteractions(objetivoConsultaService);
+	}
+
+	@Test
+	void actualizarConObjetivoInexistenteDa400YNoGuarda() {
+		existe(proyecto(1, null));
+		doThrow(new ObjetivoInvalidoException("El objetivo no existe: 77"))
+				.when(objetivoConsultaService).validarExiste(77L);
+
+		assertThatThrownBy(() -> service.actualizar(1L, request(null, 77L)))
+				.isInstanceOf(ObjetivoInvalidoException.class);
+		verify(repository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void actualizarQuitandoElObjetivoNoConsultaObjetivos() {
+		Proyecto p = existe(proyecto(1, null));
+		p.setObjetivoId(3L);
+		when(repository.saveAndFlush(p)).thenReturn(p);
+
+		assertThat(service.actualizar(1L, request(null, null)).objetivoId()).isNull();
+		verifyNoInteractions(objetivoConsultaService);
 	}
 
 	// ---- Obtener / listar ----

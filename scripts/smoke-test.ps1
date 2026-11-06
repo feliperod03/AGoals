@@ -1,17 +1,20 @@
-# Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer) y proyectos
-# (jerarquia, ciclos, asignar tareas, borrado con 409).
+# Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
+# (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
+# proyectos y tareas ligados, borrado con 409 segun el motivo).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
-# Crea tareas con fecha 2099-12-31 y proyectos "smoke-*", y los borra al terminar.
+# Crea tareas con fecha 2099-12-31, y proyectos y objetivos "smoke-*", y los borra al terminar.
 param(
     [string]$Base = "http://localhost:8080/api/tareas",
-    [string]$BaseProyectos = "http://localhost:8080/api/proyectos"
+    [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
+    [string]$BaseObjetivos = "http://localhost:8080/api/objetivos"
 )
 
 $fecha = "2099-12-31"
 $fallos = 0
 $ids = @()
 $proyectoIds = @()
+$objetivoIds = @()
 
 function Llamar($metodo, $url, $body = $null) {
     $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
@@ -24,7 +27,19 @@ function Llamar($metodo, $url, $body = $null) {
     } catch {
         $status = 0
         if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
-        return @{ Status = $status; Raw = ""; Json = $null }
+        # En los errores, Raw trae el cuerpo de la respuesta (el mensaje del API) si PowerShell lo expone.
+        $raw = ""
+        if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+            $raw = [string]$_.ErrorDetails.Message
+        } elseif ($_.Exception.Response) {
+            # Windows PowerShell 5.1: el cuerpo del error hay que leerlo del stream de la respuesta.
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $raw = $reader.ReadToEnd()
+                $reader.Close()
+            } catch { }
+        }
+        return @{ Status = $status; Raw = $raw; Json = $null }
     }
 }
 
@@ -104,7 +119,7 @@ try {
     $pc3 = Llamar "POST" $BaseProyectos '{"nombre":"smoke-X","padreId":999999}'
     Verificar "crear con padre inexistente -> 400" ($pc3.Status -eq 400) "status $($pc3.Status)"
     $pc4 = Llamar "POST" $BaseProyectos '{"nombre":"smoke-Y","objetivoId":999999}'
-    Verificar "crear con objetivoId inexistente -> 400" ($pc4.Status -eq 400) "status $($pc4.Status)"
+    Verificar "crear con objetivoId inexistente -> 400 'El objetivo no existe'" (($pc4.Status -eq 400) -and ($pc4.Raw -match "El objetivo no existe: 999999")) "status $($pc4.Status) $($pc4.Raw)"
     $pc5 = Llamar "GET" ($BaseProyectos + "/999999")
     Verificar "proyecto inexistente -> 404" ($pc5.Status -eq 404) "status $($pc5.Status)"
 
@@ -138,6 +153,71 @@ try {
     Verificar "borrar B vacio -> 204" ($d3.Status -eq 204) "status $($d3.Status)"
     $d4 = Llamar "DELETE" ($BaseProyectos + "/" + $pa.Json.id)
     Verificar "borrar A sin hijos -> 204" ($d4.Status -eq 204) "status $($d4.Status)"
+
+    # --- Objetivos: jerarquia, ciclos, proyectos, tareas y borrado con 409 por motivo ---
+    $o1 = Llamar "POST" $BaseObjetivos '{"nombre":"smoke-O1","prioridad":"ALTA"}'
+    Verificar "crear objetivo O1" (($o1.Status -eq 201) -and ($o1.Raw -match '"estado":"PENDIENTE"')) $o1.Raw
+    if ($o1.Json) { $objetivoIds += $o1.Json.id }
+    if (-not $o1.Json) { throw "No se pudo crear el objetivo O1." }
+
+    $o2 = Llamar "POST" $BaseObjetivos ('{"nombre":"smoke-O2","padreId":' + $o1.Json.id + '}')
+    Verificar "crear subobjetivo O2 con padre O1" (($o2.Status -eq 201) -and ($o2.Json.padreId -eq $o1.Json.id)) $o2.Raw
+    if ($o2.Json) { $objetivoIds += $o2.Json.id }
+    if (-not $o2.Json) { throw "No se pudo crear el objetivo O2." }
+
+    $oc1 = Llamar "PUT" ($BaseObjetivos + "/" + $o1.Json.id) ('{"nombre":"smoke-O1","padreId":' + $o2.Json.id + '}')
+    Verificar "poner O1 bajo O2 (ciclo) -> 400" ($oc1.Status -eq 400) "status $($oc1.Status)"
+    $oc2 = Llamar "PUT" ($BaseObjetivos + "/" + $o1.Json.id) ('{"nombre":"smoke-O1","padreId":' + $o1.Json.id + '}')
+    Verificar "O1 como su propio padre -> 400" ($oc2.Status -eq 400) "status $($oc2.Status)"
+    $oc3 = Llamar "POST" $BaseObjetivos '{"nombre":"smoke-X","padreId":999999}'
+    Verificar "crear objetivo con padre inexistente -> 400" ($oc3.Status -eq 400) "status $($oc3.Status)"
+    $oc4 = Llamar "GET" ($BaseObjetivos + "/999999")
+    Verificar "objetivo inexistente -> 404" ($oc4.Status -eq 404) "status $($oc4.Status)"
+
+    $ol = Llamar "GET" ($BaseObjetivos + "?estado=PENDIENTE")
+    $onombres = @($ol.Json | ForEach-Object { $_.nombre })
+    Verificar "listar objetivos con filtro estado=PENDIENTE" (($ol.Status -eq 200) -and ($onombres -contains "smoke-O1") -and ($onombres -contains "smoke-O2")) ($onombres -join ",")
+    $ol2 = Llamar "GET" ($BaseObjetivos + "?estado=HECHO")
+    $onombres2 = @($ol2.Json | ForEach-Object { $_.nombre })
+    Verificar "listar objetivos con estado=HECHO no trae O1 ni O2" (($ol2.Status -eq 200) -and ($onombres2 -notcontains "smoke-O1") -and ($onombres2 -notcontains "smoke-O2")) ($onombres2 -join ",")
+
+    # Proyecto ligado al objetivo (objetivoId validado por ObjetivoConsultaService)
+    $po = Llamar "POST" $BaseProyectos ('{"nombre":"smoke-PO","objetivoId":' + $o1.Json.id + '}')
+    Verificar "crear proyecto con objetivoId existente" (($po.Status -eq 201) -and ($po.Json.objetivoId -eq $o1.Json.id)) $po.Raw
+    if ($po.Json) { $proyectoIds += $po.Json.id }
+    if (-not $po.Json) { throw "No se pudo crear el proyecto ligado al objetivo." }
+    $pf = Llamar "GET" ($BaseProyectos + "?objetivoId=" + $o1.Json.id)
+    $pfn = @($pf.Json | ForEach-Object { $_.nombre })
+    Verificar "listar proyectos filtrando por objetivoId" (($pf.Status -eq 200) -and ($pfn -contains "smoke-PO")) ($pfn -join ",")
+
+    # Tareas ligadas directamente al objetivo
+    $ot = Llamar "PUT" ($BaseObjetivos + "/" + $o1.Json.id + "/tareas/" + $c.Json.id)
+    Verificar "asignar tarea a O1" (($ot.Status -eq 200) -and ($ot.Json.objetivoId -eq $o1.Json.id)) $ot.Raw
+    $otl = Llamar "GET" ($BaseObjetivos + "/" + $o1.Json.id + "/tareas")
+    Verificar "listar tareas de O1" (($otl.Status -eq 200) -and (@($otl.Json).Count -eq 1) -and (@($otl.Json)[0].id -eq $c.Json.id)) $otl.Raw
+    $ot2 = Llamar "PUT" ($BaseObjetivos + "/" + $o1.Json.id + "/tareas/999999")
+    Verificar "asignar tarea inexistente a objetivo -> 404" ($ot2.Status -eq 404) "status $($ot2.Status)"
+    $ot3 = Llamar "PUT" ($BaseObjetivos + "/999999/tareas/" + $c.Json.id)
+    Verificar "asignar tarea a objetivo inexistente -> 404" ($ot3.Status -eq 404) "status $($ot3.Status)"
+
+    # Borrado: cada 409 dice su motivo (subobjetivos, luego proyectos, luego tareas)
+    $od1 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id)
+    Verificar "borrar O1 con subobjetivos -> 409 (subobjetivos)" (($od1.Status -eq 409) -and ($od1.Raw -match "subobjetivos")) "status $($od1.Status) $($od1.Raw)"
+    $od2 = Llamar "DELETE" ($BaseObjetivos + "/" + $o2.Json.id)
+    Verificar "borrar O2 vacio -> 204" ($od2.Status -eq 204) "status $($od2.Status)"
+    $od3 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id)
+    Verificar "borrar O1 con proyectos -> 409 (proyectos)" (($od3.Status -eq 409) -and ($od3.Raw -match "proyectos")) "status $($od3.Status) $($od3.Raw)"
+    $od4 = Llamar "DELETE" ($BaseProyectos + "/" + $po.Json.id)
+    Verificar "borrar el proyecto del objetivo -> 204" ($od4.Status -eq 204) "status $($od4.Status)"
+    $od5 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id)
+    Verificar "borrar O1 con tareas -> 409 (tareas)" (($od5.Status -eq 409) -and ($od5.Raw -match "tareas")) "status $($od5.Status) $($od5.Raw)"
+
+    $ods1 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id + "/tareas/" + $a.Json.id)
+    Verificar "desasignar tarea que no es de O1 -> 400" ($ods1.Status -eq 400) "status $($ods1.Status)"
+    $ods2 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id + "/tareas/" + $c.Json.id)
+    Verificar "desasignar tarea de O1 -> 204" ($ods2.Status -eq 204) "status $($ods2.Status)"
+    $od6 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id)
+    Verificar "borrar O1 vacio -> 204" ($od6.Status -eq 204) "status $($od6.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
@@ -149,6 +229,9 @@ finally {
     # y se borran los hijos antes que los padres (orden inverso de creacion).
     [array]::Reverse($proyectoIds)
     foreach ($id in $proyectoIds) { [void](Llamar "DELETE" ($BaseProyectos + "/" + $id)) }
+    # Los objetivos van al final: no se pueden borrar mientras tengan proyectos o tareas.
+    [array]::Reverse($objetivoIds)
+    foreach ($id in $objetivoIds) { [void](Llamar "DELETE" ($BaseObjetivos + "/" + $id)) }
     Write-Host "Datos de prueba borrados."
 }
 

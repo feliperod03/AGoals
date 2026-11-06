@@ -3,6 +3,7 @@ package com.agoals.proyecto;
 import com.agoals.common.ApiExceptionHandler;
 import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
+import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaNoEncontradaException;
@@ -105,6 +106,28 @@ class ProyectoControllerTest {
 						.content("{\"nombre\":\"x\",\"padreId\":9}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.mensaje").value("El proyecto padre no existe: 9"));
+	}
+
+	@Test
+	void postConObjetivoInexistenteDevuelve400() throws Exception {
+		when(service.crear(any(ProyectoRequest.class)))
+				.thenThrow(new ObjetivoInvalidoException("El objetivo no existe: 77"));
+
+		mvc.perform(post("/api/proyectos").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"x\",\"objetivoId\":77}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("El objetivo no existe: 77"));
+	}
+
+	@Test
+	void putConObjetivoInexistenteDevuelve400() throws Exception {
+		when(service.actualizar(eq(1L), any(ProyectoRequest.class)))
+				.thenThrow(new ObjetivoInvalidoException("El objetivo no existe: 77"));
+
+		mvc.perform(put("/api/proyectos/1").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nombre\":\"x\",\"objetivoId\":77}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("El objetivo no existe: 77"));
 	}
 
 	// ---- Leer ----

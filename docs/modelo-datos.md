@@ -41,4 +41,6 @@ Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicia
 - Esas reglas son las de la **base de datos**. La **API** es más estricta con los proyectos: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes). No se borra nada en cascada desde la API.
 - Un proyecto no puede ser su propio descendiente: la API rechaza con 400 cualquier `padreId` que cree un ciclo.
 - Los estados no se propagan: cambiar el estado de un proyecto no modifica el de sus subproyectos ni el de sus tareas.
-- `proyecto.objetivo_id` se guarda como id simple; hasta que exista el módulo Objetivo (rebanada 4b) solo lo valida la clave foránea y un id inexistente responde 400.
+- `proyecto.objetivo_id` y `tarea.objetivo_id` / `tarea.proyecto_id` se guardan como ids simples. Al crear o editar un proyecto, un `objetivoId` inexistente responde 400 ("El objetivo no existe: N"); la clave foránea queda como red de seguridad.
+- `DELETE /api/objetivos/{id}` responde 409 si el objetivo tiene subobjetivos, proyectos o tareas ligadas directamente (`tarea.objetivo_id`); el mensaje indica cuál. Las ideas ligadas aún no se comprueban (módulo idea: rebanada 6).
+- Las tareas de un objetivo (`/api/objetivos/{id}/tareas`) son solo las ligadas directamente; los proyectos del objetivo se listan con `GET /api/proyectos?objetivoId=`.

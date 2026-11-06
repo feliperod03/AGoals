@@ -2,11 +2,11 @@ package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
+import com.agoals.objetivo.ObjetivoConsultaService;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaService;
 import com.agoals.tarea.dto.TareaResponse;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +21,15 @@ public class ProyectoService {
 
 	private final ProyectoRepository repository;
 	private final TareaService tareaService;
+	private final ObjetivoConsultaService objetivoConsultaService;
 
-	// Dependencia en un solo sentido: proyecto -> tarea. TareaService no conoce a ProyectoService.
-	public ProyectoService(ProyectoRepository repository, TareaService tareaService) {
+	// Dependencias en un solo sentido: proyecto -> tarea y proyecto -> objetivo (solo la consulta).
+	// Se usa ObjetivoConsultaService y no ObjetivoService porque ObjetivoService depende de esta clase.
+	public ProyectoService(ProyectoRepository repository, TareaService tareaService,
+			ObjetivoConsultaService objetivoConsultaService) {
 		this.repository = repository;
 		this.tareaService = tareaService;
+		this.objetivoConsultaService = objetivoConsultaService;
 	}
 
 	public ProyectoResponse crear(ProyectoRequest request) {
@@ -33,7 +37,7 @@ public class ProyectoService {
 		Proyecto proyecto = new Proyecto();
 		proyecto.setUsuarioId(USUARIO_ID);
 		aplicar(proyecto, request);
-		return aRespuesta(guardar(proyecto));
+		return aRespuesta(repository.saveAndFlush(proyecto));
 	}
 
 	@Transactional(readOnly = true)
@@ -58,7 +62,7 @@ public class ProyectoService {
 		Proyecto proyecto = buscar(id);
 		validar(request, id);
 		aplicar(proyecto, request);
-		return aRespuesta(guardar(proyecto));
+		return aRespuesta(repository.saveAndFlush(proyecto));
 	}
 
 	// Desde la API nunca se borra en cascada, aunque la base tenga CASCADE / SET NULL:
@@ -104,23 +108,14 @@ public class ProyectoService {
 				.orElseThrow(() -> new ProyectoNoEncontradoException(id));
 	}
 
-	// Hasta la 4b no existe ObjetivoService: si el objetivoId no existe, la FK de la base lo rechaza
-	// y aquí se traduce a 400. saveAndFlush fuerza el INSERT/UPDATE dentro de este método.
-	private Proyecto guardar(Proyecto proyecto) {
-		try {
-			return repository.saveAndFlush(proyecto);
-		} catch (DataIntegrityViolationException e) {
-			if (proyecto.getObjetivoId() != null) {
-				throw new ProyectoInvalidoException("El objetivo no existe: " + proyecto.getObjetivoId());
-			}
-			throw e;
-		}
-	}
-
 	private void validar(ProyectoRequest r, Long idActual) {
 		Jerarquia.validarPadre("proyecto", r.padreId(), idActual,
 				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Proyecto::getPadreId,
 				ProyectoInvalidoException::new);
+		// 400 "El objetivo no existe: N" si no existe. La FK de la base queda como red de seguridad.
+		if (r.objetivoId() != null) {
+			objetivoConsultaService.validarExiste(r.objetivoId());
+		}
 	}
 
 	private void aplicar(Proyecto proyecto, ProyectoRequest r) {
