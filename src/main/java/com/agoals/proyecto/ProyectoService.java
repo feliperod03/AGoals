@@ -1,6 +1,7 @@
 package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
+import com.agoals.common.Jerarquia;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaService;
@@ -9,9 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 @Transactional
@@ -113,31 +112,9 @@ public class ProyectoService {
 	}
 
 	private void validar(ProyectoRequest r, Long idActual) {
-		Long padreId = r.padreId();
-		if (padreId == null) {
-			return;
-		}
-		if (padreId.equals(idActual)) {
-			throw new ProyectoInvalidoException("Un proyecto no puede ser su propio padre");
-		}
-		// Se sube por la cadena de padres del nuevo padre: si aparece el proyecto que se edita,
-		// quedaría siendo su propio descendiente. El Set evita un bucle infinito ante datos ya corruptos.
-		Set<Long> visitados = new HashSet<>();
-		Long actual = padreId;
-		while (actual != null && visitados.add(actual)) {
-			if (actual.equals(idActual)) {
-				throw new ProyectoInvalidoException("Ciclo en la jerarquía: el proyecto " + padreId
-						+ " es descendiente del proyecto " + idActual);
-			}
-			Proyecto p = repository.findByIdAndUsuarioId(actual, USUARIO_ID).orElse(null);
-			if (p == null) {
-				if (actual.equals(padreId)) {
-					throw new ProyectoInvalidoException("El proyecto padre no existe: " + padreId);
-				}
-				break;
-			}
-			actual = p.getPadreId();
-		}
+		Jerarquia.validarPadre("proyecto", r.padreId(), idActual,
+				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Proyecto::getPadreId,
+				ProyectoInvalidoException::new);
 	}
 
 	private void aplicar(Proyecto proyecto, ProyectoRequest r) {
