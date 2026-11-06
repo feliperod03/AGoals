@@ -1,5 +1,8 @@
 package com.agoals.common;
 
+import com.agoals.proyecto.ProyectoConDependenciasException;
+import com.agoals.proyecto.ProyectoInvalidoException;
+import com.agoals.proyecto.ProyectoNoEncontradoException;
 import com.agoals.tarea.TareaEstadoInvalidaException;
 import com.agoals.tarea.TareaInvalidaException;
 import com.agoals.tarea.TareaNoEncontradaException;
@@ -29,6 +32,21 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(TareaEstadoInvalidaException.class)
 	public ResponseEntity<ErrorResponse> estadoInvalido(TareaEstadoInvalidaException e) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(ProyectoNoEncontradoException.class)
+	public ResponseEntity<ErrorResponse> proyectoNoEncontrado(ProyectoNoEncontradoException e) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(ProyectoInvalidoException.class)
+	public ResponseEntity<ErrorResponse> proyectoInvalido(ProyectoInvalidoException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(ProyectoConDependenciasException.class)
+	public ResponseEntity<ErrorResponse> proyectoConDependencias(ProyectoConDependenciasException e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
 	}
 

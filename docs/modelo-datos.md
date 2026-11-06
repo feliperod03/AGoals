@@ -38,3 +38,7 @@ Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicia
 - Posponer una tarea: aumenta `veces_pospuesta` y cambia `fecha` (por defecto al día siguiente).
 - Una idea pasa a CONCLUIDA con `conclusion` y `fecha_cierre`, y queda como registro (trazabilidad).
 - Borrar un proyecto u objetivo no borra sus tareas ni ideas: quedan sueltas (`SET NULL`). Borrar un padre jerárquico borra su subárbol.
+- Esas reglas son las de la **base de datos**. La **API** es más estricta con los proyectos: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes). No se borra nada en cascada desde la API.
+- Un proyecto no puede ser su propio descendiente: la API rechaza con 400 cualquier `padreId` que cree un ciclo.
+- Los estados no se propagan: cambiar el estado de un proyecto no modifica el de sus subproyectos ni el de sus tareas.
+- `proyecto.objetivo_id` se guarda como id simple; hasta que exista el módulo Objetivo (rebanada 4b) solo lo valida la clave foránea y un id inexistente responde 400.
