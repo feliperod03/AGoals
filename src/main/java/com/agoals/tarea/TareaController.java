@@ -43,6 +43,16 @@ public class TareaController {
 		return service.agendaDelDia(fecha);
 	}
 
+	@GetMapping("/atrasadas")
+	public List<TareaResponse> atrasadas(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+		return service.atrasadas(fecha);
+	}
+
+	@PatchMapping("/{id}/reabrir")
+	public TareaResponse reabrir(@PathVariable Long id) {
+		return service.reabrir(id);
+	}
+
 	@PatchMapping("/{id}/hecha")
 	public TareaResponse marcarHecha(@PathVariable Long id) {
 		return service.marcarHecha(id);

@@ -9,6 +9,8 @@ import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -370,6 +372,154 @@ class TareaServiceTest {
 		assertThatThrownBy(() -> service.posponer(1L, new PosponerRequest(DIA.minusDays(1))))
 				.isInstanceOf(TareaInvalidaException.class);
 		verify(repository, never()).save(any());
+	}
+
+	// ---- Atrasadas ----
+
+	private static final List<Estado> ABIERTOS = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+
+	@Test
+	void atrasadasOrdenaPorFechaYLuegoPrioridadAltaPrimero() {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(TareaService.USUARIO_ID, hoy, ABIERTOS)).thenReturn(List.of(
+				agendada(1, "reciente alta", hoy.minusDays(1), null, Prioridad.ALTA, Estado.PENDIENTE),
+				agendada(2, "vieja baja", hoy.minusDays(5), null, Prioridad.BAJA, Estado.PENDIENTE),
+				agendada(3, "vieja sin prioridad", hoy.minusDays(5), null, null, Estado.EN_PAUSA),
+				agendada(4, "vieja alta", hoy.minusDays(5), null, Prioridad.ALTA, Estado.EN_PROGRESO),
+				agendada(5, "vieja media", hoy.minusDays(5), null, Prioridad.MEDIA, Estado.PENDIENTE),
+				agendada(6, "vieja alta b", hoy.minusDays(5), null, Prioridad.ALTA, Estado.PENDIENTE)));
+
+		assertThat(service.atrasadas(hoy)).extracting(TareaResponse::titulo).containsExactly(
+				"vieja alta", "vieja alta b", "vieja media", "vieja baja", "vieja sin prioridad", "reciente alta");
+	}
+
+	@Test
+	void atrasadasSinResultadosDevuelveListaVacia() {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(TareaService.USUARIO_ID, hoy, ABIERTOS))
+				.thenReturn(List.of());
+
+		assertThat(service.atrasadas(hoy)).isEmpty();
+	}
+
+	// ---- Reabrir ----
+
+	@Test
+	void reabrirUnaTareaHechaLaDejaPendiente() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.HECHO);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		TareaResponse r = service.reabrir(1L);
+
+		assertThat(r.estado()).isEqualTo(Estado.PENDIENTE);
+		assertThat(t.getFecha()).isEqualTo(DIA);
+		verify(repository).save(t);
+	}
+
+	@ParameterizedTest
+	@EnumSource(value = Estado.class, names = {"PENDIENTE", "EN_PROGRESO", "EN_PAUSA"})
+	void reabrirUnaTareaYaAbiertaNoCambiaNada(Estado estado) {
+		Tarea t = agendada(1, "a", DIA, null, null, estado);
+		existe(t);
+
+		TareaResponse r = service.reabrir(1L);
+
+		assertThat(r.estado()).isEqualTo(estado);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void reabrirUnaTareaCanceladaFalla() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.CANCELADO);
+		existe(t);
+
+		assertThatThrownBy(() -> service.reabrir(1L))
+				.isInstanceOf(TareaEstadoInvalidaException.class)
+				.hasMessageContaining("cancelada");
+		assertThat(t.getEstado()).isEqualTo(Estado.CANCELADO);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void reabrirInexistenteFalla() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.reabrir(1L)).isInstanceOf(TareaNoEncontradaException.class);
+	}
+
+	// ---- Jerarquía: padre existente y sin ciclos ----
+
+	private static Tarea conPadre(long id, Long padreId) {
+		Tarea t = tarea("t" + id);
+		ReflectionTestUtils.setField(t, "id", id);
+		t.setPadreId(padreId);
+		return t;
+	}
+
+	@Test
+	void elMensajeDelPadreInexistenteEstaEnFemenino() {
+		when(repository.findByIdAndUsuarioId(99L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.crear(request(null, null, null, 99L)))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessage("La tarea padre no existe: 99");
+	}
+
+	@Test
+	void elMensajeDelPropioPadreEstaEnFemenino() {
+		existe(conPadre(1, null));
+
+		assertThatThrownBy(() -> service.actualizar(1L, request(null, null, null, 1L)))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessage("Una tarea no puede ser su propio padre");
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void ponerUnaTareaBajoSuHijaDirectaEsCicloAbA() {
+		// B es hija de A: poner A bajo B daría A -> B -> A.
+		existe(conPadre(1, null));
+		existe(conPadre(2, 1L));
+
+		assertThatThrownBy(() -> service.actualizar(1L, request(null, null, null, 2L)))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessage("Ciclo en la jerarquía: la tarea 2 es descendiente de la tarea 1");
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void ponerUnaTareaBajoUnaDescendienteIndirectaEsCiclo() {
+		// A(1) -> B(2) -> C(3): poner A bajo C cierra el ciclo A -> C -> B -> A.
+		existe(conPadre(1, null));
+		existe(conPadre(2, 1L));
+		existe(conPadre(3, 2L));
+
+		assertThatThrownBy(() -> service.actualizar(1L, request(null, null, null, 3L)))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessageContaining("Ciclo");
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void moverUnaTareaBajoOtraRamaNoEsCiclo() {
+		Tarea dos = conPadre(2, 1L);
+		existe(dos);
+		existe(conPadre(5, 4L));
+		existe(conPadre(4, null));
+		when(repository.save(dos)).thenReturn(dos);
+
+		assertThat(service.actualizar(2L, request(null, null, null, 5L)).padreId()).isEqualTo(5L);
+	}
+
+	@Test
+	void subirUnaTareaALaRaizOBajoUnAncestroNoEsCiclo() {
+		Tarea tres = conPadre(3, 2L);
+		existe(tres);
+		existe(conPadre(1, null));
+		when(repository.save(tres)).thenReturn(tres);
+
+		assertThat(service.actualizar(3L, request(null, null, null, 1L)).padreId()).isEqualTo(1L);
 	}
 
 	// ---- Soporte para proyecto ----

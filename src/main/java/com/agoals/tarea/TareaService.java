@@ -1,7 +1,7 @@
 package com.agoals.tarea;
 
 import com.agoals.common.Estado;
-
+import com.agoals.common.Jerarquia;
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
@@ -76,6 +76,42 @@ public class TareaService {
 				.map(this::aRespuesta)
 				.toList();
 		return new AgendaResponse(fecha, conHora, sinHora);
+	}
+
+	// Estados que siguen "abiertos": una tarea con fecha pasada en alguno de ellos quedó sin hacer.
+	private static final List<Estado> ESTADOS_ABIERTOS = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+
+	// Atrasadas: fecha más vieja primero, luego ALTA primero (sin prioridad al final), luego por id.
+	private static final Comparator<Tarea> ORDEN_ATRASADAS = Comparator
+			.comparing(Tarea::getFecha)
+			.thenComparing(ORDEN_SUELTAS);
+
+	/**
+	 * Tareas abiertas con fecha anterior a {@code fecha} (el "hoy" del cliente; el día mismo no cuenta).
+	 * Las tareas sin fecha no son atrasadas: están sin agendar. La prioridad se ordena aquí y no en SQL
+	 * porque se guarda como texto y el orden alfabético no coincide con ALTA > MEDIA > BAJA.
+	 */
+	@Transactional(readOnly = true)
+	public List<TareaResponse> atrasadas(LocalDate fecha) {
+		return repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(USUARIO_ID, fecha, ESTADOS_ABIERTOS).stream()
+				.sorted(ORDEN_ATRASADAS)
+				.map(this::aRespuesta)
+				.toList();
+	}
+
+	/** Deshace un "hecha" por error: HECHO pasa a PENDIENTE. Si ya estaba abierta no cambia (idempotente). */
+	public TareaResponse reabrir(Long id) {
+		Tarea tarea = buscar(id);
+		if (tarea.getEstado() == Estado.CANCELADO) {
+			throw new TareaEstadoInvalidaException("No se puede reabrir una tarea cancelada: " + id);
+		}
+		if (tarea.getEstado() == Estado.HECHO) {
+			// No se guarda el estado previo al "hecha", así que siempre vuelve a PENDIENTE.
+			tarea.setEstado(Estado.PENDIENTE);
+			return aRespuesta(repository.save(tarea));
+		}
+		// PENDIENTE, EN_PROGRESO o EN_PAUSA: ya está abierta, se devuelve tal cual (no degrada EN_PROGRESO).
+		return aRespuesta(tarea);
 	}
 
 	public TareaResponse marcarHecha(Long id) {
@@ -172,14 +208,10 @@ public class TareaService {
 		if (r.horaFin() != null && !r.horaFin().isAfter(r.horaInicio())) {
 			throw new TareaInvalidaException("hora_fin debe ser posterior a hora_inicio");
 		}
-		if (r.padreId() != null) {
-			if (r.padreId().equals(idActual)) {
-				throw new TareaInvalidaException("Una tarea no puede ser su propio padre");
-			}
-			if (repository.findByIdAndUsuarioId(r.padreId(), USUARIO_ID).isEmpty()) {
-				throw new TareaInvalidaException("La tarea padre no existe: " + r.padreId());
-			}
-		}
+		// Padre existente y sin ciclos (una tarea no puede quedar como su propia descendiente).
+		Jerarquia.validarPadre("tarea", true, r.padreId(), idActual,
+				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Tarea::getPadreId,
+				TareaInvalidaException::new);
 	}
 
 	private void aplicar(Tarea tarea, TareaRequest r) {

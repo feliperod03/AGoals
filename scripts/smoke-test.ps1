@@ -218,6 +218,68 @@ try {
     Verificar "desasignar tarea de O1 -> 204" ($ods2.Status -eq 204) "status $($ods2.Status)"
     $od6 = Llamar "DELETE" ($BaseObjetivos + "/" + $o1.Json.id)
     Verificar "borrar O1 vacio -> 204" ($od6.Status -eq 204) "status $($od6.Status)"
+
+    # --- Tareas atrasadas ---
+    # Fechas en 2098 para no mezclarse con datos reales; la respuesta se filtra a los titulos "smoke-at-*"
+    # porque la base puede tener tareas reales vencidas.
+    $limite = "2098-01-10"
+    $t1 = Llamar "POST" $Base '{"titulo":"smoke-at-1 baja","prioridad":"BAJA","fecha":"2098-01-05"}'
+    $t2 = Llamar "POST" $Base '{"titulo":"smoke-at-2 alta","prioridad":"ALTA","fecha":"2098-01-05"}'
+    $t3 = Llamar "POST" $Base '{"titulo":"smoke-at-3 mas vieja","fecha":"2098-01-01"}'
+    $t4 = Llamar "POST" $Base ('{"titulo":"smoke-at-4 en el limite","fecha":"' + $limite + '"}')
+    $t5 = Llamar "POST" $Base '{"titulo":"smoke-at-5 sin fecha"}'
+    $t6 = Llamar "POST" $Base '{"titulo":"smoke-at-6 hecha","estado":"HECHO","fecha":"2098-01-02"}'
+    $t7 = Llamar "POST" $Base '{"titulo":"smoke-at-7 en progreso","estado":"EN_PROGRESO","fecha":"2098-01-03"}'
+    foreach ($x in @($t1, $t2, $t3, $t4, $t5, $t6, $t7)) { if ($x.Json) { $ids += $x.Json.id } }
+    Verificar "crear tareas para atrasadas" (($t1.Status -eq 201) -and ($t7.Status -eq 201)) "status: $($t1.Status), $($t7.Status)"
+    if (-not ($t1.Json -and $t2.Json -and $t3.Json -and $t6.Json -and $t7.Json)) { throw "No se pudieron crear las tareas de atrasadas." }
+
+    $at = Llamar "GET" ($Base + "/atrasadas?fecha=" + $limite)
+    $titulos = @($at.Json | ForEach-Object { $_.titulo } | Where-Object { $_ -like "smoke-at-*" })
+    Verificar "atrasadas: excluye limite, sin fecha y hechas; orden fecha y prioridad" (($at.Status -eq 200) -and (($titulos -join "|") -eq "smoke-at-3 mas vieja|smoke-at-7 en progreso|smoke-at-2 alta|smoke-at-1 baja")) ($titulos -join "|")
+    $at2 = Llamar "GET" ($Base + "/atrasadas")
+    Verificar "atrasadas sin fecha -> 400" ($at2.Status -eq 400) "status $($at2.Status)"
+    $at3 = Llamar "GET" ($Base + "/atrasadas?fecha=10-01-2098")
+    Verificar "atrasadas con fecha mal formada -> 400" ($at3.Status -eq 400) "status $($at3.Status)"
+
+    # --- Reabrir ---
+    $h = Llamar "PATCH" ($Base + "/" + $t2.Json.id + "/hecha")
+    $r1 = Llamar "PATCH" ($Base + "/" + $t2.Json.id + "/reabrir")
+    Verificar "reabrir una hecha -> PENDIENTE" (($h.Status -eq 200) -and ($r1.Status -eq 200) -and ($r1.Json.estado -eq "PENDIENTE")) $r1.Raw
+    $r2 = Llamar "PATCH" ($Base + "/" + $t2.Json.id + "/reabrir")
+    Verificar "reabrir una ya abierta (idempotente)" (($r2.Status -eq 200) -and ($r2.Json.estado -eq "PENDIENTE")) $r2.Raw
+    $r3 = Llamar "PATCH" ($Base + "/" + $t7.Json.id + "/reabrir")
+    Verificar "reabrir EN_PROGRESO la deja EN_PROGRESO" (($r3.Status -eq 200) -and ($r3.Json.estado -eq "EN_PROGRESO")) $r3.Raw
+    $r4 = Llamar "PATCH" ($Base + "/" + $t6.Json.id + "/reabrir")
+    $at4 = Llamar "GET" ($Base + "/atrasadas?fecha=" + $limite)
+    $titulos2 = @($at4.Json | ForEach-Object { $_.titulo } | Where-Object { $_ -like "smoke-at-*" })
+    Verificar "una tarea reabierta vuelve a las atrasadas" (($r4.Status -eq 200) -and ($titulos2 -contains "smoke-at-6 hecha")) ($titulos2 -join "|")
+    $tc = Llamar "POST" $Base '{"titulo":"smoke-at-8 cancelada","estado":"CANCELADO","fecha":"2098-01-04"}'
+    if ($tc.Json) { $ids += $tc.Json.id }
+    if (-not $tc.Json) { throw "No se pudo crear la tarea cancelada." }
+    $r5 = Llamar "PATCH" ($Base + "/" + $tc.Json.id + "/reabrir")
+    Verificar "reabrir una cancelada -> 409" (($r5.Status -eq 409) -and ($r5.Raw -match "cancelada")) "status $($r5.Status) $($r5.Raw)"
+    $r6 = Llamar "PATCH" ($Base + "/999999/reabrir")
+    Verificar "reabrir inexistente -> 404" ($r6.Status -eq 404) "status $($r6.Status)"
+
+    # --- Ciclos en la jerarquia de tareas ---
+    $ja = Llamar "POST" $Base '{"titulo":"smoke-ja A"}'
+    if ($ja.Json) { $ids += $ja.Json.id }
+    if (-not $ja.Json) { throw "No se pudo crear la tarea A de jerarquia." }
+    $jb = Llamar "POST" $Base ('{"titulo":"smoke-ja B","padreId":' + $ja.Json.id + '}')
+    if ($jb.Json) { $ids += $jb.Json.id }
+    if (-not $jb.Json) { throw "No se pudo crear la tarea B de jerarquia." }
+    $jc = Llamar "POST" $Base ('{"titulo":"smoke-ja C","padreId":' + $jb.Json.id + '}')
+    if ($jc.Json) { $ids += $jc.Json.id }
+    if (-not $jc.Json) { throw "No se pudo crear la tarea C de jerarquia." }
+    $j1 = Llamar "PUT" ($Base + "/" + $ja.Json.id) ('{"titulo":"smoke-ja A","padreId":' + $jb.Json.id + '}')
+    Verificar "tarea: A bajo su hija B (A->B->A) -> 400" (($j1.Status -eq 400) -and ($j1.Raw -match "Ciclo")) "status $($j1.Status) $($j1.Raw)"
+    $j2 = Llamar "PUT" ($Base + "/" + $ja.Json.id) ('{"titulo":"smoke-ja A","padreId":' + $jc.Json.id + '}')
+    Verificar "tarea: A bajo su nieta C (ciclo indirecto) -> 400" (($j2.Status -eq 400) -and ($j2.Raw -match "Ciclo")) "status $($j2.Status) $($j2.Raw)"
+    $j3 = Llamar "PUT" ($Base + "/" + $ja.Json.id) ('{"titulo":"smoke-ja A","padreId":' + $ja.Json.id + '}')
+    Verificar "tarea: A como su propio padre -> 400" (($j3.Status -eq 400) -and ($j3.Raw -match "propio padre")) "status $($j3.Status) $($j3.Raw)"
+    $j4 = Llamar "PUT" ($Base + "/" + $jc.Json.id) ('{"titulo":"smoke-ja C","padreId":' + $ja.Json.id + '}')
+    Verificar "tarea: subir C bajo A (valido) -> 200" (($j4.Status -eq 200) -and ($j4.Json.padreId -eq $ja.Json.id)) "status $($j4.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red

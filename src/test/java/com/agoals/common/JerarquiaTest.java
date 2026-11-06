@@ -80,6 +80,29 @@ class JerarquiaTest {
 		assertThatCode(() -> validar(3L, null)).doesNotThrowAnyException();
 	}
 
+	private void validarFemenino(Long padreId, Long idActual) {
+		Jerarquia.validarPadre("tarea", true, padreId, idActual,
+				id -> padres.containsKey(id) ? Optional.of(id) : Optional.empty(),
+				padres::get, Falla::new);
+	}
+
+	@Test
+	void conEntidadFemeninaLosMensajesUsanLosArticulosCorrectos() {
+		assertThatThrownBy(() -> validarFemenino(1L, 1L))
+				.hasMessage("Una tarea no puede ser su propio padre");
+		assertThatThrownBy(() -> validarFemenino(99L, null))
+				.hasMessage("La tarea padre no existe: 99");
+		assertThatThrownBy(() -> validarFemenino(3L, 1L))
+				.hasMessage("Ciclo en la jerarquía: la tarea 3 es descendiente de la tarea 1");
+	}
+
+	@Test
+	void conEntidadFemeninaLasReglasSonLasMismas() {
+		assertThatCode(() -> validarFemenino(null, 1L)).doesNotThrowAnyException();
+		assertThatCode(() -> validarFemenino(5L, 2L)).doesNotThrowAnyException();
+		assertThatThrownBy(() -> validarFemenino(2L, 1L)).hasMessageContaining("Ciclo");
+	}
+
 	@Test
 	void unCicloYaExistenteEnLosDatosNoCuelgaElRecorrido() {
 		// 6 <-> 7 ya es un ciclo en la base; el Set de visitados corta el bucle.

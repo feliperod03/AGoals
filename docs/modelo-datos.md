@@ -36,6 +36,9 @@ Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicia
 - Tarea sin `fecha` = pendiente sin agendar. Las pendientes de proyecto sin fecha alimentan la "recomendación".
 - `hora_inicio` exige `fecha`; `hora_fin` exige `hora_inicio` y debe ser posterior.
 - Posponer una tarea: aumenta `veces_pospuesta` y cambia `fecha` (por defecto al día siguiente).
+- Tareas atrasadas (`GET /api/tareas/atrasadas?fecha=`): tareas con fecha **estrictamente anterior** a la indicada (el "hoy" del cliente) y estado PENDIENTE, EN_PROGRESO o EN_PAUSA, ordenadas por fecha, luego ALTA primero (sin prioridad al final) y luego id. Las tareas sin fecha no son atrasadas (están sin agendar).
+- Reabrir una tarea (`PATCH /api/tareas/{id}/reabrir`): HECHO pasa a PENDIENTE (no se guarda el estado previo). Si ya está abierta (PENDIENTE, EN_PROGRESO o EN_PAUSA) no cambia: es idempotente. Si está CANCELADO responde 409.
+- Una tarea no puede ser su propia descendiente: la API rechaza con 400 un `padreId` que cree un ciclo (directo, A→B→A, o indirecto), igual que en proyectos y objetivos.
 - Una idea pasa a CONCLUIDA con `conclusion` y `fecha_cierre`, y queda como registro (trazabilidad).
 - Borrar un proyecto u objetivo no borra sus tareas ni ideas: quedan sueltas (`SET NULL`). Borrar un padre jerárquico borra su subárbol.
 - Esas reglas son las de la **base de datos**. La **API** es más estricta con los proyectos: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes). No se borra nada en cascada desde la API.

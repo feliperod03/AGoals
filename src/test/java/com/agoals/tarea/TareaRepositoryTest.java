@@ -10,6 +10,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -119,6 +120,40 @@ class TareaRepositoryTest {
 		t.setObjetivoId(999_999L);
 
 		assertThatThrownBy(() -> repository.saveAndFlush(t)).isInstanceOf(Exception.class);
+	}
+
+	@Test
+	void atrasadasFiltraPorFechaEstrictaEstadoYUsuario() {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+		Tarea vieja = nueva("vieja pendiente");
+		vieja.setFecha(hoy.minusDays(3));
+		Tarea enProgreso = nueva("ayer en progreso");
+		enProgreso.setFecha(hoy.minusDays(1));
+		enProgreso.setEstado(Estado.EN_PROGRESO);
+		Tarea enPausa = nueva("ayer en pausa");
+		enPausa.setFecha(hoy.minusDays(1));
+		enPausa.setEstado(Estado.EN_PAUSA);
+		Tarea hecha = nueva("vieja hecha");
+		hecha.setFecha(hoy.minusDays(3));
+		hecha.setEstado(Estado.HECHO);
+		Tarea cancelada = nueva("vieja cancelada");
+		cancelada.setFecha(hoy.minusDays(3));
+		cancelada.setEstado(Estado.CANCELADO);
+		Tarea deHoy = nueva("de hoy");
+		deHoy.setFecha(hoy);
+		Tarea futura = nueva("futura");
+		futura.setFecha(hoy.plusDays(1));
+		Tarea sinFecha = nueva("sin agendar");
+		repository.saveAllAndFlush(List.of(vieja, enProgreso, enPausa, hecha, cancelada, deHoy, futura, sinFecha));
+
+		List<Tarea> r = repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(1L, hoy, abiertos);
+
+		// La base puede tener tareas del usuario: se comprueba lo propio con contains / doesNotContain.
+		assertThat(r).extracting(Tarea::getTitulo)
+				.contains("vieja pendiente", "ayer en progreso", "ayer en pausa")
+				.doesNotContain("vieja hecha", "vieja cancelada", "de hoy", "futura", "sin agendar");
+		assertThat(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(2L, hoy, abiertos)).isEmpty();
 	}
 
 	@Test

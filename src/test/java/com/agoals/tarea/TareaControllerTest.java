@@ -135,6 +135,77 @@ class TareaControllerTest {
 		mvc.perform(delete("/api/tareas/7")).andExpect(status().isNotFound());
 	}
 
+	// ---- Atrasadas ----
+
+	@Test
+	void atrasadasDevuelveLaListaYPasaLaFechaAlService() throws Exception {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(service.atrasadas(hoy)).thenReturn(List.of(respuesta(1L, "vieja"), respuesta(2L, "otra")));
+
+		mvc.perform(get("/api/tareas/atrasadas").param("fecha", "2026-11-06"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0].titulo").value("vieja"));
+		verify(service).atrasadas(hoy);
+	}
+
+	@Test
+	void atrasadasSinResultadosDevuelveArregloVacio() throws Exception {
+		when(service.atrasadas(LocalDate.of(2026, 11, 6))).thenReturn(List.of());
+
+		mvc.perform(get("/api/tareas/atrasadas").param("fecha", "2026-11-06"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
+	void atrasadasSinFechaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/atrasadas")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void atrasadasConFechaMalFormadaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/atrasadas").param("fecha", "06-11-2026")).andExpect(status().isBadRequest());
+	}
+
+	// ---- Reabrir ----
+
+	@Test
+	void reabrirDevuelve200ConLaTareaPendiente() throws Exception {
+		when(service.reabrir(1L)).thenReturn(respuesta(1L, "a"));
+
+		mvc.perform(patch("/api/tareas/1/reabrir"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.estado").value("PENDIENTE"));
+	}
+
+	@Test
+	void reabrirInexistenteDevuelve404() throws Exception {
+		when(service.reabrir(7L)).thenThrow(new TareaNoEncontradaException(7L));
+
+		mvc.perform(patch("/api/tareas/7/reabrir")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void reabrirUnaCanceladaDevuelve409() throws Exception {
+		when(service.reabrir(1L)).thenThrow(new TareaEstadoInvalidaException("No se puede reabrir una tarea cancelada: 1"));
+
+		mvc.perform(patch("/api/tareas/1/reabrir"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value("No se puede reabrir una tarea cancelada: 1"));
+	}
+
+	@Test
+	void putQueCreaUnCicloDevuelve400() throws Exception {
+		when(service.actualizar(eq(1L), any(TareaRequest.class)))
+				.thenThrow(new TareaInvalidaException("Ciclo en la jerarquía: la tarea 2 es descendiente de la tarea 1"));
+
+		mvc.perform(put("/api/tareas/1").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"titulo\":\"x\",\"padreId\":2}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("Ciclo")));
+	}
+
 	// ---- Agenda del día ----
 
 	@Test
