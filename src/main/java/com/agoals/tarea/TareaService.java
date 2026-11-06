@@ -1,10 +1,14 @@
 package com.agoals.tarea;
 
+import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -49,6 +53,62 @@ public class TareaService {
 
 	public void eliminar(Long id) {
 		repository.delete(buscar(id));
+	}
+
+	// Sueltas: ALTA primero, sin prioridad al final (el orden del enum es BAJA, MEDIA, ALTA), luego por id.
+	private static final Comparator<Tarea> ORDEN_SUELTAS = Comparator
+			.comparing(Tarea::getPrioridad, Comparator.nullsLast(Comparator.reverseOrder()))
+			.thenComparing(Tarea::getId);
+
+	@Transactional(readOnly = true)
+	public AgendaResponse agendaDelDia(LocalDate fecha) {
+		List<Tarea> delDia = repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(USUARIO_ID, fecha);
+		// La consulta ya ordena por hora e id; las que tienen hora conservan ese orden.
+		List<TareaResponse> conHora = delDia.stream()
+				.filter(t -> t.getHoraInicio() != null)
+				.map(this::aRespuesta)
+				.toList();
+		List<TareaResponse> sinHora = delDia.stream()
+				.filter(t -> t.getHoraInicio() == null)
+				.sorted(ORDEN_SUELTAS)
+				.map(this::aRespuesta)
+				.toList();
+		return new AgendaResponse(fecha, conHora, sinHora);
+	}
+
+	public TareaResponse marcarHecha(Long id) {
+		Tarea tarea = buscar(id);
+		if (tarea.getEstado() == Estado.CANCELADO) {
+			throw new TareaEstadoInvalidaException("No se puede marcar como hecha una tarea cancelada: " + id);
+		}
+		// Si ya estaba HECHO no pasa nada: la operación es idempotente.
+		tarea.setEstado(Estado.HECHO);
+		return aRespuesta(repository.save(tarea));
+	}
+
+	public TareaResponse posponer(Long id, PosponerRequest request) {
+		Tarea tarea = buscar(id);
+		if (tarea.getEstado() == Estado.HECHO || tarea.getEstado() == Estado.CANCELADO) {
+			throw new TareaEstadoInvalidaException(
+					"No se puede posponer una tarea en estado " + tarea.getEstado() + ": " + id);
+		}
+		LocalDate actual = tarea.getFecha();
+		LocalDate pedida = request != null ? request.fecha() : null;
+		LocalDate nueva;
+		if (pedida != null) {
+			if (actual != null && !pedida.isAfter(actual)) {
+				throw new TareaInvalidaException("La nueva fecha debe ser posterior a la actual (" + actual + ")");
+			}
+			nueva = pedida;
+		} else if (actual != null) {
+			// Por defecto suma un día a la fecha de la TAREA, no a "hoy": si estaba atrasada,
+			// el resultado puede seguir en el pasado y hay que posponer de nuevo o indicar fecha.
+			nueva = actual.plusDays(1);
+		} else {
+			throw new TareaInvalidaException("La tarea no tiene fecha: indica a qué día posponerla");
+		}
+		tarea.posponerA(nueva);
+		return aRespuesta(repository.save(tarea));
 	}
 
 	private Tarea buscar(Long id) {

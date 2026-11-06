@@ -1,6 +1,8 @@
 package com.agoals.tarea;
 
 import com.agoals.common.ApiExceptionHandler;
+import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
@@ -11,15 +13,18 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -126,5 +131,114 @@ class TareaControllerTest {
 		doThrow(new TareaNoEncontradaException(7L)).when(service).eliminar(7L);
 
 		mvc.perform(delete("/api/tareas/7")).andExpect(status().isNotFound());
+	}
+
+	// ---- Agenda del día ----
+
+	@Test
+	void getAgendaDevuelveConHoraYSinHora() throws Exception {
+		LocalDate dia = LocalDate.of(2026, 11, 6);
+		when(service.agendaDelDia(dia)).thenReturn(new AgendaResponse(dia,
+				List.of(respuesta(1L, "con hora")), List.of(respuesta(2L, "suelta"), respuesta(3L, "otra"))));
+
+		mvc.perform(get("/api/tareas/agenda").param("fecha", "2026-11-06"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.fecha").value("2026-11-06"))
+				.andExpect(jsonPath("$.conHora.length()").value(1))
+				.andExpect(jsonPath("$.conHora[0].titulo").value("con hora"))
+				.andExpect(jsonPath("$.sinHora.length()").value(2))
+				.andExpect(jsonPath("$.sinHora[1].titulo").value("otra"));
+	}
+
+	@Test
+	void getAgendaSinFechaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/agenda")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void getAgendaConFechaMalFormadaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/agenda").param("fecha", "06-11-2026")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void patchHechaDevuelve200() throws Exception {
+		when(service.marcarHecha(1L)).thenReturn(
+				new TareaResponse(1L, "a", null, Estado.HECHO, null, null, null, null, null, 0, null));
+
+		mvc.perform(patch("/api/tareas/1/hecha"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.estado").value("HECHO"));
+	}
+
+	@Test
+	void patchHechaInexistenteDevuelve404() throws Exception {
+		when(service.marcarHecha(7L)).thenThrow(new TareaNoEncontradaException(7L));
+
+		mvc.perform(patch("/api/tareas/7/hecha")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void patchHechaDeTareaCanceladaDevuelve409() throws Exception {
+		when(service.marcarHecha(2L)).thenThrow(new TareaEstadoInvalidaException("cancelada"));
+
+		mvc.perform(patch("/api/tareas/2/hecha"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value("cancelada"));
+	}
+
+	@Test
+	void patchPosponerSinBodyDevuelve200() throws Exception {
+		LocalDate manana = LocalDate.of(2026, 11, 7);
+		when(service.posponer(eq(1L), isNull())).thenReturn(
+				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, manana, null, null, null, 1, null));
+
+		mvc.perform(patch("/api/tareas/1/posponer"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.fecha").value("2026-11-07"))
+				.andExpect(jsonPath("$.vecesPospuesta").value(1));
+	}
+
+	@Test
+	void patchPosponerConFechaDevuelve200() throws Exception {
+		LocalDate destino = LocalDate.of(2026, 11, 20);
+		when(service.posponer(eq(1L), eq(new PosponerRequest(destino)))).thenReturn(
+				new TareaResponse(1L, "a", null, Estado.PENDIENTE, null, destino, null, null, null, 1, null));
+
+		mvc.perform(patch("/api/tareas/1/posponer").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-20\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.fecha").value("2026-11-20"));
+	}
+
+	@Test
+	void patchPosponerInexistenteDevuelve404() throws Exception {
+		when(service.posponer(eq(7L), any())).thenThrow(new TareaNoEncontradaException(7L));
+
+		mvc.perform(patch("/api/tareas/7/posponer")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void patchPosponerTareaHechaOCanceladaDevuelve409() throws Exception {
+		when(service.posponer(eq(2L), any())).thenThrow(new TareaEstadoInvalidaException("ya hecha"));
+
+		mvc.perform(patch("/api/tareas/2/posponer"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value("ya hecha"));
+	}
+
+	@Test
+	void patchPosponerConReglaInvalidaDevuelve400() throws Exception {
+		when(service.posponer(eq(3L), any())).thenThrow(new TareaInvalidaException("sin fecha"));
+
+		mvc.perform(patch("/api/tareas/3/posponer"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("sin fecha"));
+	}
+
+	@Test
+	void patchPosponerConFechaMalFormadaDevuelve400() throws Exception {
+		mvc.perform(patch("/api/tareas/1/posponer").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"mañana\"}"))
+				.andExpect(status().isBadRequest());
 	}
 }

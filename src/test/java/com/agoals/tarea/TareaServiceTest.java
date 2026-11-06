@@ -1,5 +1,7 @@
 package com.agoals.tarea;
 
+import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
@@ -8,6 +10,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -160,5 +163,209 @@ class TareaServiceTest {
 
 		assertThatThrownBy(() -> service.eliminar(1L)).isInstanceOf(TareaNoEncontradaException.class);
 		verify(repository, never()).delete(any());
+	}
+
+	// ---- Agenda del día ----
+
+	private static final LocalDate DIA = LocalDate.of(2026, 11, 6);
+
+	private static Tarea agendada(long id, String titulo, LocalDate fecha, LocalTime inicio, Prioridad prioridad,
+			Estado estado) {
+		Tarea t = tarea(titulo);
+		ReflectionTestUtils.setField(t, "id", id);
+		t.setFecha(fecha);
+		t.setHoraInicio(inicio);
+		t.setPrioridad(prioridad);
+		t.setEstado(estado);
+		return t;
+	}
+
+	private void existe(Tarea t) {
+		when(repository.findByIdAndUsuarioId(t.getId(), TareaService.USUARIO_ID)).thenReturn(Optional.of(t));
+	}
+
+	@Test
+	void agendaSeparaConHoraDeSueltasYOrdenaCadaGrupo() {
+		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(TareaService.USUARIO_ID, DIA)).thenReturn(List.of(
+				agendada(1, "hora 9", DIA, LocalTime.of(9, 0), null, Estado.PENDIENTE),
+				agendada(2, "hora 15", DIA, LocalTime.of(15, 0), null, Estado.PENDIENTE),
+				agendada(3, "sin prioridad", DIA, null, null, Estado.PENDIENTE),
+				agendada(4, "baja", DIA, null, Prioridad.BAJA, Estado.PENDIENTE),
+				agendada(5, "alta b", DIA, null, Prioridad.ALTA, Estado.PENDIENTE),
+				agendada(6, "media", DIA, null, Prioridad.MEDIA, Estado.PENDIENTE),
+				agendada(7, "alta a", DIA, null, Prioridad.ALTA, Estado.PENDIENTE)));
+
+		AgendaResponse agenda = service.agendaDelDia(DIA);
+
+		assertThat(agenda.fecha()).isEqualTo(DIA);
+		assertThat(agenda.conHora()).extracting(TareaResponse::titulo).containsExactly("hora 9", "hora 15");
+		// ALTA primero (desempata por id), luego MEDIA, BAJA y, al final, sin prioridad.
+		assertThat(agenda.sinHora()).extracting(TareaResponse::titulo)
+				.containsExactly("alta b", "alta a", "media", "baja", "sin prioridad");
+	}
+
+	@Test
+	void agendaDeDiaVacioDevuelveListasVacias() {
+		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(TareaService.USUARIO_ID, DIA))
+				.thenReturn(List.of());
+
+		AgendaResponse agenda = service.agendaDelDia(DIA);
+
+		assertThat(agenda.conHora()).isEmpty();
+		assertThat(agenda.sinHora()).isEmpty();
+	}
+
+	// ---- Marcar como hecha ----
+
+	@Test
+	void marcarHechaCambiaElEstado() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.EN_PROGRESO);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.marcarHecha(1L).estado()).isEqualTo(Estado.HECHO);
+	}
+
+	@Test
+	void marcarHechaUnaTareaYaHechaEsIdempotente() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.HECHO);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.marcarHecha(1L).estado()).isEqualTo(Estado.HECHO);
+	}
+
+	@Test
+	void marcarHechaInexistenteFalla() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.marcarHecha(1L)).isInstanceOf(TareaNoEncontradaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void marcarHechaUnaTareaCanceladaFalla() {
+		existe(agendada(1, "a", DIA, null, null, Estado.CANCELADO));
+
+		assertThatThrownBy(() -> service.marcarHecha(1L)).isInstanceOf(TareaEstadoInvalidaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	// ---- Posponer ----
+
+	@Test
+	void posponerSinBodySumaUnDiaYCuentaElAplazamiento() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		TareaResponse r = service.posponer(1L, null);
+
+		assertThat(r.fecha()).isEqualTo(DIA.plusDays(1));
+		assertThat(r.vecesPospuesta()).isEqualTo(1);
+	}
+
+	@Test
+	void posponerSinFechaEnElBodyTambienSumaUnDia() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.posponer(1L, new PosponerRequest(null)).fecha()).isEqualTo(DIA.plusDays(1));
+	}
+
+	// Decisión documentada: el "día siguiente" es relativo a la fecha de la tarea, no a hoy.
+	@Test
+	void posponerSinBodySumaUnDiaALaFechaDeLaTareaAunqueQuedeEnElPasado() {
+		LocalDate muyVieja = LocalDate.of(2020, 1, 1);
+		Tarea t = agendada(1, "atrasada", muyVieja, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.posponer(1L, null).fecha()).isEqualTo(LocalDate.of(2020, 1, 2));
+	}
+
+	@Test
+	void posponerAUnaFechaExplicitaYConservaLasHoras() {
+		Tarea t = agendada(1, "a", DIA, LocalTime.of(9, 0), null, Estado.PENDIENTE);
+		t.setHoraFin(LocalTime.of(10, 0));
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		TareaResponse r = service.posponer(1L, new PosponerRequest(DIA.plusDays(5)));
+
+		assertThat(r.fecha()).isEqualTo(DIA.plusDays(5));
+		assertThat(r.horaInicio()).isEqualTo(LocalTime.of(9, 0));
+		assertThat(r.horaFin()).isEqualTo(LocalTime.of(10, 0));
+		assertThat(r.vecesPospuesta()).isEqualTo(1);
+	}
+
+	@Test
+	void posponerVariasVecesAcumulaElContador() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		service.posponer(1L, null);
+		TareaResponse r = service.posponer(1L, null);
+
+		assertThat(r.vecesPospuesta()).isEqualTo(2);
+		assertThat(r.fecha()).isEqualTo(DIA.plusDays(2));
+	}
+
+	@Test
+	void posponerInexistenteFalla() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.posponer(1L, null)).isInstanceOf(TareaNoEncontradaException.class);
+	}
+
+	@Test
+	void posponerUnaTareaHechaFalla() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.HECHO);
+		existe(t);
+
+		assertThatThrownBy(() -> service.posponer(1L, null)).isInstanceOf(TareaEstadoInvalidaException.class);
+		assertThat(t.getFecha()).isEqualTo(DIA);
+		assertThat(t.getVecesPospuesta()).isZero();
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void posponerUnaTareaCanceladaFalla() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.CANCELADO);
+		existe(t);
+
+		assertThatThrownBy(() -> service.posponer(1L, null)).isInstanceOf(TareaEstadoInvalidaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void posponerSinFechaYSinBodyFalla() {
+		existe(agendada(1, "sin agendar", null, null, null, Estado.PENDIENTE));
+
+		assertThatThrownBy(() -> service.posponer(1L, null)).isInstanceOf(TareaInvalidaException.class);
+		verify(repository, never()).save(any());
+	}
+
+	@Test
+	void posponerUnaTareaSinFechaConFechaExplicitaLaAgenda() {
+		Tarea t = agendada(1, "sin agendar", null, null, null, Estado.PENDIENTE);
+		existe(t);
+		when(repository.save(t)).thenReturn(t);
+
+		assertThat(service.posponer(1L, new PosponerRequest(DIA)).fecha()).isEqualTo(DIA);
+	}
+
+	@Test
+	void posponerAUnaFechaNoPosteriorFalla() {
+		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
+		existe(t);
+
+		assertThatThrownBy(() -> service.posponer(1L, new PosponerRequest(DIA)))
+				.isInstanceOf(TareaInvalidaException.class);
+		assertThatThrownBy(() -> service.posponer(1L, new PosponerRequest(DIA.minusDays(1))))
+				.isInstanceOf(TareaInvalidaException.class);
+		verify(repository, never()).save(any());
 	}
 }

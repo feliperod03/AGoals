@@ -1,5 +1,6 @@
 package com.agoals.common;
 
+import com.agoals.tarea.TareaEstadoInvalidaException;
 import com.agoals.tarea.TareaInvalidaException;
 import com.agoals.tarea.TareaNoEncontradaException;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(TareaInvalidaException.class)
 	public ResponseEntity<ErrorResponse> invalida(TareaInvalidaException e) {
 		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(TareaEstadoInvalidaException.class)
+	public ResponseEntity<ErrorResponse> estadoInvalido(TareaEstadoInvalidaException e) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

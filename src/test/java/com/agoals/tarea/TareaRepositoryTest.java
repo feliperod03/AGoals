@@ -45,6 +45,27 @@ class TareaRepositoryTest {
 	}
 
 	@Test
+	void buscaPorFechaYUsuarioOrdenadoPorHora() {
+		LocalDate dia = LocalDate.of(2026, 11, 6);
+		Tarea tarde = nueva("tarde");
+		tarde.setFecha(dia);
+		tarde.setHoraInicio(LocalTime.of(15, 0));
+		Tarea temprano = nueva("temprano");
+		temprano.setFecha(dia);
+		temprano.setHoraInicio(LocalTime.of(8, 0));
+		Tarea suelta = nueva("suelta");
+		suelta.setFecha(dia);
+		Tarea otroDia = nueva("otro día");
+		otroDia.setFecha(dia.plusDays(1));
+		repository.saveAllAndFlush(java.util.List.of(tarde, temprano, suelta, otroDia));
+
+		assertThat(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(1L, dia))
+				.extracting(Tarea::getTitulo)
+				.containsExactly("temprano", "tarde", "suelta");
+		assertThat(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(2L, dia)).isEmpty();
+	}
+
+	@Test
 	void laBaseRechazaHoraSinFecha() {
 		Tarea t = nueva("invalida");
 		t.setHoraInicio(LocalTime.of(9, 0));

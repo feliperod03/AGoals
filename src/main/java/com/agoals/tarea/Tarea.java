@@ -94,6 +94,12 @@ public class Tarea {
 
 	public OffsetDateTime getFechaCreacion() { return fechaCreacion; }
 
+	/** Cambia la fecha y cuenta un aplazamiento. Las horas se conservan. */
+	public void posponerA(LocalDate nuevaFecha) {
+		this.fecha = nuevaFecha;
+		this.vecesPospuesta++;
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
