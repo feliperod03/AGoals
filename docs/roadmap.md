@@ -11,8 +11,9 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
    - **4c Tareas** (hecha): tareas con fecha pasada y sin terminar visibles (`GET /api/tareas/atrasadas?fecha=`), reabrir tareas marcadas como hechas por error (`PATCH /api/tareas/{id}/reabrir`), detección de ciclos en la jerarquía de `TareaService` y 409 al borrar una tarea con subtareas (sin cascada desde la API).
 5. **Recomendación** (hecha): `GET /api/tareas/recomendacion?fecha=&orden=&sentido=&limite=&proyectoId=&objetivoId=`. Solo lectura, en el módulo tarea. Sugiere tareas abiertas **sin fecha o atrasadas**, de cualquier tipo (con proyecto, con objetivo, con ambos o sin ninguno; también madres), con subtareas anidadas, ordenadas por prioridad o antigüedad. Decidido: incluye las ligadas solo a un objetivo.
    - **5b Agendar tarea con sus subtareas** (hecha): `PATCH /api/tareas/{id}/agendar` con `{fecha, hoy, incluirSubtareas}`. Escritura en el módulo tarea: asigna la nueva fecha a la madre y, por defecto, a sus descendientes candidatos (los mismos que la vista previa de `/recomendacion` anida bajo ella). Las descendientes con fecha de hoy o futura y las hechas/canceladas se respetan. Todo o nada.
-6. **Ideas**: libres o ligadas a proyecto/objetivo, estado y conclusión.
-   - Al llegar a esta rebanada, `ObjetivoService.eliminar` (y el borrado de proyectos) debe pasar a dar 409 también si el objetivo o proyecto tiene ideas; hoy la base les hace SET NULL en silencio porque el módulo idea no existe.
+6. **Ideas** (hecha): `/api/ideas`. Libres o ligadas a un proyecto o a un objetivo (nunca a ambos), estado PLANTEADA/CONCLUIDA (`EstadoIdea`), conclusión opcional y fecha de cierre; filtros por estado, proyecto, objetivo y `libres`; `PATCH /concluir` y `/reabrir`.
+   - Sin ciclos de beans: `ProyectoConsultaService` (solo `ProyectoRepository`, con su test guardián) y `ObjetivoConsultaService` validan los ids desde `IdeaService`; `ProyectoService` y `ObjetivoService` preguntan a `IdeaService` si hay ideas ligadas.
+   - `DELETE` de proyecto y de objetivo responden 409 si tienen ideas ligadas.
 7. **Eventos y Recordatorios**: citas y avisos (primero dentro de la app).
 8. **Frontend React**: agenda del día primero, luego el resto.
 9. **Calendario**: vistas mensual y semanal (librería, no a mano).

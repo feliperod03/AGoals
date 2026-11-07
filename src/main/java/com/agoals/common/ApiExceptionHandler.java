@@ -1,5 +1,8 @@
 package com.agoals.common;
 
+import com.agoals.idea.IdeaEstadoInvalidaException;
+import com.agoals.idea.IdeaInvalidaException;
+import com.agoals.idea.IdeaNoEncontradaException;
 import com.agoals.objetivo.ObjetivoConDependenciasException;
 import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.objetivo.ObjetivoNoEncontradoException;
@@ -15,8 +18,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -72,6 +78,34 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(ObjetivoConDependenciasException.class)
 	public ResponseEntity<ErrorResponse> objetivoConDependencias(ObjetivoConDependenciasException e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(IdeaNoEncontradaException.class)
+	public ResponseEntity<ErrorResponse> ideaNoEncontrada(IdeaNoEncontradaException e) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(IdeaInvalidaException.class)
+	public ResponseEntity<ErrorResponse> ideaInvalida(IdeaInvalidaException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(IdeaEstadoInvalidaException.class)
+	public ResponseEntity<ErrorResponse> ideaEstadoInvalido(IdeaEstadoInvalidaException e) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	// Un parámetro de URL con tipo inválido (p. ej. ?estado=RARO o ?fecha=06-11-2026): 400 con mensaje claro.
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ErrorResponse> parametroInvalido(MethodArgumentTypeMismatchException e) {
+		String mensaje = "Valor inválido para '" + e.getName() + "': '" + e.getValue() + "'";
+		Class<?> tipo = e.getRequiredType();
+		if (tipo != null && tipo.isEnum()) {
+			mensaje += ". Valores válidos: " + Arrays.stream(tipo.getEnumConstants())
+					.map(c -> ((Enum<?>) c).name())
+					.collect(Collectors.joining(", "));
+		}
+		return ResponseEntity.badRequest().body(new ErrorResponse(mensaje, List.of()));
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

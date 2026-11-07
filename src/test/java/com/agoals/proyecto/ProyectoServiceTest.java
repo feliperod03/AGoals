@@ -2,6 +2,7 @@ package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
+import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.ObjetivoConsultaService;
 import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.proyecto.dto.ProyectoRequest;
@@ -41,6 +42,9 @@ class ProyectoServiceTest {
 
 	@Mock
 	ObjetivoConsultaService objetivoConsultaService;
+
+	@Mock
+	IdeaService ideaService;
 
 	@InjectMocks
 	ProyectoService service;
@@ -311,10 +315,24 @@ class ProyectoServiceTest {
 	}
 
 	@Test
+	void eliminarConIdeasDa409() {
+		existe(proyecto(1, null));
+		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
+		when(tareaService.existenTareasDelProyecto(1L)).thenReturn(false);
+		when(ideaService.existenIdeasDelProyecto(1L)).thenReturn(true);
+
+		assertThatThrownBy(() -> service.eliminar(1L))
+				.isInstanceOf(ProyectoConDependenciasException.class)
+				.hasMessageContaining("ideas");
+		verify(repository, never()).delete(any());
+	}
+
+	@Test
 	void eliminarUnProyectoVacioLoBorra() {
 		Proyecto p = existe(proyecto(1, null));
 		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
 		when(tareaService.existenTareasDelProyecto(1L)).thenReturn(false);
+		when(ideaService.existenIdeasDelProyecto(1L)).thenReturn(false);
 
 		service.eliminar(1L);
 

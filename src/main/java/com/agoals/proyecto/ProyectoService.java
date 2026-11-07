@@ -2,6 +2,7 @@ package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
+import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.ObjetivoConsultaService;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
@@ -22,14 +23,17 @@ public class ProyectoService {
 	private final ProyectoRepository repository;
 	private final TareaService tareaService;
 	private final ObjetivoConsultaService objetivoConsultaService;
+	private final IdeaService ideaService;
 
-	// Dependencias en un solo sentido: proyecto -> tarea y proyecto -> objetivo (solo la consulta).
+	// Dependencias en un solo sentido: proyecto -> tarea, proyecto -> objetivo (solo la consulta) y proyecto -> idea.
 	// Se usa ObjetivoConsultaService y no ObjetivoService porque ObjetivoService depende de esta clase.
+	// IdeaService valida proyectos con ProyectoConsultaService, no con esta clase (evita el ciclo).
 	public ProyectoService(ProyectoRepository repository, TareaService tareaService,
-			ObjetivoConsultaService objetivoConsultaService) {
+			ObjetivoConsultaService objetivoConsultaService, IdeaService ideaService) {
 		this.repository = repository;
 		this.tareaService = tareaService;
 		this.objetivoConsultaService = objetivoConsultaService;
+		this.ideaService = ideaService;
 	}
 
 	public ProyectoResponse crear(ProyectoRequest request) {
@@ -66,7 +70,7 @@ public class ProyectoService {
 	}
 
 	// Desde la API nunca se borra en cascada, aunque la base tenga CASCADE / SET NULL:
-	// hay que vaciar el proyecto (mover o quitar subproyectos y tareas) antes de borrarlo.
+	// hay que vaciar el proyecto (mover o quitar subproyectos, tareas e ideas) antes de borrarlo.
 	public void eliminar(Long id) {
 		Proyecto proyecto = buscar(id);
 		if (repository.existsByPadreIdAndUsuarioId(id, USUARIO_ID)) {
@@ -76,6 +80,10 @@ public class ProyectoService {
 		if (tareaService.existenTareasDelProyecto(id)) {
 			throw new ProyectoConDependenciasException(
 					"El proyecto " + id + " tiene tareas: desasígnalas primero");
+		}
+		if (ideaService.existenIdeasDelProyecto(id)) {
+			throw new ProyectoConDependenciasException(
+					"El proyecto " + id + " tiene ideas: desvincúlalas o bórralas primero");
 		}
 		repository.delete(proyecto);
 	}

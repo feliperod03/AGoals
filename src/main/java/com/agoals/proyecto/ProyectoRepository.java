@@ -12,6 +12,8 @@ public interface ProyectoRepository extends JpaRepository<Proyecto, Long> {
 
 	Optional<Proyecto> findByIdAndUsuarioId(Long id, Long usuarioId);
 
+	boolean existsByIdAndUsuarioId(Long id, Long usuarioId);
+
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
 	boolean existsByObjetivoIdAndUsuarioId(Long objetivoId, Long usuarioId);

@@ -1,6 +1,6 @@
 # AGoals
 
-App personal de agenda multifuncional: agenda diaria, calendario, objetivos, proyectos, ideas y notas, centralizado.
+App personal de agenda multifuncional: agenda diaria, calendario, objetivos, proyectos, ideas, centralizado.
 Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: que quede usable y entendible, no completo.
 
 ## Stack

@@ -243,6 +243,16 @@ class ProyectoControllerTest {
 				.andExpect(jsonPath("$.mensaje").value(containsString("tareas")));
 	}
 
+	@Test
+	void deleteConIdeasDevuelve409() throws Exception {
+		doThrow(new ProyectoConDependenciasException("El proyecto 1 tiene ideas: desvincúlalas o bórralas primero"))
+				.when(service).eliminar(1L);
+
+		mvc.perform(delete("/api/proyectos/1"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value(containsString("ideas")));
+	}
+
 	// ---- Tareas del proyecto ----
 
 	@Test

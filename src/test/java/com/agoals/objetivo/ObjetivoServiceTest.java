@@ -2,6 +2,7 @@ package com.agoals.objetivo;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
+import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.proyecto.ProyectoService;
@@ -39,6 +40,9 @@ class ObjetivoServiceTest {
 
 	@Mock
 	TareaService tareaService;
+
+	@Mock
+	IdeaService ideaService;
 
 	@InjectMocks
 	ObjetivoService service;
@@ -237,11 +241,26 @@ class ObjetivoServiceTest {
 	}
 
 	@Test
+	void eliminarConIdeasDa409() {
+		existe(objetivo(1, null));
+		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
+		when(proyectoService.existenProyectosDelObjetivo(1L)).thenReturn(false);
+		when(tareaService.existenTareasDelObjetivo(1L)).thenReturn(false);
+		when(ideaService.existenIdeasDelObjetivo(1L)).thenReturn(true);
+
+		assertThatThrownBy(() -> service.eliminar(1L))
+				.isInstanceOf(ObjetivoConDependenciasException.class)
+				.hasMessageContaining("ideas");
+		verify(repository, never()).delete(any());
+	}
+
+	@Test
 	void eliminarUnObjetivoVacioLoBorra() {
 		Objetivo o = existe(objetivo(1, null));
 		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
 		when(proyectoService.existenProyectosDelObjetivo(1L)).thenReturn(false);
 		when(tareaService.existenTareasDelObjetivo(1L)).thenReturn(false);
+		when(ideaService.existenIdeasDelObjetivo(1L)).thenReturn(false);
 
 		service.eliminar(1L);
 

@@ -215,6 +215,16 @@ class ObjetivoControllerTest {
 				.andExpect(jsonPath("$.mensaje").value(containsString("proyectos")));
 	}
 
+	@Test
+	void deleteConIdeasDevuelve409ConElMotivo() throws Exception {
+		doThrow(new ObjetivoConDependenciasException("El objetivo 1 tiene ideas: desvincúlalas o bórralas primero"))
+				.when(service).eliminar(1L);
+
+		mvc.perform(delete("/api/objetivos/1"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value(containsString("ideas")));
+	}
+
 	// ---- Tareas del objetivo ----
 
 	@Test

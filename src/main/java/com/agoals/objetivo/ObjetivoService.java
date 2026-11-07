@@ -2,6 +2,7 @@ package com.agoals.objetivo;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
+import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.proyecto.ProyectoService;
@@ -22,14 +23,17 @@ public class ObjetivoService {
 	private final ObjetivoRepository repository;
 	private final ProyectoService proyectoService;
 	private final TareaService tareaService;
+	private final IdeaService ideaService;
 
-	// Dependencias en un solo sentido: objetivo -> proyecto, objetivo -> tarea.
+	// Dependencias en un solo sentido: objetivo -> proyecto, objetivo -> tarea, objetivo -> idea.
 	// ProyectoService valida objetivos con ObjetivoConsultaService, no con esta clase (evita el ciclo).
+	// IdeaService valida objetivos con ObjetivoConsultaService, tampoco con esta clase.
 	public ObjetivoService(ObjetivoRepository repository, ProyectoService proyectoService,
-			TareaService tareaService) {
+			TareaService tareaService, IdeaService ideaService) {
 		this.repository = repository;
 		this.proyectoService = proyectoService;
 		this.tareaService = tareaService;
+		this.ideaService = ideaService;
 	}
 
 	public ObjetivoResponse crear(ObjetivoRequest request) {
@@ -61,7 +65,6 @@ public class ObjetivoService {
 
 	// Desde la API nunca se borra en cascada, aunque la base tenga CASCADE / SET NULL:
 	// hay que vaciar el objetivo antes. Cada motivo tiene su propio mensaje.
-	// (Cuando exista el módulo idea, sumar aquí el chequeo de ideas: ver docs/roadmap.md, rebanada 6.)
 	public void eliminar(Long id) {
 		Objetivo objetivo = buscar(id);
 		if (repository.existsByPadreIdAndUsuarioId(id, USUARIO_ID)) {
@@ -75,6 +78,10 @@ public class ObjetivoService {
 		if (tareaService.existenTareasDelObjetivo(id)) {
 			throw new ObjetivoConDependenciasException(
 					"El objetivo " + id + " tiene tareas: desasígnalas primero");
+		}
+		if (ideaService.existenIdeasDelObjetivo(id)) {
+			throw new ObjetivoConDependenciasException(
+					"El objetivo " + id + " tiene ideas: desvincúlalas o bórralas primero");
 		}
 		repository.delete(objetivo);
 	}

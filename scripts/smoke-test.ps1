@@ -1,14 +1,16 @@
 # Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
 # (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
 # proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir, recomendacion
-# y agendar una tarea con sus subtareas.
+# y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
+# reabrir y 409 al borrar un proyecto u objetivo con ideas).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
-# Crea tareas con fecha 2099-12-31, y proyectos y objetivos "smoke-*", y los borra al terminar.
+# Crea tareas con fecha 2099-12-31, y proyectos, objetivos e ideas "smoke-*", y los borra al terminar.
 param(
     [string]$Base = "http://localhost:8080/api/tareas",
     [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
-    [string]$BaseObjetivos = "http://localhost:8080/api/objetivos"
+    [string]$BaseObjetivos = "http://localhost:8080/api/objetivos",
+    [string]$BaseIdeas = "http://localhost:8080/api/ideas"
 )
 
 $fecha = "2099-12-31"
@@ -16,6 +18,7 @@ $fallos = 0
 $ids = @()
 $proyectoIds = @()
 $objetivoIds = @()
+$ideaIds = @()
 
 function Llamar($metodo, $url, $body = $null) {
     $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
@@ -410,12 +413,119 @@ try {
     Verificar "borrar la ultima subtarea -> 204" ($k5.Status -eq 204) "status $($k5.Status)"
     $k6 = Llamar "DELETE" ($Base + "/" + $ja.Json.id)
     Verificar "borrar la tarea ya sin subtareas -> 204" ($k6.Status -eq 204) "status $($k6.Status)"
+
+    # --- Ideas: libres o ligadas a un proyecto/objetivo, concluir/reabrir y 409 al borrar ---
+    $ip = Llamar "POST" $BaseProyectos '{"nombre":"smoke-id-P"}'
+    if ($ip.Json) { $proyectoIds += $ip.Json.id }
+    if (-not $ip.Json) { throw "No se pudo crear el proyecto de ideas." }
+    $io = Llamar "POST" $BaseObjetivos '{"nombre":"smoke-id-O"}'
+    if ($io.Json) { $objetivoIds += $io.Json.id }
+    if (-not $io.Json) { throw "No se pudo crear el objetivo de ideas." }
+
+    $i1 = Llamar "POST" $BaseIdeas '{"titulo":"smoke-id-1 libre"}'
+    Verificar "crear idea libre: 201, PLANTEADA, descripcion vacia y fechaCreacion con valor" (($i1.Status -eq 201) -and ($i1.Json.estado -eq "PLANTEADA") -and ($i1.Json.descripcion -eq "") -and ($i1.Json.fechaCreacion) -and (-not $i1.Json.fechaCierre) -and (-not $i1.Json.proyectoId) -and (-not $i1.Json.objetivoId)) $i1.Raw
+    if ($i1.Json) { $ideaIds += $i1.Json.id }
+    if (-not $i1.Json) { throw "No se pudo crear la idea libre." }
+    $i2 = Llamar "POST" $BaseIdeas ('{"titulo":"smoke-id-2 de proyecto","descripcion":"detalle","proyectoId":' + $ip.Json.id + '}')
+    Verificar "crear idea ligada a un proyecto" (($i2.Status -eq 201) -and ($i2.Json.proyectoId -eq $ip.Json.id) -and ($i2.Json.descripcion -eq "detalle")) $i2.Raw
+    if ($i2.Json) { $ideaIds += $i2.Json.id }
+    if (-not $i2.Json) { throw "No se pudo crear la idea del proyecto." }
+    $i3 = Llamar "POST" $BaseIdeas ('{"titulo":"smoke-id-3 de objetivo","objetivoId":' + $io.Json.id + '}')
+    Verificar "crear idea ligada a un objetivo" (($i3.Status -eq 201) -and ($i3.Json.objetivoId -eq $io.Json.id)) $i3.Raw
+    if ($i3.Json) { $ideaIds += $i3.Json.id }
+    if (-not $i3.Json) { throw "No se pudo crear la idea del objetivo." }
+    $i4 = Llamar "POST" $BaseIdeas ('{"titulo":"smoke-id-4 de proyecto, mas nueva","proyectoId":' + $ip.Json.id + '}')
+    if ($i4.Json) { $ideaIds += $i4.Json.id }
+    if (-not $i4.Json) { throw "No se pudo crear la segunda idea del proyecto." }
+
+    $ie1 = Llamar "POST" $BaseIdeas ('{"titulo":"smoke-id-x","proyectoId":' + $ip.Json.id + ',"objetivoId":' + $io.Json.id + '}')
+    Verificar "crear idea con proyecto y objetivo a la vez -> 400" ($ie1.Status -eq 400) "status $($ie1.Status)"
+    if ($ie1.Json -and $ie1.Json.id) { $ideaIds += $ie1.Json.id }
+    $ie2 = Llamar "POST" $BaseIdeas '{"titulo":"smoke-id-x","proyectoId":999999}'
+    Verificar "crear idea con proyectoId inexistente -> 400 'El proyecto no existe'" (($ie2.Status -eq 400) -and ($ie2.Raw -match "El proyecto no existe: 999999")) "status $($ie2.Status) $($ie2.Raw)"
+    $ie3 = Llamar "POST" $BaseIdeas '{"titulo":"smoke-id-x","objetivoId":999999}'
+    Verificar "crear idea con objetivoId inexistente -> 400 'El objetivo no existe'" (($ie3.Status -eq 400) -and ($ie3.Raw -match "El objetivo no existe: 999999")) "status $($ie3.Status) $($ie3.Raw)"
+    $ie4 = Llamar "POST" $BaseIdeas '{"titulo":""}'
+    Verificar "crear idea sin titulo -> 400" ($ie4.Status -eq 400) "status $($ie4.Status)"
+    $ie5 = Llamar "GET" ($BaseIdeas + "/999999")
+    Verificar "idea inexistente -> 404" ($ie5.Status -eq 404) "status $($ie5.Status)"
+
+    # Filtros y orden (creacion descendente, luego id descendente)
+    $il1 = Llamar "GET" ($BaseIdeas + "?proyectoId=" + $ip.Json.id)
+    $il1t = @($il1.Json | ForEach-Object { $_.titulo })
+    Verificar "listar ideas por proyectoId: la mas nueva primero" (($il1.Status -eq 200) -and (($il1t -join "|") -eq "smoke-id-4 de proyecto, mas nueva|smoke-id-2 de proyecto")) ($il1t -join "|")
+    $il2 = Llamar "GET" ($BaseIdeas + "?objetivoId=" + $io.Json.id)
+    $il2t = @($il2.Json | ForEach-Object { $_.titulo })
+    Verificar "listar ideas por objetivoId" (($il2.Status -eq 200) -and (($il2t -join "|") -eq "smoke-id-3 de objetivo")) ($il2t -join "|")
+    $il3 = Llamar "GET" ($BaseIdeas + "?libres=true")
+    $il3t = @($il3.Json | ForEach-Object { $_.titulo })
+    Verificar "listar ideas libres: trae la libre y no las ligadas" (($il3.Status -eq 200) -and ($il3t -contains "smoke-id-1 libre") -and ($il3t -notcontains "smoke-id-2 de proyecto") -and ($il3t -notcontains "smoke-id-3 de objetivo")) ($il3t -join "|")
+    $il4 = Llamar "GET" ($BaseIdeas + "?libres=true&proyectoId=" + $ip.Json.id)
+    Verificar "libres=true con proyectoId -> 400" ($il4.Status -eq 400) "status $($il4.Status)"
+    $il5 = Llamar "GET" ($BaseIdeas + "?libres=true&objetivoId=" + $io.Json.id)
+    Verificar "libres=true con objetivoId -> 400" ($il5.Status -eq 400) "status $($il5.Status)"
+    $il6 = Llamar "GET" ($BaseIdeas + "?estado=RARO")
+    Verificar "listar con estado invalido -> 400 con mensaje claro" (($il6.Status -eq 400) -and ($il6.Raw -match "estado") -and ($il6.Raw -match "PLANTEADA")) "status $($il6.Status) $($il6.Raw)"
+    $il7 = Llamar "GET" ($BaseIdeas + "?estado=CONCLUIDA&proyectoId=" + $ip.Json.id)
+    Verificar "listar CONCLUIDAS del proyecto: aun ninguna" (($il7.Status -eq 200) -and (@($il7.Json).Count -eq 0)) $il7.Raw
+
+    # Editar (PUT no cambia el estado)
+    $iu = Llamar "PUT" ($BaseIdeas + "/" + $i1.Json.id) ('{"titulo":"smoke-id-1 editada","descripcion":"nueva","proyectoId":' + $ip.Json.id + '}')
+    Verificar "editar idea: pasa de libre a ligada al proyecto" (($iu.Status -eq 200) -and ($iu.Json.titulo -eq "smoke-id-1 editada") -and ($iu.Json.proyectoId -eq $ip.Json.id) -and ($iu.Json.estado -eq "PLANTEADA")) $iu.Raw
+    $iu2 = Llamar "PUT" ($BaseIdeas + "/" + $i1.Json.id) ('{"titulo":"smoke-id-1 libre"}')
+    Verificar "editar idea: soltar el vinculo la deja libre" (($iu2.Status -eq 200) -and (-not $iu2.Json.proyectoId)) $iu2.Raw
+    $iu3 = Llamar "PUT" ($BaseIdeas + "/999999") '{"titulo":"x"}'
+    Verificar "editar idea inexistente -> 404" ($iu3.Status -eq 404) "status $($iu3.Status)"
+
+    # Concluir / reabrir
+    $c1 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/concluir")
+    Verificar "concluir sin body -> 200, CONCLUIDA, con fechaCierre" (($c1.Status -eq 200) -and ($c1.Json.estado -eq "CONCLUIDA") -and ($c1.Json.fechaCierre) -and (-not $c1.Json.conclusion)) $c1.Raw
+    $c2 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/concluir") '{"conclusion":"otra"}'
+    Verificar "concluir una ya concluida -> 409" ($c2.Status -eq 409) "status $($c2.Status)"
+    $cl = Llamar "GET" ($BaseIdeas + "?estado=CONCLUIDA&proyectoId=" + $ip.Json.id)
+    Verificar "listar CONCLUIDAS del proyecto: trae la concluida" (($cl.Status -eq 200) -and (@($cl.Json).Count -eq 1) -and (@($cl.Json)[0].id -eq $i2.Json.id)) $cl.Raw
+    $r1 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/reabrir")
+    Verificar "reabrir -> PLANTEADA sin fechaCierre" (($r1.Status -eq 200) -and ($r1.Json.estado -eq "PLANTEADA") -and (-not $r1.Json.fechaCierre)) $r1.Raw
+    $r2 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/reabrir")
+    Verificar "reabrir una ya planteada (idempotente)" (($r2.Status -eq 200) -and ($r2.Json.estado -eq "PLANTEADA")) $r2.Raw
+    $c3 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/concluir") '{"conclusion":"Se hace asi"}'
+    Verificar "concluir con conclusion la guarda" (($c3.Status -eq 200) -and ($c3.Json.conclusion -eq "Se hace asi")) $c3.Raw
+    $r3 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/reabrir")
+    Verificar "reabrir conserva la conclusion" (($r3.Status -eq 200) -and ($r3.Json.conclusion -eq "Se hace asi")) $r3.Raw
+    $c4 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/concluir") '{"conclusion":""}'
+    Verificar "concluir con conclusion vacia conserva la anterior" (($c4.Status -eq 200) -and ($c4.Json.conclusion -eq "Se hace asi")) $c4.Raw
+    [void](Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/reabrir"))
+    $c5 = Llamar "PATCH" ($BaseIdeas + "/" + $i2.Json.id + "/concluir") '{"conclusion":"Mejor asi"}'
+    Verificar "concluir con conclusion nueva reemplaza la anterior" (($c5.Status -eq 200) -and ($c5.Json.conclusion -eq "Mejor asi")) $c5.Raw
+    $c6 = Llamar "PATCH" ($BaseIdeas + "/999999/concluir")
+    Verificar "concluir inexistente -> 404" ($c6.Status -eq 404) "status $($c6.Status)"
+    $c7 = Llamar "PATCH" ($BaseIdeas + "/999999/reabrir")
+    Verificar "reabrir inexistente -> 404" ($c7.Status -eq 404) "status $($c7.Status)"
+
+    # Borrar un proyecto / objetivo con ideas -> 409; sin ideas -> 204
+    $dp1 = Llamar "DELETE" ($BaseProyectos + "/" + $ip.Json.id)
+    Verificar "borrar proyecto con ideas -> 409 (ideas)" (($dp1.Status -eq 409) -and ($dp1.Raw -match "ideas")) "status $($dp1.Status) $($dp1.Raw)"
+    $do1 = Llamar "DELETE" ($BaseObjetivos + "/" + $io.Json.id)
+    Verificar "borrar objetivo con ideas -> 409 (ideas)" (($do1.Status -eq 409) -and ($do1.Raw -match "ideas")) "status $($do1.Status) $($do1.Raw)"
+    $dv = Llamar "GET" ($BaseIdeas + "/" + $i2.Json.id)
+    Verificar "las ideas siguen existiendo tras el 409" ($dv.Status -eq 200) "status $($dv.Status)"
+    foreach ($x in @($i2, $i3, $i4)) { [void](Llamar "DELETE" ($BaseIdeas + "/" + $x.Json.id)) }
+    $di = Llamar "DELETE" ($BaseIdeas + "/" + $i1.Json.id)
+    Verificar "borrar idea -> 204" ($di.Status -eq 204) "status $($di.Status)"
+    $di2 = Llamar "DELETE" ($BaseIdeas + "/" + $i1.Json.id)
+    Verificar "borrar idea ya borrada -> 404" ($di2.Status -eq 404) "status $($di2.Status)"
+    $dp2 = Llamar "DELETE" ($BaseProyectos + "/" + $ip.Json.id)
+    Verificar "borrar proyecto sin ideas -> 204" ($dp2.Status -eq 204) "status $($dp2.Status)"
+    $do2 = Llamar "DELETE" ($BaseObjetivos + "/" + $io.Json.id)
+    Verificar "borrar objetivo sin ideas -> 204" ($do2.Status -eq 204) "status $($do2.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
     $fallos++
 }
 finally {
+    # Las ideas primero: la API da 409 al borrar un proyecto u objetivo que todavia las tiene.
+    foreach ($id in $ideaIds) { [void](Llamar "DELETE" ($BaseIdeas + "/" + $id)) }
     # Orden inverso al de creacion: las subtareas (creadas despues) se borran antes que sus madres,
     # porque la API da 409 al borrar una tarea que todavia tiene subtareas.
     [array]::Reverse($ids)

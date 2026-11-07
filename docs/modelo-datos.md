@@ -52,10 +52,18 @@ Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicia
 - Reabrir una tarea (`PATCH /api/tareas/{id}/reabrir`): HECHO pasa a PENDIENTE (no se guarda el estado previo). Si ya está abierta (PENDIENTE, EN_PROGRESO o EN_PAUSA) no cambia: es idempotente. Si está CANCELADO responde 409.
 - Una tarea no puede ser su propia descendiente: la API rechaza con 400 un `padreId` que cree un ciclo (directo, A→B→A, o indirecto), igual que en proyectos y objetivos.
 - Una idea pasa a CONCLUIDA con `conclusion` y `fecha_cierre`, y queda como registro (trazabilidad).
+- Ideas (`/api/ideas`; no son jerárquicas y las notas libres también son ideas):
+  - Una idea es libre, o está ligada a un proyecto **o** a un objetivo, nunca a ambos (400). Un `proyectoId` u `objetivoId` inexistente responde 400 ("El proyecto no existe: N" / "El objetivo no existe: N"); la clave foránea queda como red de seguridad. 404 si la idea no existe.
+  - `POST`: `titulo` obligatorio (máx. 200); `descripcion` opcional (null se guarda como `''`); `conclusion` opcional (vacía se guarda como null). Nace PLANTEADA y la respuesta trae `fechaCreacion` (la pone la base).
+  - `PUT /{id}`: reemplaza `titulo`, `descripcion`, `proyectoId`, `objetivoId` y `conclusion` en cualquier estado; un campo opcional que no viene queda vacío/null (también suelta el vínculo). **No** cambia el estado ni `fecha_cierre`.
+  - `GET /api/ideas?estado=&proyectoId=&objetivoId=&libres=`: todos opcionales. `libres=true` = sin ningún vínculo; junto con `proyectoId` u `objetivoId` responde 400 (`libres=false` equivale a no filtrar). Un `estado` que no es PLANTEADA/CONCLUIDA responde 400 con los valores válidos. Orden: fecha de creación descendente y luego id descendente.
+  - `PATCH /{id}/concluir` (body opcional `{conclusion}`, también sin body): pasa a CONCLUIDA y `fecha_cierre` = ahora (hora del servidor). Una `conclusion` no vacía reemplaza a la existente; vacía o ausente conserva la anterior. Si ya está CONCLUIDA responde 409.
+  - `PATCH /{id}/reabrir`: pasa a PLANTEADA con `fecha_cierre` null y **conserva** la conclusión. Si ya está PLANTEADA no cambia (idempotente).
+  - `DELETE /{id}` responde 204; la idea no tiene dependencias.
 - Borrar un proyecto u objetivo no borra sus tareas ni ideas: quedan sueltas (`SET NULL`). Borrar un padre jerárquico borra su subárbol.
-- Esas reglas son las de la **base de datos**. La **API** es más estricta: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes), y `DELETE /api/tareas/{id}` responde 409 si la tarea tiene subtareas (hay que moverlas o borrarlas antes). No se borra nada en cascada desde la API.
+- Esas reglas son las de la **base de datos**. La **API** es más estricta: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos, tareas o ideas (hay que moverlos o desasignarlos antes), y `DELETE /api/tareas/{id}` responde 409 si la tarea tiene subtareas (hay que moverlas o borrarlas antes). No se borra nada en cascada desde la API.
 - Un proyecto no puede ser su propio descendiente: la API rechaza con 400 cualquier `padreId` que cree un ciclo.
 - Los estados no se propagan: cambiar el estado de un proyecto no modifica el de sus subproyectos ni el de sus tareas.
 - `proyecto.objetivo_id` y `tarea.objetivo_id` / `tarea.proyecto_id` se guardan como ids simples. Al crear o editar un proyecto, un `objetivoId` inexistente responde 400 ("El objetivo no existe: N"); la clave foránea queda como red de seguridad.
-- `DELETE /api/objetivos/{id}` responde 409 si el objetivo tiene subobjetivos, proyectos o tareas ligadas directamente (`tarea.objetivo_id`); el mensaje indica cuál. Las ideas ligadas aún no se comprueban (módulo idea: rebanada 6).
+- `DELETE /api/objetivos/{id}` responde 409 si el objetivo tiene subobjetivos, proyectos, tareas ligadas directamente (`tarea.objetivo_id`) o ideas ligadas (`idea.objetivo_id`); el mensaje indica cuál.
 - Las tareas de un objetivo (`/api/objetivos/{id}/tareas`) son solo las ligadas directamente; los proyectos del objetivo se listan con `GET /api/proyectos?objetivoId=`.
