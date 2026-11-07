@@ -116,6 +116,19 @@ public class Tarea {
 		this.vecesPospuesta++;
 	}
 
+	/**
+	 * Agenda en {@code nuevaFecha} y la deja en la lista del día (sin horas). Cuenta un aplazamiento solo si estaba
+	 * atrasada: una tarea sin fecha, o con fecha de hoy o futura, no se "pospone", se agenda.
+	 */
+	public void agendarEn(LocalDate nuevaFecha, boolean estabaAtrasada) {
+		this.fecha = nuevaFecha;
+		this.horaInicio = null;
+		this.horaFin = null;
+		if (estabaAtrasada) {
+			this.vecesPospuesta++;
+		}
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;

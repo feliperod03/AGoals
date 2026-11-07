@@ -1,6 +1,7 @@
 package com.agoals.tarea;
 
 import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.AgendarRequest;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
@@ -75,6 +76,11 @@ public class TareaController {
 	@PatchMapping("/{id}/posponer")
 	public TareaResponse posponer(@PathVariable Long id, @RequestBody(required = false) PosponerRequest request) {
 		return service.posponer(id, request);
+	}
+
+	@PatchMapping("/{id}/agendar")
+	public List<TareaResponse> agendar(@PathVariable Long id, @Valid @RequestBody AgendarRequest request) {
+		return service.agendar(id, request);
 	}
 
 	@GetMapping("/{id}")

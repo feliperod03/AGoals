@@ -4,6 +4,7 @@ import com.agoals.common.Estado;
 
 import com.agoals.common.ApiExceptionHandler;
 import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.AgendarRequest;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
@@ -292,6 +293,86 @@ class TareaControllerTest {
 						.content("{\"fecha\":\"2026-11-20\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.fecha").value("2026-11-20"));
+	}
+
+	@Test
+	void patchAgendarDevuelve200ConLaListaDeModificadas() throws Exception {
+		LocalDate nueva = LocalDate.of(2026, 11, 10);
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(service.agendar(1L, new AgendarRequest(nueva, hoy, false))).thenReturn(List.of(respuesta(1L, "madre"), respuesta(2L, "hija")));
+
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-10\",\"hoy\":\"2026-11-06\",\"incluirSubtareas\":false}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0].id").value(1))
+				.andExpect(jsonPath("$[1].id").value(2));
+	}
+
+	@Test
+	void patchAgendarSinIncluirSubtareasPasaNullAlService() throws Exception {
+		LocalDate nueva = LocalDate.of(2026, 11, 10);
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		// El default (true) lo aplica el service: el controller deja pasar null.
+		when(service.agendar(1L, new AgendarRequest(nueva, hoy, null))).thenReturn(List.of(respuesta(1L, "madre")));
+
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-10\",\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(1));
+	}
+
+	@Test
+	void patchAgendarSinFechaDevuelve400() throws Exception {
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errores[0]").value(org.hamcrest.Matchers.containsString("fecha")));
+	}
+
+	@Test
+	void patchAgendarSinHoyDevuelve400() throws Exception {
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-10\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errores[0]").value(org.hamcrest.Matchers.containsString("hoy")));
+	}
+
+	@Test
+	void patchAgendarSinBodyOConFechaMalFormadaDevuelve400() throws Exception {
+		mvc.perform(patch("/api/tareas/1/agendar")).andExpect(status().isBadRequest());
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"10-11-2026\",\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void patchAgendarConFechaAnteriorAHoySegunElServiceDevuelve400() throws Exception {
+		when(service.agendar(eq(1L), any())).thenThrow(new TareaInvalidaException("fecha anterior a hoy"));
+
+		mvc.perform(patch("/api/tareas/1/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-01\",\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("fecha anterior a hoy"));
+	}
+
+	@Test
+	void patchAgendarInexistenteDevuelve404() throws Exception {
+		when(service.agendar(eq(7L), any())).thenThrow(new TareaNoEncontradaException(7L));
+
+		mvc.perform(patch("/api/tareas/7/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-10\",\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void patchAgendarMadreCerradaDevuelve409() throws Exception {
+		when(service.agendar(eq(2L), any())).thenThrow(new TareaEstadoInvalidaException("ya hecha"));
+
+		mvc.perform(patch("/api/tareas/2/agendar").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"fecha\":\"2026-11-10\",\"hoy\":\"2026-11-06\"}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value("ya hecha"));
 	}
 
 	@Test

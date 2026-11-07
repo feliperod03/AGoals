@@ -3,6 +3,7 @@ package com.agoals.tarea;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
 import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.AgendarRequest;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.common.Prioridad;
@@ -15,8 +16,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 @Service
@@ -133,15 +136,10 @@ public class TareaService {
 				orden != null ? orden : OrdenRecomendacion.PRIORIDAD,
 				sentido != null ? sentido : SentidoOrden.DESC);
 
-		List<Tarea> candidatas = repository.findCandidatasRecomendacion(USUARIO_ID, fecha, ESTADOS_ABIERTOS);
-		Map<Long, Tarea> porId = new HashMap<>();
-		candidatas.forEach(t -> porId.put(t.getId(), t));
-		Map<Long, List<Tarea>> hijasDe = new HashMap<>();
-		for (Tarea t : candidatas) {
-			if (t.getPadreId() != null && porId.containsKey(t.getPadreId())) {
-				hijasDe.computeIfAbsent(t.getPadreId(), k -> new ArrayList<>()).add(t);
-			}
-		}
+		ArbolCandidatas arbol = cargarCandidatas(fecha);
+		List<Tarea> candidatas = arbol.candidatas();
+		Map<Long, Tarea> porId = arbol.porId();
+		Map<Long, List<Tarea>> hijasDe = arbol.hijasDe();
 
 		Predicate<Tarea> cumple = t -> (proyectoId == null || proyectoId.equals(t.getProyectoId()))
 				&& (objetivoId == null || objetivoId.equals(t.getObjetivoId()));
@@ -152,6 +150,78 @@ public class TareaService {
 				.limit(tope)
 				.map(t -> aRecomendada(t, hijasDe, comparador))
 				.toList();
+	}
+
+	/**
+	 * Candidatas (abiertas y sin fecha o con fecha anterior a {@code hoy}) con sus índices. {@code hijasDe} agrupa por
+	 * {@code padreId} a TODAS las candidatas, aunque el padre no sea candidata (p. ej. fecha de hoy o futura):
+	 * {@code recomendacion} solo desciende desde sus raíces, que sí son candidatas, y {@code agendar} necesita
+	 * encontrar las hijas de una madre que no lo es. Una sola consulta, sin N+1.
+	 */
+	private record ArbolCandidatas(List<Tarea> candidatas, Map<Long, Tarea> porId, Map<Long, List<Tarea>> hijasDe) {
+	}
+
+	private ArbolCandidatas cargarCandidatas(LocalDate hoy) {
+		List<Tarea> candidatas = repository.findCandidatasRecomendacion(USUARIO_ID, hoy, ESTADOS_ABIERTOS);
+		Map<Long, Tarea> porId = new HashMap<>();
+		Map<Long, List<Tarea>> hijasDe = new HashMap<>();
+		for (Tarea t : candidatas) {
+			porId.put(t.getId(), t);
+			if (t.getPadreId() != null) {
+				hijasDe.computeIfAbsent(t.getPadreId(), k -> new ArrayList<>()).add(t);
+			}
+		}
+		return new ArbolCandidatas(candidatas, porId, hijasDe);
+	}
+
+	/**
+	 * Agenda la tarea en {@code request.fecha()} y, si {@code incluirSubtareas} (por defecto sí), a sus descendientes
+	 * candidatos: los mismos que la vista previa de {@link #recomendacion} anida bajo ella. Se baja solo a través de
+	 * candidatas, así que una descendiente con fecha de hoy/futura (o hecha/cancelada) se respeta y corta esa rama.
+	 * Todo o nada: una sola transacción. Devuelve la madre primero y luego los descendientes en orden de árbol.
+	 */
+	public List<TareaResponse> agendar(Long id, AgendarRequest request) {
+		Tarea madre = buscar(id);
+		if (!ESTADOS_ABIERTOS.contains(madre.getEstado())) {
+			throw new TareaEstadoInvalidaException(
+					"No se puede agendar una tarea en estado " + madre.getEstado() + ": " + id);
+		}
+		LocalDate nueva = request.fecha();
+		LocalDate hoy = request.hoy();
+		if (nueva == null || hoy == null) {
+			throw new TareaInvalidaException("fecha y hoy son obligatorias");
+		}
+		if (nueva.isBefore(hoy)) {
+			throw new TareaInvalidaException("La nueva fecha (" + nueva + ") no puede ser anterior a hoy (" + hoy + ")");
+		}
+
+		List<Tarea> afectadas = new ArrayList<>();
+		afectadas.add(madre);
+		if (request.incluirSubtareas() == null || request.incluirSubtareas()) {
+			// Mismo orden que la vista previa por defecto (prioridad, ALTA primero).
+			Comparator<Tarea> comparador = comparadorRecomendacion(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC);
+			Map<Long, List<Tarea>> hijasDe = cargarCandidatas(hoy).hijasDe();
+			Set<Long> visitadas = new HashSet<>();
+			visitadas.add(madre.getId());
+			agregarDescendientes(madre.getId(), hijasDe, comparador, visitadas, afectadas);
+		}
+
+		for (Tarea t : afectadas) {
+			boolean atrasada = t.getFecha() != null && t.getFecha().isBefore(hoy);
+			t.agendarEn(nueva, atrasada);
+		}
+		return repository.saveAll(afectadas).stream().map(this::aRespuesta).toList();
+	}
+
+	// Preorden (cada hija seguida de su subárbol). "visitadas" es solo red de seguridad ante ciclos.
+	private static void agregarDescendientes(Long padreId, Map<Long, List<Tarea>> hijasDe, Comparator<Tarea> comparador,
+			Set<Long> visitadas, List<Tarea> salida) {
+		hijasDe.getOrDefault(padreId, List.of()).stream().sorted(comparador).forEach(h -> {
+			if (visitadas.add(h.getId())) {
+				salida.add(h);
+				agregarDescendientes(h.getId(), hijasDe, comparador, visitadas, salida);
+			}
+		});
 	}
 
 	// Sube por padreId mientras el padre sea candidata. La API impide ciclos; el contador es solo una red de seguridad.

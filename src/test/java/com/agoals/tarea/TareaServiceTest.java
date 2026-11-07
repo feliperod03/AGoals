@@ -4,6 +4,7 @@ import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
 
 import com.agoals.tarea.dto.AgendaResponse;
+import com.agoals.tarea.dto.AgendarRequest;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
@@ -874,6 +875,246 @@ class TareaServiceTest {
 		candidatas();
 
 		assertThat(recomendar(null, null, null, null, null)).isEmpty();
+	}
+
+	// ---- Agendar tarea con sus subtareas ----
+
+	private static final LocalDate NUEVA = HOY_REC.plusDays(5);
+
+	private static AgendarRequest agendarReq(Boolean incluir) {
+		return new AgendarRequest(NUEVA, HOY_REC, incluir);
+	}
+
+	/** Madre abierta y existente; devuelve las ids de lo que agendar modificó, en orden. */
+	private List<Long> agendar(Tarea madre, Boolean incluir) {
+		existe(madre);
+		when(repository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+		return service.agendar(madre.getId(), agendarReq(incluir)).stream().map(TareaResponse::id).toList();
+	}
+
+	private static Tarea madreAgendable(long id, LocalDate fecha, Estado estado) {
+		Tarea t = cand(id, "madre", fecha, LocalDate.of(2026, 10, 1), null, null, null, null);
+		t.setEstado(estado);
+		return t;
+	}
+
+	private static Tarea hija(long id, long padreId, LocalDate fecha, Prioridad prioridad) {
+		return cand(id, "t" + id, fecha, LocalDate.of(2026, 10, 1), prioridad, padreId, null, null);
+	}
+
+	@Test
+	void agendarMadreSinHijasAtrasadaLimpiaHorasYSumaPospuesta() {
+		Tarea madre = madreAgendable(1, HOY_REC.minusDays(3), Estado.EN_PROGRESO);
+		madre.setHoraInicio(LocalTime.of(9, 0));
+		madre.setHoraFin(LocalTime.of(10, 0));
+		candidatas(madre);
+
+		assertThat(agendar(madre, null)).containsExactly(1L);
+
+		assertThat(madre.getFecha()).isEqualTo(NUEVA);
+		assertThat(madre.getHoraInicio()).isNull();
+		assertThat(madre.getHoraFin()).isNull();
+		assertThat(madre.getVecesPospuesta()).isEqualTo(1);
+		assertThat(madre.getEstado()).isEqualTo(Estado.EN_PROGRESO); // los estados no se tocan
+	}
+
+	@Test
+	void agendarMadreSinFechaNoSumaPospuesta() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		candidatas(madre);
+
+		agendar(madre, true);
+
+		assertThat(madre.getFecha()).isEqualTo(NUEVA);
+		assertThat(madre.getVecesPospuesta()).isZero();
+	}
+
+	@Test
+	void agendarMuevePorDefectoLasHijasSinFechaYAtrasadasYSumaSoloEnLasAtrasadas() {
+		Tarea madre = madreAgendable(1, HOY_REC.minusDays(1), Estado.PENDIENTE);
+		Tarea sinFecha = hija(2, 1, null, null);
+		Tarea atrasada = hija(3, 1, HOY_REC.minusDays(4), null);
+		atrasada.setHoraInicio(LocalTime.of(8, 0));
+		candidatas(madre, sinFecha, atrasada);
+
+		assertThat(agendar(madre, null)).containsExactly(1L, 2L, 3L);
+
+		assertThat(List.of(madre, sinFecha, atrasada)).allSatisfy(t -> {
+			assertThat(t.getFecha()).isEqualTo(NUEVA);
+			assertThat(t.getHoraInicio()).isNull();
+		});
+		assertThat(madre.getVecesPospuesta()).isEqualTo(1);
+		assertThat(sinFecha.getVecesPospuesta()).isZero();
+		assertThat(atrasada.getVecesPospuesta()).isEqualTo(1);
+	}
+
+	@Test
+	void agendarMadreConFechaFuturaMueveSusHijasCandidatas() {
+		// La madre no es candidata (fecha futura) pero se agenda igual; sus hijas candidatas se mueven con ella.
+		Tarea madre = madreAgendable(1, HOY_REC.plusDays(3), Estado.PENDIENTE);
+		Tarea sinFecha = hija(2, 1, null, null);
+		Tarea atrasada = hija(3, 1, HOY_REC.minusDays(2), null);
+		candidatas(sinFecha, atrasada); // la madre no sale en la consulta de candidatas
+
+		assertThat(agendar(madre, true)).containsExactly(1L, 2L, 3L);
+
+		assertThat(List.of(madre, sinFecha, atrasada)).allSatisfy(t -> assertThat(t.getFecha()).isEqualTo(NUEVA));
+		assertThat(madre.getVecesPospuesta()).isZero();    // no estaba atrasada
+		assertThat(sinFecha.getVecesPospuesta()).isZero(); // no tenía fecha
+		assertThat(atrasada.getVecesPospuesta()).isEqualTo(1);
+	}
+
+	@Test
+	void agendarMadreConFechaDeHoyMueveLaHijaSinFecha() {
+		Tarea madre = madreAgendable(1, HOY_REC, Estado.PENDIENTE);
+		Tarea sinFecha = hija(2, 1, null, null);
+		candidatas(sinFecha);
+
+		assertThat(agendar(madre, true)).containsExactly(1L, 2L);
+
+		assertThat(sinFecha.getFecha()).isEqualTo(NUEVA);
+		assertThat(madre.getFecha()).isEqualTo(NUEVA);
+		assertThat(madre.getVecesPospuesta()).isZero();
+	}
+
+	@Test
+	void agendarRespetaHijasDeHoyFuturasYHechas() {
+		// Las de hoy/futuras y las HECHO/CANCELADO no son candidatas: la consulta no las trae y no se tocan.
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		Tarea candidata = hija(2, 1, null, null);
+		Tarea deHoy = hija(3, 1, HOY_REC, null);
+		Tarea futura = hija(4, 1, HOY_REC.plusDays(9), null);
+		Tarea hecha = hija(5, 1, HOY_REC.minusDays(2), null);
+		hecha.setEstado(Estado.HECHO);
+		candidatas(madre, candidata);
+
+		assertThat(agendar(madre, true)).containsExactly(1L, 2L);
+
+		assertThat(deHoy.getFecha()).isEqualTo(HOY_REC);
+		assertThat(futura.getFecha()).isEqualTo(HOY_REC.plusDays(9));
+		assertThat(hecha.getFecha()).isEqualTo(HOY_REC.minusDays(2));
+		assertThat(hecha.getVecesPospuesta()).isZero();
+	}
+
+	@Test
+	void agendarBajaPorVariosNivelesEnOrdenDeArbol() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		Tarea hijaBaja = hija(2, 1, null, Prioridad.BAJA);
+		Tarea hijaAlta = hija(3, 1, null, Prioridad.ALTA);
+		Tarea nieta = hija(4, 3, HOY_REC.minusDays(1), null);
+		Tarea bisnieta = hija(5, 4, null, null);
+		candidatas(madre, hijaBaja, hijaAlta, nieta, bisnieta);
+
+		// Madre primero y luego preorden: la hija ALTA con su subárbol antes que la BAJA.
+		assertThat(agendar(madre, true)).containsExactly(1L, 3L, 4L, 5L, 2L);
+		assertThat(nieta.getVecesPospuesta()).isEqualTo(1);
+		assertThat(bisnieta.getVecesPospuesta()).isZero();
+	}
+
+	@Test
+	void agendarNoBajaATravesDeUnDescendienteNoCandidato() {
+		// La hija (2) tiene fecha futura: no es candidata, así que su hija (3), aunque sí lo sea, no se mueve.
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		Tarea hijaFutura = hija(2, 1, HOY_REC.plusDays(4), null);
+		Tarea nieta = hija(3, 2, null, null);
+		candidatas(madre, nieta);
+
+		assertThat(agendar(madre, true)).containsExactly(1L);
+
+		assertThat(nieta.getFecha()).isNull();
+		assertThat(hijaFutura.getFecha()).isEqualTo(HOY_REC.plusDays(4));
+	}
+
+	@Test
+	void agendarSinIncluirSubtareasMueveSoloLaMadreYNoConsultaCandidatas() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		Tarea hija = hija(2, 1, null, null);
+
+		assertThat(agendar(madre, false)).containsExactly(1L);
+
+		assertThat(hija.getFecha()).isNull();
+		verify(repository, never()).findCandidatasRecomendacion(any(), any(), any());
+	}
+
+	@ParameterizedTest
+	@EnumSource(value = Estado.class, names = {"HECHO", "CANCELADO"})
+	void agendarMadreCerradaLanza409SinCambios(Estado estado) {
+		Tarea madre = madreAgendable(1, HOY_REC.minusDays(1), estado);
+		existe(madre);
+
+		assertThatThrownBy(() -> service.agendar(1L, agendarReq(true))).isInstanceOf(TareaEstadoInvalidaException.class);
+
+		assertThat(madre.getFecha()).isEqualTo(HOY_REC.minusDays(1));
+		verify(repository, never()).saveAll(any());
+	}
+
+	@Test
+	void agendarConFechaAnteriorAHoyLanza400SinCambios() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		existe(madre);
+
+		assertThatThrownBy(() -> service.agendar(1L, new AgendarRequest(HOY_REC.minusDays(1), HOY_REC, true)))
+				.isInstanceOf(TareaInvalidaException.class);
+
+		assertThat(madre.getFecha()).isNull();
+		verify(repository, never()).saveAll(any());
+	}
+
+	@Test
+	void agendarParaHoyEsValido() {
+		Tarea madre = madreAgendable(1, HOY_REC.minusDays(2), Estado.PENDIENTE);
+		existe(madre);
+		when(repository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+		candidatas(madre);
+
+		service.agendar(1L, new AgendarRequest(HOY_REC, HOY_REC, true));
+
+		assertThat(madre.getFecha()).isEqualTo(HOY_REC);
+	}
+
+	@Test
+	void agendarSinFechaOSinHoyLanza400() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		existe(madre);
+
+		assertThatThrownBy(() -> service.agendar(1L, new AgendarRequest(null, HOY_REC, true)))
+				.isInstanceOf(TareaInvalidaException.class);
+		assertThatThrownBy(() -> service.agendar(1L, new AgendarRequest(NUEVA, null, true)))
+				.isInstanceOf(TareaInvalidaException.class);
+	}
+
+	@Test
+	void agendarTareaInexistenteLanza404() {
+		when(repository.findByIdAndUsuarioId(99L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.agendar(99L, agendarReq(true))).isInstanceOf(TareaNoEncontradaException.class);
+	}
+
+	private static void aplanar(TareaRecomendadaResponse nodo, List<Long> salida) {
+		nodo.subtareas().forEach(h -> {
+			salida.add(h.tarea().id());
+			aplanar(h, salida);
+		});
+	}
+
+	@Test
+	void agendarMueveExactamenteLoQueLaVistaPreviaAnidaBajoLaMadre() {
+		Tarea madre = madreAgendable(1, null, Estado.PENDIENTE);
+		madre.setPrioridad(Prioridad.ALTA);
+		Tarea h1 = hija(2, 1, null, Prioridad.BAJA);
+		Tarea h2 = hija(3, 1, HOY_REC.minusDays(3), Prioridad.ALTA);
+		Tarea n1 = hija(4, 3, null, null);
+		Tarea n2 = hija(5, 3, null, Prioridad.MEDIA);
+		Tarea otra = cand(9, "otra", Prioridad.BAJA);
+		candidatas(madre, h1, h2, n1, n2, otra);
+
+		TareaRecomendadaResponse enVistaPrevia = service.recomendacion(HOY_REC, null, null, null, null, null).stream()
+				.filter(r -> r.tarea().id() == 1L).findFirst().orElseThrow();
+		List<Long> esperado = new java.util.ArrayList<>(List.of(1L));
+		aplanar(enVistaPrevia, esperado);
+
+		assertThat(agendar(madre, true)).containsExactlyElementsOf(esperado);
+		assertThat(otra.getFecha()).isNull();
 	}
 
 	@Test

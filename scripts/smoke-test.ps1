@@ -1,6 +1,7 @@
 # Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
 # (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
-# proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir y recomendacion.
+# proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir, recomendacion
+# y agendar una tarea con sus subtareas.
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos y objetivos "smoke-*", y los borra al terminar.
@@ -310,6 +311,71 @@ try {
     Verificar "recomendacion con sentido invalido -> 400" ($rc8.Status -eq 400) "status $($rc8.Status)"
     $rc9 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + "&limite=0")
     Verificar "recomendacion con limite 0 -> 400" ($rc9.Status -eq 400) "status $($rc9.Status)"
+
+    # --- Agendar una tarea con sus subtareas (PATCH /{id}/agendar) ---
+    # Fechas en 2098 para no tocar tareas reales. hoy = 2098-06-01; se agenda para 2098-07-01.
+    # Arbol: M (atrasada, con horas) -> H1 (sin fecha) -> N (sin fecha)
+    #                                -> H2 (atrasada)
+    #                                -> H3 (futura, se respeta) -> G (sin fecha: no se alcanza)
+    #                                -> H4 (hecha, no se toca)
+    $hoyAg = "2098-06-01"
+    $nuevaAg = "2098-07-01"
+    function NuevaAg($json) {
+        $r = Llamar "POST" $Base $json
+        if (-not $r.Json) { throw "No se pudo crear la tarea de agendar: $json" }
+        $script:ids += $r.Json.id
+        return $r.Json.id
+    }
+    $agM = NuevaAg '{"titulo":"smoke-ag-M madre","prioridad":"ALTA","fecha":"2098-01-01","horaInicio":"09:00","horaFin":"10:00"}'
+    $agH1 = NuevaAg ('{"titulo":"smoke-ag-H1 sin fecha","prioridad":"MEDIA","padreId":' + $agM + '}')
+    $agN = NuevaAg ('{"titulo":"smoke-ag-N nieta","padreId":' + $agH1 + '}')
+    $agH2 = NuevaAg ('{"titulo":"smoke-ag-H2 atrasada","prioridad":"BAJA","fecha":"2098-02-01","padreId":' + $agM + '}')
+    $agH3 = NuevaAg ('{"titulo":"smoke-ag-H3 futura","fecha":"2098-12-01","padreId":' + $agM + '}')
+    $agG = NuevaAg ('{"titulo":"smoke-ag-G bajo la futura","padreId":' + $agH3 + '}')
+    $agH4 = NuevaAg ('{"titulo":"smoke-ag-H4 hecha","estado":"HECHO","fecha":"2098-02-02","padreId":' + $agM + '}')
+
+    function AplanarAg($nodos) {
+        foreach ($n in @($nodos)) { $n.tarea.id; AplanarAg $n.subtareas }
+    }
+    $vista = Llamar "GET" ($Base + "/recomendacion?fecha=" + $hoyAg + "&limite=200")
+    $raizM = @($vista.Json | Where-Object { $_.tarea.id -eq $agM })[0]
+    $esperadoAg = @($agM) + @(AplanarAg $raizM.subtareas)
+    Verificar "agendar: la vista previa anida H1, N y H2 bajo M (no H3, G ni H4)" ((($esperadoAg | Sort-Object) -join ",") -eq ((@($agM, $agH1, $agN, $agH2) | Sort-Object) -join ",")) ($esperadoAg -join ",")
+
+    $ag1 = Llamar "PATCH" ($Base + "/" + $agM + "/agendar") ('{"fecha":"' + $nuevaAg + '","hoy":"' + $hoyAg + '"}')
+    $devueltas = @($ag1.Json | ForEach-Object { $_.id })
+    Verificar "agendar -> 200 con la madre primero y lo mismo que la vista previa" (($ag1.Status -eq 200) -and (($devueltas -join ",") -eq ($esperadoAg -join ","))) "status $($ag1.Status) ids $($devueltas -join ',') esperado $($esperadoAg -join ',')"
+    $m = (Llamar "GET" ($Base + "/" + $agM)).Json
+    Verificar "agendar: la madre atrasada cambia de fecha, pierde las horas y suma 1" (($m.fecha -eq $nuevaAg) -and (-not $m.horaInicio) -and (-not $m.horaFin) -and ($m.vecesPospuesta -eq 1) -and ($m.estado -eq "PENDIENTE")) ($m | ConvertTo-Json -Compress)
+    $h1 = (Llamar "GET" ($Base + "/" + $agH1)).Json
+    Verificar "agendar: la hija sin fecha se agenda y NO suma veces_pospuesta" (($h1.fecha -eq $nuevaAg) -and ($h1.vecesPospuesta -eq 0)) ($h1 | ConvertTo-Json -Compress)
+    $nn = (Llamar "GET" ($Base + "/" + $agN)).Json
+    Verificar "agendar: la nieta sin fecha se agenda sin sumar" (($nn.fecha -eq $nuevaAg) -and ($nn.vecesPospuesta -eq 0)) ($nn | ConvertTo-Json -Compress)
+    $h2 = (Llamar "GET" ($Base + "/" + $agH2)).Json
+    Verificar "agendar: la hija atrasada se agenda y suma 1" (($h2.fecha -eq $nuevaAg) -and ($h2.vecesPospuesta -eq 1)) ($h2 | ConvertTo-Json -Compress)
+    $h3 = (Llamar "GET" ($Base + "/" + $agH3)).Json
+    $gg = (Llamar "GET" ($Base + "/" + $agG)).Json
+    Verificar "agendar: la hija futura se respeta y no se baja a traves de ella" (($h3.fecha -eq "2098-12-01") -and (-not $gg.fecha)) "H3 $($h3.fecha) G $($gg.fecha)"
+    $h4 = (Llamar "GET" ($Base + "/" + $agH4)).Json
+    Verificar "agendar: la hija hecha no se toca" (($h4.fecha -eq "2098-02-02") -and ($h4.estado -eq "HECHO") -and ($h4.vecesPospuesta -eq 0)) ($h4 | ConvertTo-Json -Compress)
+
+    # incluirSubtareas=false: solo la madre, aunque tenga una hija candidata.
+    $agS = NuevaAg '{"titulo":"smoke-ag-S madre sola"}'
+    $agSh = NuevaAg ('{"titulo":"smoke-ag-S1 hija","padreId":' + $agS + '}')
+    $ag2 = Llamar "PATCH" ($Base + "/" + $agS + "/agendar") ('{"fecha":"' + $nuevaAg + '","hoy":"' + $hoyAg + '","incluirSubtareas":false}')
+    $s1 = (Llamar "GET" ($Base + "/" + $agSh)).Json
+    Verificar "agendar con incluirSubtareas=false mueve solo la madre" (($ag2.Status -eq 200) -and (@($ag2.Json).Count -eq 1) -and (-not $s1.fecha)) "status $($ag2.Status) hija $($s1.fecha)"
+
+    $ag3 = Llamar "PATCH" ($Base + "/" + $agS + "/agendar") ('{"fecha":"2098-05-31","hoy":"' + $hoyAg + '"}')
+    Verificar "agendar con fecha < hoy -> 400" ($ag3.Status -eq 400) "status $($ag3.Status)"
+    $ag4 = Llamar "PATCH" ($Base + "/" + $agS + "/agendar") ('{"fecha":"' + $nuevaAg + '"}')
+    Verificar "agendar sin hoy -> 400" ($ag4.Status -eq 400) "status $($ag4.Status)"
+    $ag5 = Llamar "PATCH" ($Base + "/" + $agS + "/agendar") ('{"hoy":"' + $hoyAg + '"}')
+    Verificar "agendar sin fecha -> 400" ($ag5.Status -eq 400) "status $($ag5.Status)"
+    $ag6 = Llamar "PATCH" ($Base + "/999999/agendar") ('{"fecha":"' + $nuevaAg + '","hoy":"' + $hoyAg + '"}')
+    Verificar "agendar inexistente -> 404" ($ag6.Status -eq 404) "status $($ag6.Status)"
+    $ag7 = Llamar "PATCH" ($Base + "/" + $agH4 + "/agendar") ('{"fecha":"' + $nuevaAg + '","hoy":"' + $hoyAg + '"}')
+    Verificar "agendar una tarea hecha -> 409" ($ag7.Status -eq 409) "status $($ag7.Status)"
 
     # --- Ciclos en la jerarquia de tareas ---
     $ja = Llamar "POST" $Base '{"titulo":"smoke-ja A"}'
