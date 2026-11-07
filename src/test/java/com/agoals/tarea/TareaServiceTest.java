@@ -163,6 +163,37 @@ class TareaServiceTest {
 	}
 
 	@Test
+	void eliminarConSubtareasDa409YNoBorra() {
+		Tarea madre = agendada(1, "madre", DIA, null, null, Estado.PENDIENTE);
+		existe(madre);
+		when(repository.existsByPadreIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(true);
+
+		assertThatThrownBy(() -> service.eliminar(1L))
+				.isInstanceOf(TareaConDependenciasException.class)
+				.hasMessage("La tarea 1 tiene subtareas: muévelas o bórralas primero");
+		verify(repository, never()).delete(any());
+	}
+
+	@Test
+	void eliminarUnaTareaSinSubtareasLaBorra() {
+		Tarea hoja = agendada(1, "hoja", DIA, null, null, Estado.PENDIENTE);
+		existe(hoja);
+		when(repository.existsByPadreIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(false);
+
+		service.eliminar(1L);
+
+		verify(repository).delete(hoja);
+	}
+
+	@Test
+	void eliminarInexistenteNoConsultaSubtareas() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.eliminar(1L)).isInstanceOf(TareaNoEncontradaException.class);
+		verify(repository, never()).existsByPadreIdAndUsuarioId(any(), any());
+	}
+
+	@Test
 	void eliminarInexistenteFalla() {
 		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
 

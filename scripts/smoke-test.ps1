@@ -280,12 +280,30 @@ try {
     Verificar "tarea: A como su propio padre -> 400" (($j3.Status -eq 400) -and ($j3.Raw -match "propio padre")) "status $($j3.Status) $($j3.Raw)"
     $j4 = Llamar "PUT" ($Base + "/" + $jc.Json.id) ('{"titulo":"smoke-ja C","padreId":' + $ja.Json.id + '}')
     Verificar "tarea: subir C bajo A (valido) -> 200" (($j4.Status -eq 200) -and ($j4.Json.padreId -eq $ja.Json.id)) "status $($j4.Status)"
+
+    # --- Borrar una tarea con subtareas -> 409 (sin cascada desde la API) ---
+    # Ahora A tiene dos hijas: B y C.
+    $k1 = Llamar "DELETE" ($Base + "/" + $ja.Json.id)
+    Verificar "borrar tarea con subtareas -> 409 (subtareas)" (($k1.Status -eq 409) -and ($k1.Raw -match "subtareas")) "status $($k1.Status) $($k1.Raw)"
+    $k2 = Llamar "GET" ($Base + "/" + $jb.Json.id)
+    Verificar "las subtareas siguen existiendo tras el 409" ($k2.Status -eq 200) "status $($k2.Status)"
+    $k3 = Llamar "DELETE" ($Base + "/" + $jb.Json.id)
+    Verificar "borrar una subtarea (hoja) -> 204" ($k3.Status -eq 204) "status $($k3.Status)"
+    $k4 = Llamar "DELETE" ($Base + "/" + $ja.Json.id)
+    Verificar "borrar tarea que aun tiene una subtarea -> 409" ($k4.Status -eq 409) "status $($k4.Status)"
+    $k5 = Llamar "DELETE" ($Base + "/" + $jc.Json.id)
+    Verificar "borrar la ultima subtarea -> 204" ($k5.Status -eq 204) "status $($k5.Status)"
+    $k6 = Llamar "DELETE" ($Base + "/" + $ja.Json.id)
+    Verificar "borrar la tarea ya sin subtareas -> 204" ($k6.Status -eq 204) "status $($k6.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
     $fallos++
 }
 finally {
+    # Orden inverso al de creacion: las subtareas (creadas despues) se borran antes que sus madres,
+    # porque la API da 409 al borrar una tarea que todavia tiene subtareas.
+    [array]::Reverse($ids)
     foreach ($id in $ids) { [void](Llamar "DELETE" ($Base + "/" + $id)) }
     # Limpieza de proyectos si la prueba fallo a medias: primero se desasignan tareas (ya borradas arriba)
     # y se borran los hijos antes que los padres (orden inverso de creacion).

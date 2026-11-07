@@ -7,8 +7,8 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
 3. **Agenda del día**: listar tareas por fecha, marcar como hecha, posponer (aumenta `veces_pospuesta` y mueve la fecha).
 4. **Proyectos y Objetivos**, en tres partes:
    - **4a Proyecto** (hecha): CRUD con jerarquía, estados, filtros y tareas asignadas.
-   - **4b Objetivo**: CRUD con jerarquía, mapeo de `tarea.objetivo_id` y tareas ligadas a un objetivo, y validación explícita de `objetivoId` en Proyecto (vía `ObjetivoConsultaService`).
-   - **4c Tareas**: tareas con fecha pasada y sin terminar visibles (`GET /api/tareas/atrasadas?fecha=`), reabrir tareas marcadas como hechas por error (`PATCH /api/tareas/{id}/reabrir`) y detección de ciclos en la jerarquía de `TareaService` (hoy solo impide ser su propio padre).
+   - **4b Objetivo** (hecha): CRUD con jerarquía, mapeo de `tarea.objetivo_id` y tareas ligadas a un objetivo, y validación explícita de `objetivoId` en Proyecto (vía `ObjetivoConsultaService`).
+   - **4c Tareas** (hecha): tareas con fecha pasada y sin terminar visibles (`GET /api/tareas/atrasadas?fecha=`), reabrir tareas marcadas como hechas por error (`PATCH /api/tareas/{id}/reabrir`), detección de ciclos en la jerarquía de `TareaService` y 409 al borrar una tarea con subtareas (sin cascada desde la API).
 5. **Recomendación**: endpoint que sugiere tareas de proyecto pendientes y sin fecha, ordenadas por prioridad.
    - Pregunta abierta: ¿incluye también las tareas ligadas solo a un objetivo (`objetivo_id` sin `proyecto_id`)? Decidir antes de planificar esta rebanada.
 6. **Ideas**: libres o ligadas a proyecto/objetivo, estado y conclusión.

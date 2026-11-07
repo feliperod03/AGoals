@@ -129,6 +129,16 @@ class TareaControllerTest {
 	}
 
 	@Test
+	void deleteConSubtareasDevuelve409ConElMotivo() throws Exception {
+		doThrow(new TareaConDependenciasException("La tarea 1 tiene subtareas: muévelas o bórralas primero"))
+				.when(service).eliminar(1L);
+
+		mvc.perform(delete("/api/tareas/1"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("subtareas")));
+	}
+
+	@Test
 	void deleteInexistenteDevuelve404() throws Exception {
 		doThrow(new TareaNoEncontradaException(7L)).when(service).eliminar(7L);
 

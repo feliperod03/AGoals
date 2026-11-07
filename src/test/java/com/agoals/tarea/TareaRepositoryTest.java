@@ -123,6 +123,19 @@ class TareaRepositoryTest {
 	}
 
 	@Test
+	void existsByPadreIdDetectaSubtareas() {
+		Tarea madre = repository.saveAndFlush(nueva("madre"));
+		Tarea sola = repository.saveAndFlush(nueva("sola"));
+		Tarea hija = nueva("hija");
+		hija.setPadreId(madre.getId());
+		repository.saveAndFlush(hija);
+
+		assertThat(repository.existsByPadreIdAndUsuarioId(madre.getId(), 1L)).isTrue();
+		assertThat(repository.existsByPadreIdAndUsuarioId(sola.getId(), 1L)).isFalse();
+		assertThat(repository.existsByPadreIdAndUsuarioId(madre.getId(), 2L)).isFalse();
+	}
+
+	@Test
 	void atrasadasFiltraPorFechaEstrictaEstadoYUsuario() {
 		LocalDate hoy = LocalDate.of(2026, 11, 6);
 		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);

@@ -41,7 +41,7 @@ Fuente: diagrama de clases (`Class_map.drawio`) y migración `V1__esquema_inicia
 - Una tarea no puede ser su propia descendiente: la API rechaza con 400 un `padreId` que cree un ciclo (directo, A→B→A, o indirecto), igual que en proyectos y objetivos.
 - Una idea pasa a CONCLUIDA con `conclusion` y `fecha_cierre`, y queda como registro (trazabilidad).
 - Borrar un proyecto u objetivo no borra sus tareas ni ideas: quedan sueltas (`SET NULL`). Borrar un padre jerárquico borra su subárbol.
-- Esas reglas son las de la **base de datos**. La **API** es más estricta con los proyectos: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes). No se borra nada en cascada desde la API.
+- Esas reglas son las de la **base de datos**. La **API** es más estricta: `DELETE /api/proyectos/{id}` responde 409 si el proyecto tiene subproyectos o tareas (hay que moverlos o desasignarlos antes), y `DELETE /api/tareas/{id}` responde 409 si la tarea tiene subtareas (hay que moverlas o borrarlas antes). No se borra nada en cascada desde la API.
 - Un proyecto no puede ser su propio descendiente: la API rechaza con 400 cualquier `padreId` que cree un ciclo.
 - Los estados no se propagan: cambiar el estado de un proyecto no modifica el de sus subproyectos ni el de sus tareas.
 - `proyecto.objetivo_id` y `tarea.objetivo_id` / `tarea.proyecto_id` se guardan como ids simples. Al crear o editar un proyecto, un `objetivoId` inexistente responde 400 ("El objetivo no existe: N"); la clave foránea queda como red de seguridad.

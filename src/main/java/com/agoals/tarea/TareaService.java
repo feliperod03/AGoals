@@ -53,8 +53,15 @@ public class TareaService {
 		return aRespuesta(repository.save(tarea));
 	}
 
+	// Desde la API nunca se borra en cascada, aunque la base tenga ON DELETE CASCADE en padre_id:
+	// hay que mover o borrar las subtareas antes (igual que proyectos y objetivos).
 	public void eliminar(Long id) {
-		repository.delete(buscar(id));
+		Tarea tarea = buscar(id);
+		if (repository.existsByPadreIdAndUsuarioId(id, USUARIO_ID)) {
+			throw new TareaConDependenciasException(
+					"La tarea " + id + " tiene subtareas: muévelas o bórralas primero");
+		}
+		repository.delete(tarea);
 	}
 
 	// Sueltas: ALTA primero, sin prioridad al final (el orden del enum es BAJA, MEDIA, ALTA), luego por id.
