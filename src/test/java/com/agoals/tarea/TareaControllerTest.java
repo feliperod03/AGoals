@@ -5,6 +5,7 @@ import com.agoals.common.Estado;
 import com.agoals.common.ApiExceptionHandler;
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
+import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
@@ -323,5 +324,73 @@ class TareaControllerTest {
 		mvc.perform(patch("/api/tareas/1/posponer").contentType(MediaType.APPLICATION_JSON)
 						.content("{\"fecha\":\"mañana\"}"))
 				.andExpect(status().isBadRequest());
+	}
+
+	// ---- Recomendación ----
+
+	@Test
+	void recomendacionDevuelveElArbolYPasaLosParametrosAlService() throws Exception {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(service.recomendacion(hoy, OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.ASC, 5, 7L, 9L)).thenReturn(List.of(
+				new TareaRecomendadaResponse(respuesta(1L, "madre"),
+						List.of(new TareaRecomendadaResponse(respuesta(2L, "hija"), List.of())))));
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("orden", "antiguedad")
+						.param("sentido", "asc").param("limite", "5").param("proyectoId", "7").param("objetivoId", "9"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].tarea.titulo").value("madre"))
+				.andExpect(jsonPath("$[0].subtareas[0].tarea.titulo").value("hija"))
+				.andExpect(jsonPath("$[0].subtareas[0].subtareas").isEmpty());
+	}
+
+	@Test
+	void recomendacionSoloConFechaUsaLosValoresPorDefecto() throws Exception {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(service.recomendacion(hoy, OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null))
+				.thenReturn(List.of());
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$").isEmpty());
+	}
+
+	@Test
+	void recomendacionSinFechaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void recomendacionConFechaMalFormadaDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "06-11-2026")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void recomendacionConOrdenInvalidoDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("orden", "raro"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("orden inválido")));
+	}
+
+	@Test
+	void recomendacionConSentidoInvalidoDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("sentido", "raro"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("sentido inválido")));
+	}
+
+	@Test
+	void recomendacionConLimiteNoNumericoDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("limite", "muchos"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void recomendacionConLimiteInvalidoSegunElServiceDevuelve400() throws Exception {
+		when(service.recomendacion(any(), any(), any(), eq(0), any(), any()))
+				.thenThrow(new TareaInvalidaException("limite debe ser mayor que 0"));
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("limite", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("limite debe ser mayor que 0"));
 	}
 }

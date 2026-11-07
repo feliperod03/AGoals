@@ -2,6 +2,7 @@ package com.agoals.tarea;
 
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
+import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import jakarta.validation.Valid;
@@ -46,6 +47,19 @@ public class TareaController {
 	@GetMapping("/atrasadas")
 	public List<TareaResponse> atrasadas(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
 		return service.atrasadas(fecha);
+	}
+
+	@GetMapping("/recomendacion")
+	public List<TareaRecomendadaResponse> recomendacion(
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+			@RequestParam(required = false) String orden,
+			@RequestParam(required = false) String sentido,
+			@RequestParam(required = false) Integer limite,
+			@RequestParam(required = false) Long proyectoId,
+			@RequestParam(required = false) Long objetivoId) {
+		// orden y sentido llegan como texto y se validan aquí: un valor desconocido responde 400 con mensaje claro.
+		return service.recomendacion(fecha, OrdenRecomendacion.desde(orden), SentidoOrden.desde(sentido),
+				limite, proyectoId, objetivoId);
 	}
 
 	@PatchMapping("/{id}/reabrir")

@@ -176,4 +176,62 @@ class TareaRepositoryTest {
 
 		assertThatThrownBy(() -> repository.saveAndFlush(t)).isInstanceOf(Exception.class);
 	}
+
+	@Test
+	void candidatasRecomendacionIncluyeSinFechaYAtrasadasAbiertasDelUsuario() {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+		Tarea sinFecha = nueva("rc sin fecha");
+		Tarea atrasada = nueva("rc atrasada");
+		atrasada.setFecha(hoy.minusDays(2));
+		Tarea enPausaSinFecha = nueva("rc en pausa");
+		enPausaSinFecha.setEstado(Estado.EN_PAUSA);
+		Tarea deHoy = nueva("rc de hoy");
+		deHoy.setFecha(hoy);
+		Tarea futura = nueva("rc futura");
+		futura.setFecha(hoy.plusDays(1));
+		Tarea hechaSinFecha = nueva("rc hecha");
+		hechaSinFecha.setEstado(Estado.HECHO);
+		Tarea canceladaAtrasada = nueva("rc cancelada");
+		canceladaAtrasada.setEstado(Estado.CANCELADO);
+		canceladaAtrasada.setFecha(hoy.minusDays(2));
+		repository.saveAllAndFlush(List.of(sinFecha, atrasada, enPausaSinFecha, deHoy, futura,
+				hechaSinFecha, canceladaAtrasada));
+
+		List<Tarea> r = repository.findCandidatasRecomendacion(1L, hoy, abiertos);
+
+		// La base puede tener tareas del usuario: se comprueba lo propio con contains / doesNotContain.
+		assertThat(r).extracting(Tarea::getTitulo)
+				.contains("rc sin fecha", "rc atrasada", "rc en pausa")
+				.doesNotContain("rc de hoy", "rc futura", "rc hecha", "rc cancelada");
+		assertThat(repository.findCandidatasRecomendacion(2L, hoy, abiertos)).isEmpty();
+	}
+
+	@Test
+	void candidatasRecomendacionTraeTareasConCualquierVinculoYPadre() {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+		Long proyectoId = ((Number) em.createNativeQuery(
+				"INSERT INTO proyecto (usuario_id, nombre) VALUES (1, 'p') RETURNING id").getSingleResult())
+				.longValue();
+		Long objetivoId = ((Number) em.createNativeQuery(
+				"INSERT INTO objetivo (usuario_id, nombre) VALUES (1, 'o') RETURNING id").getSingleResult())
+				.longValue();
+		Tarea madre = nueva("rv madre");
+		repository.saveAndFlush(madre);
+		Tarea hija = nueva("rv hija");
+		hija.setPadreId(madre.getId());
+		Tarea conProyecto = nueva("rv proyecto");
+		conProyecto.setProyectoId(proyectoId);
+		Tarea conObjetivo = nueva("rv objetivo");
+		conObjetivo.setObjetivoId(objetivoId);
+		Tarea conAmbos = nueva("rv ambos");
+		conAmbos.setProyectoId(proyectoId);
+		conAmbos.setObjetivoId(objetivoId);
+		repository.saveAllAndFlush(List.of(hija, conProyecto, conObjetivo, conAmbos));
+
+		// El repository no filtra por proyecto/objetivo: devuelve todas y el service decide.
+		assertThat(repository.findCandidatasRecomendacion(1L, hoy, abiertos)).extracting(Tarea::getTitulo)
+				.contains("rv madre", "rv hija", "rv proyecto", "rv objetivo", "rv ambos");
+	}
 }

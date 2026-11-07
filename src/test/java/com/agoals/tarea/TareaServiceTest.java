@@ -5,6 +5,7 @@ import com.agoals.common.Prioridad;
 
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
+import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
@@ -653,5 +654,235 @@ class TareaServiceTest {
 
 		assertThat(service.existenTareasDelProyecto(7L)).isTrue();
 		assertThat(service.existenTareasDelProyecto(8L)).isFalse();
+	}
+
+	// ---- Recomendación ----
+
+	private static final LocalDate HOY_REC = LocalDate.of(2026, 11, 6);
+
+	/** Candidata de la recomendación armada a mano: padre, proyecto y objetivo opcionales. */
+	private static Tarea cand(long id, String titulo, LocalDate fecha, LocalDate creada, Prioridad prioridad,
+			Long padreId, Long proyectoId, Long objetivoId) {
+		Tarea t = agendada(id, titulo, fecha, null, prioridad, Estado.PENDIENTE);
+		t.setPadreId(padreId);
+		t.setProyectoId(proyectoId);
+		t.setObjetivoId(objetivoId);
+		if (creada != null) {
+			ReflectionTestUtils.setField(t, "fechaCreacion", creada.atStartOfDay().atOffset(java.time.ZoneOffset.UTC));
+		}
+		return t;
+	}
+
+	private static Tarea cand(long id, String titulo, Prioridad prioridad) {
+		return cand(id, titulo, null, LocalDate.of(2026, 10, 1), prioridad, null, null, null);
+	}
+
+	private void candidatas(Tarea... tareas) {
+		when(repository.findCandidatasRecomendacion(TareaService.USUARIO_ID, HOY_REC, ABIERTOS))
+				.thenReturn(List.of(tareas));
+	}
+
+	private List<String> raices(List<TareaRecomendadaResponse> r) {
+		return r.stream().map(x -> x.tarea().titulo()).toList();
+	}
+
+	private List<TareaRecomendadaResponse> recomendar(OrdenRecomendacion o, SentidoOrden s, Integer limite, Long p, Long ob) {
+		return service.recomendacion(HOY_REC, o, s, limite, p, ob);
+	}
+
+	@Test
+	void recomendacionIncluyeCadaTipoDeTarea() {
+		candidatas(
+				cand(1, "ninguno", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, null, null, null),
+				cand(2, "con proyecto", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, null, 7L, null),
+				cand(3, "con objetivo", HOY_REC.minusDays(2), null, Prioridad.BAJA, null, null, 9L),
+				cand(4, "con ambos", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, null, 7L, 9L));
+
+		assertThat(raices(recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null)))
+				.containsExactly("ninguno", "con proyecto", "con objetivo", "con ambos");
+	}
+
+	@Test
+	void recomendacionAnidaSubtareasEnTodosLosNiveles() {
+		candidatas(
+				cand(1, "madre", null, LocalDate.of(2026, 10, 1), Prioridad.ALTA, null, null, null),
+				cand(2, "hija", null, LocalDate.of(2026, 10, 1), null, 1L, null, null),
+				cand(3, "nieta", null, LocalDate.of(2026, 10, 1), null, 2L, null, null));
+
+		List<TareaRecomendadaResponse> r = recomendar(null, null, null, null, null);
+
+		assertThat(raices(r)).containsExactly("madre");
+		TareaRecomendadaResponse hija = r.get(0).subtareas().get(0);
+		assertThat(hija.tarea().titulo()).isEqualTo("hija");
+		assertThat(hija.subtareas()).extracting(x -> x.tarea().titulo()).containsExactly("nieta");
+		assertThat(hija.subtareas().get(0).subtareas()).isEmpty();
+	}
+
+	@Test
+	void recomendacionSubtareaSueltaSoloSiLaMadreNoEsCandidata() {
+		// La madre (id 1) no está entre las candidatas (p. ej. HECHO o con fecha futura): la hija sale como raíz.
+		candidatas(
+				cand(2, "hija huerfana", null, LocalDate.of(2026, 10, 1), null, 1L, null, null),
+				cand(3, "otra", null, LocalDate.of(2026, 10, 1), null, null, null, null));
+
+		assertThat(raices(recomendar(null, null, null, null, null))).containsExactly("hija huerfana", "otra");
+	}
+
+	@Test
+	void recomendacionPrioridadDescYAscConSinPrioridadSiempreAlFinal() {
+		candidatas(cand(1, "sin", null), cand(2, "media", Prioridad.MEDIA), cand(3, "alta", Prioridad.ALTA),
+				cand(4, "baja", Prioridad.BAJA), cand(5, "alta b", Prioridad.ALTA));
+
+		assertThat(raices(recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null)))
+				.containsExactly("alta", "alta b", "media", "baja", "sin");
+		assertThat(raices(recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.ASC, null, null, null)))
+				.containsExactly("baja", "media", "alta", "alta b", "sin");
+	}
+
+	@Test
+	void recomendacionAntiguedadUsaFechaOCreacionYDescPoneLaMasAntiguaPrimero() {
+		candidatas(
+				cand(1, "creada reciente", null, LocalDate.of(2026, 11, 1), null, null, null, null),
+				cand(2, "fecha vieja", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 11, 1), null, null, null, null),
+				cand(3, "creada antigua", null, LocalDate.of(2026, 8, 1), null, null, null, null),
+				cand(4, "creada reciente b", null, LocalDate.of(2026, 11, 1), null, null, null, null));
+
+		assertThat(raices(recomendar(OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.DESC, null, null, null)))
+				.containsExactly("creada antigua", "fecha vieja", "creada reciente", "creada reciente b");
+		assertThat(raices(recomendar(OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.ASC, null, null, null)))
+				.containsExactly("creada reciente", "creada reciente b", "fecha vieja", "creada antigua");
+	}
+
+	@Test
+	void recomendacionAntiguedadToleraFechaCreacionNula() {
+		// Entidades armadas a mano: sin fecha ni fechaCreacion cuentan como la más reciente, sin NullPointerException.
+		candidatas(
+				cand(1, "sin nada", null, null, null, null, null, null),
+				cand(2, "con fecha", HOY_REC.minusDays(1), null, null, null, null, null));
+
+		assertThat(raices(recomendar(OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.DESC, null, null, null)))
+				.containsExactly("con fecha", "sin nada");
+	}
+
+	@Test
+	void recomendacionLimiteSeAplicaDespuesDeOrdenar() {
+		candidatas(cand(1, "baja", Prioridad.BAJA), cand(2, "alta", Prioridad.ALTA), cand(3, "media", Prioridad.MEDIA));
+
+		assertThat(raices(recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, 2, null, null)))
+				.containsExactly("alta", "media");
+	}
+
+	@Test
+	void recomendacionLimiteSeAplicaALasRaicesYNoCuentaSubtareas() {
+		candidatas(
+				cand(1, "madre", null, LocalDate.of(2026, 10, 1), Prioridad.ALTA, null, null, null),
+				cand(2, "hija", null, LocalDate.of(2026, 10, 1), null, 1L, null, null),
+				cand(3, "otra", Prioridad.BAJA));
+
+		List<TareaRecomendadaResponse> r = recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, 1, null, null);
+
+		assertThat(raices(r)).containsExactly("madre");
+		assertThat(r.get(0).subtareas()).hasSize(1);
+	}
+
+	@Test
+	void recomendacionLimiteSinIndicarUsaElTopePorDefectoYElMaximoRecorta() {
+		Tarea[] muchas = new Tarea[250];
+		for (int i = 0; i < muchas.length; i++) {
+			muchas[i] = cand(i + 1, "t" + i, null);
+		}
+		candidatas(muchas);
+
+		assertThat(recomendar(null, null, null, null, null)).hasSize(TareaService.LIMITE_RECOMENDACION_DEFECTO);
+		assertThat(recomendar(null, null, 1000, null, null)).hasSize(TareaService.LIMITE_RECOMENDACION_MAXIMO);
+	}
+
+	@Test
+	void recomendacionLimiteNoPositivoLanza400() {
+		assertThatThrownBy(() -> recomendar(null, null, 0, null, null)).isInstanceOf(TareaInvalidaException.class);
+		assertThatThrownBy(() -> recomendar(null, null, -3, null, null)).isInstanceOf(TareaInvalidaException.class);
+	}
+
+	@Test
+	void recomendacionFiltraPorProyectoYPorObjetivo() {
+		candidatas(
+				cand(1, "p7", null, LocalDate.of(2026, 10, 1), null, null, 7L, null),
+				cand(2, "p8", null, LocalDate.of(2026, 10, 1), null, null, 8L, null),
+				cand(3, "o9", null, LocalDate.of(2026, 10, 1), null, null, null, 9L),
+				cand(4, "p7 o9", null, LocalDate.of(2026, 10, 1), null, null, 7L, 9L));
+
+		assertThat(raices(recomendar(null, null, null, 7L, null))).containsExactly("p7", "p7 o9");
+		assertThat(raices(recomendar(null, null, null, null, 9L))).containsExactly("o9", "p7 o9");
+		assertThat(raices(recomendar(null, null, null, 7L, 9L))).containsExactly("p7 o9");
+	}
+
+	@Test
+	void recomendacionConFiltroAnidaLasHijasAunqueNoCumplanElFiltro() {
+		// Madre del proyecto P con una subtarea sin proyecto: filtrando por P la subtarea sale anidada, no suelta.
+		candidatas(
+				cand(1, "madre P", null, LocalDate.of(2026, 10, 1), null, null, 7L, null),
+				cand(2, "hija sin proyecto", null, LocalDate.of(2026, 10, 1), null, 1L, null, null));
+
+		List<TareaRecomendadaResponse> r = recomendar(null, null, null, 7L, null);
+
+		assertThat(raices(r)).containsExactly("madre P");
+		assertThat(r.get(0).subtareas()).extracting(x -> x.tarea().titulo()).containsExactly("hija sin proyecto");
+	}
+
+	@Test
+	void recomendacionConFiltroNietaQueCumpleApareceUnaSolaVezBajoLaAbuela() {
+		// Abuela P, madre candidata sin P, nieta P: la nieta NO es raíz porque un ancestro ya cumple el filtro.
+		candidatas(
+				cand(1, "abuela P", null, LocalDate.of(2026, 10, 1), null, null, 7L, null),
+				cand(2, "madre sin P", null, LocalDate.of(2026, 10, 1), null, 1L, null, null),
+				cand(3, "nieta P", null, LocalDate.of(2026, 10, 1), null, 2L, 7L, null));
+
+		List<TareaRecomendadaResponse> r = recomendar(null, null, null, 7L, null);
+
+		assertThat(raices(r)).containsExactly("abuela P");
+		TareaRecomendadaResponse madre = r.get(0).subtareas().get(0);
+		assertThat(madre.tarea().titulo()).isEqualTo("madre sin P");
+		assertThat(madre.subtareas()).extracting(x -> x.tarea().titulo()).containsExactly("nieta P");
+	}
+
+	@Test
+	void recomendacionConFiltroHijaQueCumpleConMadreQueNoCumpleEsRaiz() {
+		candidatas(
+				cand(1, "madre sin P", null, LocalDate.of(2026, 10, 1), null, null, null, null),
+				cand(2, "hija P", null, LocalDate.of(2026, 10, 1), null, 1L, 7L, null));
+
+		List<TareaRecomendadaResponse> r = recomendar(null, null, null, 7L, null);
+
+		assertThat(raices(r)).containsExactly("hija P");
+		assertThat(r.get(0).subtareas()).isEmpty();
+	}
+
+	@Test
+	void recomendacionOrdenaTambienLasSubtareas() {
+		candidatas(
+				cand(1, "madre", null, LocalDate.of(2026, 10, 1), null, null, null, null),
+				cand(2, "hija baja", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, 1L, null, null),
+				cand(3, "hija alta", null, LocalDate.of(2026, 10, 1), Prioridad.ALTA, 1L, null, null));
+
+		List<TareaRecomendadaResponse> r = recomendar(OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null);
+
+		assertThat(r.get(0).subtareas()).extracting(x -> x.tarea().titulo()).containsExactly("hija alta", "hija baja");
+	}
+
+	@Test
+	void recomendacionSinCandidatasDevuelveListaVacia() {
+		candidatas();
+
+		assertThat(recomendar(null, null, null, null, null)).isEmpty();
+	}
+
+	@Test
+	void ordenYSentidoTienenDefectoYRechazanValoresInvalidos() {
+		assertThat(OrdenRecomendacion.desde(null)).isEqualTo(OrdenRecomendacion.PRIORIDAD);
+		assertThat(OrdenRecomendacion.desde("Antiguedad")).isEqualTo(OrdenRecomendacion.ANTIGUEDAD);
+		assertThat(SentidoOrden.desde(null)).isEqualTo(SentidoOrden.DESC);
+		assertThat(SentidoOrden.desde("ASC")).isEqualTo(SentidoOrden.ASC);
+		assertThatThrownBy(() -> OrdenRecomendacion.desde("raro")).isInstanceOf(TareaInvalidaException.class);
+		assertThatThrownBy(() -> SentidoOrden.desde("raro")).isInstanceOf(TareaInvalidaException.class);
 	}
 }

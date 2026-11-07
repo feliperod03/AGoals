@@ -5,13 +5,19 @@ import com.agoals.common.Jerarquia;
 import com.agoals.tarea.dto.AgendaResponse;
 import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRequest;
+import com.agoals.common.Prioridad;
+import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
 
 @Service
 @Transactional
@@ -104,6 +110,97 @@ public class TareaService {
 				.sorted(ORDEN_ATRASADAS)
 				.map(this::aRespuesta)
 				.toList();
+	}
+
+	static final int LIMITE_RECOMENDACION_DEFECTO = 50;
+	static final int LIMITE_RECOMENDACION_MAXIMO = 200;
+
+	/**
+	 * Recomendación: tareas abiertas sin fecha o atrasadas (fecha anterior a {@code fecha}), de cualquier tipo.
+	 * Se arma un árbol con TODAS las candidatas (sin filtrar). Con filtros, las raíces son las candidatas que
+	 * cumplen el filtro y no tienen ningún ancestro candidato que también lo cumpla (así nadie sale dos veces);
+	 * bajo cada raíz se anidan todas sus hijas candidatas, cumplan o no el filtro, para una vista previa completa.
+	 * El filtro se aplica aquí y no en SQL justamente porque hacen falta las hijas que no lo cumplen.
+	 */
+	@Transactional(readOnly = true)
+	public List<TareaRecomendadaResponse> recomendacion(LocalDate fecha, OrdenRecomendacion orden, SentidoOrden sentido,
+			Integer limite, Long proyectoId, Long objetivoId) {
+		if (limite != null && limite <= 0) {
+			throw new TareaInvalidaException("limite debe ser mayor que 0");
+		}
+		int tope = limite == null ? LIMITE_RECOMENDACION_DEFECTO : Math.min(limite, LIMITE_RECOMENDACION_MAXIMO);
+		Comparator<Tarea> comparador = comparadorRecomendacion(
+				orden != null ? orden : OrdenRecomendacion.PRIORIDAD,
+				sentido != null ? sentido : SentidoOrden.DESC);
+
+		List<Tarea> candidatas = repository.findCandidatasRecomendacion(USUARIO_ID, fecha, ESTADOS_ABIERTOS);
+		Map<Long, Tarea> porId = new HashMap<>();
+		candidatas.forEach(t -> porId.put(t.getId(), t));
+		Map<Long, List<Tarea>> hijasDe = new HashMap<>();
+		for (Tarea t : candidatas) {
+			if (t.getPadreId() != null && porId.containsKey(t.getPadreId())) {
+				hijasDe.computeIfAbsent(t.getPadreId(), k -> new ArrayList<>()).add(t);
+			}
+		}
+
+		Predicate<Tarea> cumple = t -> (proyectoId == null || proyectoId.equals(t.getProyectoId()))
+				&& (objetivoId == null || objetivoId.equals(t.getObjetivoId()));
+		return candidatas.stream()
+				.filter(cumple)
+				.filter(t -> !tieneAncestroQueCumple(t, porId, cumple))
+				.sorted(comparador)
+				.limit(tope)
+				.map(t -> aRecomendada(t, hijasDe, comparador))
+				.toList();
+	}
+
+	// Sube por padreId mientras el padre sea candidata. La API impide ciclos; el contador es solo una red de seguridad.
+	private static boolean tieneAncestroQueCumple(Tarea t, Map<Long, Tarea> porId, Predicate<Tarea> cumple) {
+		Tarea actual = t;
+		for (int pasos = 0; pasos <= porId.size(); pasos++) {
+			Tarea padre = actual.getPadreId() == null ? null : porId.get(actual.getPadreId());
+			if (padre == null) {
+				return false;
+			}
+			if (cumple.test(padre)) {
+				return true;
+			}
+			actual = padre;
+		}
+		return false;
+	}
+
+	private TareaRecomendadaResponse aRecomendada(Tarea t, Map<Long, List<Tarea>> hijasDe, Comparator<Tarea> comparador) {
+		List<TareaRecomendadaResponse> subtareas = hijasDe.getOrDefault(t.getId(), List.of()).stream()
+				.sorted(comparador)
+				.map(h -> aRecomendada(h, hijasDe, comparador))
+				.toList();
+		return new TareaRecomendadaResponse(aRespuesta(t), subtareas);
+	}
+
+	private static Comparator<Tarea> comparadorRecomendacion(OrdenRecomendacion orden, SentidoOrden sentido) {
+		boolean desc = sentido == SentidoOrden.DESC;
+		Comparator<Tarea> principal;
+		if (orden == OrdenRecomendacion.PRIORIDAD) {
+			// El enum es BAJA < MEDIA < ALTA: el orden natural es asc; desc = ALTA primero. Sin prioridad, al final.
+			principal = Comparator.comparing(Tarea::getPrioridad,
+					Comparator.nullsLast(desc ? Comparator.<Prioridad>reverseOrder() : Comparator.<Prioridad>naturalOrder()));
+		} else {
+			// "desc" pone primero la más antigua (fecha más baja), "asc" la más reciente.
+			principal = desc
+					? Comparator.comparing(TareaService::claveAntiguedad)
+					: Comparator.comparing(TareaService::claveAntiguedad, Comparator.reverseOrder());
+		}
+		return principal.thenComparing(Tarea::getId);
+	}
+
+	// Fecha de la tarea si tiene; si no, la de creación. Si ambas faltan (entidad armada a mano, aún sin guardar)
+	// cuenta como la más reciente en vez de lanzar NullPointerException.
+	private static LocalDate claveAntiguedad(Tarea t) {
+		if (t.getFecha() != null) {
+			return t.getFecha();
+		}
+		return t.getFechaCreacion() != null ? t.getFechaCreacion().toLocalDate() : LocalDate.MAX;
 	}
 
 	/** Deshace un "hecha" por error: HECHO pasa a PENDIENTE. Si ya estaba abierta no cambia (idempotente). */

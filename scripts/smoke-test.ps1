@@ -1,6 +1,6 @@
 # Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
 # (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
-# proyectos y tareas ligados, borrado con 409 segun el motivo).
+# proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir y recomendacion.
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos y objetivos "smoke-*", y los borra al terminar.
@@ -261,6 +261,55 @@ try {
     Verificar "reabrir una cancelada -> 409" (($r5.Status -eq 409) -and ($r5.Raw -match "cancelada")) "status $($r5.Status) $($r5.Raw)"
     $r6 = Llamar "PATCH" ($Base + "/999999/reabrir")
     Verificar "reabrir inexistente -> 404" ($r6.Status -eq 404) "status $($r6.Status)"
+
+    # --- Recomendacion (sin fecha o atrasadas) ---
+    # Se filtra por un proyecto propio para aislarse de las tareas reales de la base.
+    $rp = Llamar "POST" $BaseProyectos '{"nombre":"smoke-rc-P"}'
+    if ($rp.Json) { $proyectoIds += $rp.Json.id }
+    if (-not $rp.Json) { throw "No se pudo crear el proyecto de recomendacion." }
+    $rm = Llamar "POST" $Base '{"titulo":"smoke-rc-M madre","prioridad":"ALTA"}'
+    if ($rm.Json) { $ids += $rm.Json.id }
+    if (-not $rm.Json) { throw "No se pudo crear la madre de recomendacion." }
+    $rh = Llamar "POST" $Base ('{"titulo":"smoke-rc-H hija atrasada","prioridad":"BAJA","fecha":"2098-01-01","padreId":' + $rm.Json.id + '}')
+    if ($rh.Json) { $ids += $rh.Json.id }
+    $rx = Llamar "POST" $Base '{"titulo":"smoke-rc-X sin fecha","prioridad":"MEDIA"}'
+    if ($rx.Json) { $ids += $rx.Json.id }
+    $rw = Llamar "POST" $Base '{"titulo":"smoke-rc-W atrasada","prioridad":"BAJA","fecha":"2098-01-05"}'
+    if ($rw.Json) { $ids += $rw.Json.id }
+    $ry = Llamar "POST" $Base ('{"titulo":"smoke-rc-Y en el limite","fecha":"' + $limite + '"}')
+    if ($ry.Json) { $ids += $ry.Json.id }
+    $rz = Llamar "POST" $Base '{"titulo":"smoke-rc-Z hecha","estado":"HECHO","fecha":"2098-01-01"}'
+    if ($rz.Json) { $ids += $rz.Json.id }
+    if (-not ($rh.Json -and $rx.Json -and $rw.Json -and $ry.Json -and $rz.Json)) { throw "No se pudieron crear las tareas de recomendacion." }
+    # La hija H queda SIN proyecto a proposito: debe aparecer anidada bajo su madre al filtrar por el proyecto.
+    foreach ($x in @($rm, $rx, $rw, $ry, $rz)) { [void](Llamar "PUT" ($BaseProyectos + "/" + $rp.Json.id + "/tareas/" + $x.Json.id)) }
+    $filtro = "&proyectoId=" + $rp.Json.id
+
+    $rc = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro)
+    $raices = @($rc.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: prioridad desc; excluye limite, hechas; hija no es raiz" (($rc.Status -eq 200) -and (($raices -join "|") -eq "smoke-rc-M madre|smoke-rc-X sin fecha|smoke-rc-W atrasada")) ($raices -join "|")
+    $subs = @($rc.Json[0].subtareas | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: la subtarea sin proyecto va anidada bajo su madre" (($subs -join "|") -eq "smoke-rc-H hija atrasada") ($subs -join "|")
+    $rc2 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&orden=prioridad&sentido=asc")
+    $raices2 = @($rc2.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: prioridad asc" (($raices2 -join "|") -eq "smoke-rc-W atrasada|smoke-rc-X sin fecha|smoke-rc-M madre") ($raices2 -join "|")
+    $rc3 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&orden=antiguedad&sentido=desc")
+    $raices3 = @($rc3.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: antiguedad desc (la mas antigua primero)" (($raices3 -join "|") -eq "smoke-rc-M madre|smoke-rc-X sin fecha|smoke-rc-W atrasada") ($raices3 -join "|")
+    $rc4 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&orden=antiguedad&sentido=asc")
+    $raices4 = @($rc4.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: antiguedad asc (la mas reciente primero)" (($raices4 -join "|") -eq "smoke-rc-W atrasada|smoke-rc-M madre|smoke-rc-X sin fecha") ($raices4 -join "|")
+    $rc5 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&limite=2")
+    $raices5 = @($rc5.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion: limite=2 corta despues de ordenar" (($raices5 -join "|") -eq "smoke-rc-M madre|smoke-rc-X sin fecha") ($raices5 -join "|")
+    $rc6 = Llamar "GET" ($Base + "/recomendacion")
+    Verificar "recomendacion sin fecha -> 400" ($rc6.Status -eq 400) "status $($rc6.Status)"
+    $rc7 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + "&orden=raro")
+    Verificar "recomendacion con orden invalido -> 400" ($rc7.Status -eq 400) "status $($rc7.Status)"
+    $rc8 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + "&sentido=raro")
+    Verificar "recomendacion con sentido invalido -> 400" ($rc8.Status -eq 400) "status $($rc8.Status)"
+    $rc9 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + "&limite=0")
+    Verificar "recomendacion con limite 0 -> 400" ($rc9.Status -eq 400) "status $($rc9.Status)"
 
     # --- Ciclos en la jerarquia de tareas ---
     $ja = Llamar "POST" $Base '{"titulo":"smoke-ja A"}'
