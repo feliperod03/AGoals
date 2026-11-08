@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Capturas y logs de Playwright (no se commitean)
+.playwright-mcp/

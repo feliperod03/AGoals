@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  aFechaLocal,
   aIsoConDesfase,
   ahora,
   formatearDesfase,
+  formatearFechaHoraCorta,
   formatearFechaLarga,
   formatearHora,
+  formatearMinutos,
   hoy,
+  minutosDeHora,
+  minutosDelDia,
   rangoDelDia,
+  recortarEventoAlDia,
 } from './fechas'
 
 afterEach(() => vi.useRealTimers())
@@ -74,5 +80,64 @@ describe('con zona horaria de Buenos Aires', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-11-10T15:00:00Z'))
     expect(rangoDelDia().desde).toBe('2026-11-10T00:00:00-03:00')
+  })
+})
+
+describe('minutos del día', () => {
+  it('minutosDeHora y formatearMinutos son inversas', () => {
+    expect(minutosDeHora('09:30:00')).toBe(570)
+    expect(minutosDeHora('00:00')).toBe(0)
+    expect(formatearMinutos(570)).toBe('09:30')
+    expect(formatearMinutos(1440)).toBe('24:00')
+  })
+
+  it('aFechaLocal usa el día local, no el de UTC', () => {
+    // 23:30 en Buenos Aires = 02:30 UTC del día siguiente.
+    expect(aFechaLocal(new Date('2026-11-10T23:30:00-03:00'))).toBe('2026-11-10')
+  })
+
+  it('minutosDelDia cuenta desde la medianoche local', () => {
+    expect(minutosDelDia(new Date('2026-11-10T14:05:00-03:00'), '2026-11-10')).toBe(845)
+  })
+
+  it('formatearFechaHoraCorta escribe día y hora locales', () => {
+    expect(formatearFechaHoraCorta('2026-11-10T15:00:00-03:00')).toBe('mar 10 nov · 15:00')
+  })
+})
+
+describe('recortarEventoAlDia', () => {
+  const dia = '2026-11-10'
+
+  it('deja intacto un evento dentro del día', () => {
+    const e = { fechaHoraInicio: '2026-11-10T15:00:00-03:00', fechaHoraFin: '2026-11-10T16:30:00-03:00' }
+    expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 900, finMin: 990 })
+  })
+
+  it('recorta al inicio del día un evento que viene del día anterior', () => {
+    const e = { fechaHoraInicio: '2026-11-09T22:00:00-03:00', fechaHoraFin: '2026-11-10T01:30:00-03:00' }
+    expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 0, finMin: 90 })
+  })
+
+  it('recorta al fin del día un evento que sigue al día siguiente', () => {
+    const e = { fechaHoraInicio: '2026-11-10T22:00:00-03:00', fechaHoraFin: '2026-11-11T02:00:00-03:00' }
+    expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 1320, finMin: 1440 })
+  })
+
+  it('un evento de varios días ocupa el día entero', () => {
+    const e = { fechaHoraInicio: '2026-11-08T10:00:00-03:00', fechaHoraFin: '2026-11-12T10:00:00-03:00' }
+    expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 0, finMin: 1440 })
+  })
+
+  it('devuelve null si el evento no toca el día (los bordes exactos no cuentan)', () => {
+    const antes = { fechaHoraInicio: '2026-11-09T22:00:00-03:00', fechaHoraFin: '2026-11-10T00:00:00-03:00' }
+    const despues = { fechaHoraInicio: '2026-11-11T00:00:00-03:00', fechaHoraFin: '2026-11-11T01:00:00-03:00' }
+    expect(recortarEventoAlDia(antes, dia)).toBeNull()
+    expect(recortarEventoAlDia(despues, dia)).toBeNull()
+  })
+
+  it('interpreta el instante aunque el desfase del evento sea otro', () => {
+    // 18:00 UTC = 15:00 en Buenos Aires.
+    const e = { fechaHoraInicio: '2026-11-10T18:00:00+00:00', fechaHoraFin: '2026-11-10T19:00:00+00:00' }
+    expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 900, finMin: 960 })
   })
 })

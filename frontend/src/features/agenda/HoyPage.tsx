@@ -1,67 +1,59 @@
-import { useState } from 'react'
-
-import { formatearFechaLarga, formatearHora, hoy } from '@/lib/fechas'
-import { cn } from '@/lib/utils'
-import type { Tarea } from '@/types/tarea'
-import { PrioridadChip } from './PrioridadChip'
+import { ProximosEventos, ProximosRecordatorios } from './ColumnaLateral'
+import { EncabezadoHoy } from './EncabezadoHoy'
+import { armarBloques } from './horario'
+import { ListaDelDia } from './ListaDelDia'
+import { PlanificacionPorHoras } from './PlanificacionPorHoras'
 import { useAgendaDelDia } from './useAgendaDelDia'
+import { useAhora } from './useAhora'
+import { useEventosDelDia, useProximosEventos } from './useEventos'
+import { useProximosRecordatorios } from './useRecordatorios'
 
-/** Página Hoy (rebanada 8.0): solo lista las tareas del día, sin acciones. */
+const estaAbierta = (estado: string) => estado !== 'HECHO' && estado !== 'CANCELADO'
+
+/**
+ * Página Hoy (rebanada 8.1, solo lectura). Las columnas se apilan solas en pantallas angostas
+ * (`flex-wrap`). Cada tarjeta maneja su propia carga y error: un fallo en una no tumba las demás.
+ */
 export function HoyPage() {
-  // Se fija al montar: así la página no cambia de día sola a medianoche sin recargar.
-  const [fecha] = useState(hoy)
-  const { data, isPending, error } = useAgendaDelDia(fecha)
+  // `hoy` se recalcula cada minuto y al volver a enfocar la pestaña, así la página cambia de día sola.
+  const { ahora, hoy } = useAhora()
+  const agenda = useAgendaDelDia(hoy)
+  const eventosDelDia = useEventosDelDia(hoy)
+  const proximosEventos = useProximosEventos()
+  const proximosRecordatorios = useProximosRecordatorios(ahora)
+
+  const bloques = armarBloques(agenda.data?.conHora ?? [], eventosDelDia.data ?? [], hoy)
+  // Solo cuentan los eventos que realmente tocan el día (los bordes exactos no).
+  const cantidadEventos = eventosDelDia.data ? bloques.filter((b) => b.tipo === 'evento').length : undefined
+  const tareasAbiertas = agenda.data
+    ? [...agenda.data.conHora, ...agenda.data.sinHora].filter((t) => estaAbierta(t.estado)).length
+    : undefined
 
   return (
-    <section>
-      <header className="mb-6">
-        <h1 className="text-4xl">Hoy</h1>
-        <p className="mt-1 text-sm text-mut first-letter:uppercase">{formatearFechaLarga(fecha)}</p>
-      </header>
+    <div>
+      <EncabezadoHoy fecha={hoy} tareasAbiertas={tareasAbiertas} eventos={cantidadEventos} />
 
-      {isPending && <p className="text-mut">Cargando tu agenda…</p>}
+      <div className="flex flex-wrap items-start gap-6">
+        <div className="flex min-w-0 flex-[1_1_480px] flex-col gap-6">
+          <ListaDelDia tareas={agenda.data?.sinHora} cargando={agenda.isPending} error={agenda.error} />
+          <PlanificacionPorHoras
+            bloques={bloques}
+            fecha={hoy}
+            ahora={ahora}
+            cargando={agenda.isPending || eventosDelDia.isPending}
+            errores={[agenda.error, eventosDelDia.error].flatMap((e) => (e ? [e.message] : []))}
+          />
+        </div>
 
-      {error && (
-        <p role="alert" className="rounded-card border border-alta bg-card p-4 text-tx">
-          {error.message}
-        </p>
-      )}
-
-      {data && data.conHora.length === 0 && data.sinHora.length === 0 && (
-        <p className="rounded-card bg-card p-6 text-mut shadow-card">No tienes tareas para hoy.</p>
-      )}
-
-      {data && data.conHora.length > 0 && <ListaTareas titulo="Planificación por horas" tareas={data.conHora} />}
-      {data && data.sinHora.length > 0 && <ListaTareas titulo="Lista del día" tareas={data.sinHora} />}
-    </section>
-  )
-}
-
-function ListaTareas({ titulo, tareas }: { titulo: string; tareas: Tarea[] }) {
-  return (
-    <div className="mb-6">
-      <h2 className="mb-3 text-xl">{titulo}</h2>
-      <ul className="flex flex-col gap-2">
-        {tareas.map((tarea) => (
-          <FilaTarea key={tarea.id} tarea={tarea} />
-        ))}
-      </ul>
+        <aside className="flex min-w-0 max-w-[380px] flex-[1_1_300px] flex-col gap-6">
+          <ProximosRecordatorios
+            datos={proximosRecordatorios.data}
+            cargando={proximosRecordatorios.isPending}
+            error={proximosRecordatorios.error}
+          />
+          <ProximosEventos datos={proximosEventos.data} cargando={proximosEventos.isPending} error={proximosEventos.error} />
+        </aside>
+      </div>
     </div>
-  )
-}
-
-function FilaTarea({ tarea }: { tarea: Tarea }) {
-  const cerrada = tarea.estado === 'HECHO' || tarea.estado === 'CANCELADO'
-  return (
-    <li className="flex items-center gap-3 rounded-card bg-card px-4 py-3 shadow-card">
-      {tarea.horaInicio && (
-        <span className="w-24 shrink-0 text-sm font-medium text-mut">
-          {formatearHora(tarea.horaInicio)}
-          {tarea.horaFin && `–${formatearHora(tarea.horaFin)}`}
-        </span>
-      )}
-      <span className={cn('min-w-0 flex-1 truncate', cerrada && 'text-mut line-through')}>{tarea.titulo}</span>
-      {tarea.prioridad && <PrioridadChip prioridad={tarea.prioridad} />}
-    </li>
   )
 }

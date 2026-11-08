@@ -1,4 +1,4 @@
-import { addDays, format, parseISO, startOfDay } from 'date-fns'
+import { addDays, differenceInMinutes, format, parseISO, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 // Todo el manejo de fechas del frontend vive aquí. Regla: nunca `toISOString()`,
@@ -35,9 +35,55 @@ export function formatearHora(hora: string): string {
   return hora.slice(0, 5)
 }
 
+/** El día local de una fecha (`YYYY-MM-DD`), no el de UTC. */
+export function aFechaLocal(fecha: Date): string {
+  return format(fecha, FORMATO_FECHA)
+}
+
 /** El día de hoy según el reloj local (`YYYY-MM-DD`), no el de UTC. */
 export function hoy(): string {
-  return format(new Date(), FORMATO_FECHA)
+  return aFechaLocal(new Date())
+}
+
+/** `09:30:00` -> minutos desde las 00:00 (570). */
+export function minutosDeHora(hora: string): number {
+  return Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5))
+}
+
+/** Minutos desde las 00:00 -> `HH:MM` (1440 -> `24:00`). */
+export function formatearMinutos(minutos: number): string {
+  const horas = String(Math.floor(minutos / 60)).padStart(2, '0')
+  const resto = String(minutos % 60).padStart(2, '0')
+  return `${horas}:${resto}`
+}
+
+/** Minutos desde las 00:00 del día local de `fecha` hasta el instante `instante`. */
+export function minutosDelDia(instante: Date, fecha: string): number {
+  return differenceInMinutes(instante, startOfDay(parseISO(fecha)))
+}
+
+/** ISO con desfase -> `lun 9 nov · 15:00` (hora local). */
+export function formatearFechaHoraCorta(iso: string): string {
+  return format(parseISO(iso), "EEE d MMM · HH:mm", { locale: es })
+}
+
+/**
+ * Recorta un evento al día local `fecha`: devuelve su inicio y fin en minutos desde las 00:00
+ * (0 a 1440). Un evento que cruza la medianoche se corta en 0 o en 1440. `null` si no toca el día.
+ */
+export function recortarEventoAlDia(
+  evento: { fechaHoraInicio: string; fechaHoraFin: string },
+  fecha: string,
+): { inicioMin: number; finMin: number } | null {
+  const inicioDia = startOfDay(parseISO(fecha))
+  const finDia = addDays(inicioDia, 1)
+  const inicio = Math.max(parseISO(evento.fechaHoraInicio).getTime(), inicioDia.getTime())
+  const fin = Math.min(parseISO(evento.fechaHoraFin).getTime(), finDia.getTime())
+  if (fin <= inicio) return null
+  return {
+    inicioMin: differenceInMinutes(inicio, inicioDia),
+    finMin: fin === finDia.getTime() ? 1440 : differenceInMinutes(fin, inicioDia),
+  }
 }
 
 /** El instante actual con desfase local. */

@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from './App'
 
+vi.mock('@/api/eventos', () => ({ getEventos: vi.fn().mockResolvedValue([]), getEvento: vi.fn() }))
+vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/api/tareas', () => ({
+  getTarea: vi.fn(),
   getAgenda: vi.fn().mockResolvedValue({ fecha: '2026-11-10', conHora: [], sinHora: [] }),
 }))
 
@@ -57,7 +60,7 @@ describe('App', () => {
 
   it('la ruta raíz muestra la página Hoy', async () => {
     renderizar('/')
-    expect(await screen.findByText('No tienes tareas para hoy.')).toBeInTheDocument()
+    expect(await screen.findByText('No tienes tareas sin hora para hoy.')).toBeInTheDocument()
   })
 
   it('navega a una sección todavía no construida', async () => {
