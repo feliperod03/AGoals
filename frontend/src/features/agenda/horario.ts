@@ -25,6 +25,8 @@ export interface Bloque {
   finMin: number
   estado?: Estado
   prioridad: Prioridad | null
+  /** La tarea original (solo en bloques de tipo tarea), para poder editarla desde la planificación. */
+  tarea?: Tarea
 }
 
 export interface BloqueColocado extends Bloque {
@@ -111,6 +113,7 @@ export function armarBloques(tareasConHora: Tarea[], eventos: Evento[], fecha: s
       finMin: finDeTarea(t.horaInicio, t.horaFin),
       estado: t.estado,
       prioridad: t.prioridad,
+      tarea: t,
     })
   }
   for (const e of eventos) {

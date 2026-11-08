@@ -103,3 +103,9 @@ export function rangoDelDia(fecha: string = hoy()): { desde: string; hasta: stri
     hasta: aIsoConDesfase(addDays(inicio, 1)),
   }
 }
+
+/** Mensaje de confirmación al guardar una tarea: sin fecha va al cofre. */
+export function mensajeGuardada(fecha: string | null): string {
+  if (!fecha) return 'Guardada en el cofre'
+  return `Guardada para el ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
+}

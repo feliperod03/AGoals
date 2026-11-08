@@ -27,3 +27,19 @@ export interface Agenda {
   conHora: Tarea[]
   sinHora: Tarea[]
 }
+
+/**
+ * Cuerpo de POST/PUT /api/tareas (TareaRequest). `horaInicio`/`horaFin` van como `HH:mm`.
+ * Ojo: el PUT reemplaza todo. `estado` y `padreId` hay que reenviarlos al editar o se pierden
+ * (estado vuelve a PENDIENTE y el padre se suelta).
+ */
+export interface TareaRequest {
+  titulo: string
+  descripcion: string | null
+  estado?: Estado
+  prioridad: Prioridad | null
+  fecha: string | null
+  horaInicio: string | null
+  horaFin: string | null
+  padreId?: number | null
+}

@@ -53,7 +53,7 @@ Lugar para tareas que hay que hacer "en algún momento", sin fecha. **No requier
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
 - 8.1 Agenda del día en lectura (tareas + eventos, lista del día y horas, próximos recordatorios y eventos): hecha (commit `e9ba44d`).
-- 8.2a Crear y editar tareas (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
+- 8.2a Crear y editar tareas, hecha (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
 - 8.2b Acciones rápidas (hecha, reabrir, posponer, borrar; aviso al cerrar una tarea con recordatorio; errores 409 legibles).
 - 8.3 Recomendación (+ agendar con/sin subtareas; tareas del cofre marcadas).
 - 8.3b Cofre (vista propia con filtros y agendar).

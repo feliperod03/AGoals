@@ -9,6 +9,7 @@ import {
   formatearHora,
   formatearMinutos,
   hoy,
+  mensajeGuardada,
   minutosDeHora,
   minutosDelDia,
   rangoDelDia,
@@ -139,5 +140,15 @@ describe('recortarEventoAlDia', () => {
     // 18:00 UTC = 15:00 en Buenos Aires.
     const e = { fechaHoraInicio: '2026-11-10T18:00:00+00:00', fechaHoraFin: '2026-11-10T19:00:00+00:00' }
     expect(recortarEventoAlDia(e, dia)).toEqual({ inicioMin: 900, finMin: 960 })
+  })
+})
+
+describe('mensajeGuardada', () => {
+  it('sin fecha dice que va al cofre', () => {
+    expect(mensajeGuardada(null)).toBe('Guardada en el cofre')
+  })
+  it('con fecha la escribe en español', () => {
+    expect(mensajeGuardada('2026-11-12')).toBe('Guardada para el 12 de noviembre')
+    expect(mensajeGuardada('2026-12-01')).toBe('Guardada para el 1 de diciembre')
   })
 })

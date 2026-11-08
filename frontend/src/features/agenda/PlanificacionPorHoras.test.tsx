@@ -6,7 +6,7 @@ import { PlanificacionPorHoras } from './PlanificacionPorHoras'
 const AHORA = new Date('2026-11-10T12:00:00-03:00')
 
 function renderizar(fecha: string) {
-  render(<PlanificacionPorHoras bloques={[]} fecha={fecha} ahora={AHORA} cargando={false} errores={[]} />)
+  render(<PlanificacionPorHoras bloques={[]} fecha={fecha} ahora={AHORA} cargando={false} errores={[]} alEditar={() => {}} />)
 }
 
 describe('PlanificacionPorHoras: línea de "ahora"', () => {
