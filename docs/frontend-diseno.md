@@ -40,16 +40,20 @@ Capas: componentes -> hooks de `features/` -> `api/`. Solo `api/` llama a `fetch
 - Interfaz en español.
 - Código: inglés para lo técnico/genérico (`Button`, `ApiClient`, `useDebounce`, `formatDate`); español para el dominio y lo que viene de la API (`Tarea`, `useTareasDelDia`, `marcarHecha`, `fechaHoraInicio`).
 
-## Cofre (decidido el 8/11/2026)
-Lugar para tareas que hay que hacer "en algún momento", sin fecha. **No requiere cambios en el backend**: una tarea sin `fecha` ya es "sin agendar" y la recomendación ya las incluye (con o sin proyecto/objetivo).
-- **Qué es:** todas las tareas abiertas sin fecha (PENDIENTE, EN_PROGRESO, EN_PAUSA), sean sueltas, de proyecto o de objetivo. Filtros por tipo (sueltas / de proyecto / de objetivo), con "Sueltas" como idea inicial a evaluar al diseñarlo.
-- **Nombre:** "Cofre", con subtítulo explicativo ("Tareas sin fecha, para cuando tengas un hueco"). Puede cambiarse después solo en el frontend.
-- **Crear:** en el formulario de nueva tarea (8.2a), si la fecha queda vacía la tarea va al cofre y el formulario lo dice ("Sin fecha: se guarda en el cofre").
-- **Recomendación (8.3):** las tareas del cofre ya aparecen; se marcan visualmente.
-- **Vista propia (8.3b):** entrada "Cofre" en la barra lateral, con las tareas ordenadas por prioridad o antigüedad y botón "Agendar" que reutiliza `PATCH /agendar`.
-- **Datos:** `GET /api/tareas` filtrando en el cliente (abiertas y `fecha == null`); suficiente con un solo usuario.
-- **Opcional:** contador "Cofre: N tareas" en Hoy que lleve a la vista.
-- **Consecuencia conocida:** hasta que lleguen 8.3 y 8.3b, una tarea guardada en el cofre no se ve listada en ninguna pantalla.
+## Cofre (decidido el 8/11/2026; ampliado el mismo día)
+Inventario de **todas** las tareas, con filtros. Nació como lugar para las tareas "de algún momento" (sin fecha), y ese uso sigue siendo la vista por defecto. **No requiere cambios en el backend.**
+- **Qué muestra:** todas las tareas, con o sin fecha y en cualquier estado. Por defecto abre en **"Abiertas sin fecha"** (el cofre original).
+- **Filtros:** fecha (con fecha / sin fecha / atrasadas / rango), estado (abiertas por defecto, o cualquiera de los cinco), prioridad, vínculo (suelta / de un proyecto puntual / de un objetivo puntual) y búsqueda por título. Proyectos y objetivos se eligen con sus listados existentes.
+- **Filtros anclados:** el usuario elige hasta **3** filtros como accesos rápidos visibles arriba (p. ej. "Atrasadas", "Pendientes", "Prioridad alta"); el resto va en un panel desplegable. La elección se guarda en `localStorage` (solo vale en ese navegador; sincronizarla entre dispositivos sería una mejora futura con backend).
+- **Subtareas:** anidadas bajo su tarea madre, no en lista plana.
+- **Acciones:** las mismas de Hoy (editar, hecha, posponer, etc.) y "Agendar", que reutiliza `PATCH /agendar` (con o sin subtareas).
+- **Nombre:** "Cofre", con subtítulo explicativo. Puede cambiarse después solo en el frontend.
+- **Crear:** en el formulario de nueva tarea, si la fecha queda vacía la tarea va al cofre y el formulario lo dice ("Sin fecha: se guarda en el cofre").
+- **Recomendación (8.3):** las tareas sin fecha ya aparecen; se marcan visualmente.
+- **Datos:** `GET /api/tareas` filtrando en el cliente; suficiente con un solo usuario.
+- **Opcional:** contador en Hoy que lleve al cofre.
+- **No hay posposición automática:** una tarea no completada queda en su fecha como atrasada; se ve en el cofre (filtro "Atrasadas") y en la recomendación.
+- **Consecuencia conocida:** hasta que llegue 8.3b, una tarea guardada sin fecha solo se ve en la recomendación (8.3).
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -57,7 +61,7 @@ Lugar para tareas que hay que hacer "en algún momento", sin fecha. **No requier
 - 8.2a Crear y editar tareas, hecha (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
 - 8.2b Acciones rápidas, hecha (hecha, reabrir, posponer +1 día, cancelar, reactivar, borrar con confirmación; pregunta por el recordatorio pendiente al marcar hecha o cancelar; errores 409 legibles).
 - 8.3 Recomendación (+ agendar con/sin subtareas; tareas del cofre marcadas).
-- 8.3b Cofre (vista propia con filtros y agendar).
+- 8.3b Cofre (inventario de todas las tareas con filtros, 3 filtros anclados, subtareas anidadas y agendar).
 - 8.4 Proyectos, objetivos e ideas.
 - 8.5 Recordatorios (polling de vencidos, aviso al cerrar tarea con recordatorio).
 - 9 Calendario (librería a decidir entonces).
@@ -94,7 +98,6 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 ## Pendiente de decidir (de Felipe)
 - Tarjeta de objetivos con porcentaje de progreso: el backend no lo calcula (requeriría endpoint nuevo). Para la v1: lista de objetivos con estado y prioridad.
 - Librería del calendario (rebanada 9).
-- Filtro por defecto de la vista del cofre (todas vs. solo sueltas).
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
 - Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
 - Mensaje de confirmación: debería ser un aviso flotante pequeño abajo, con una animación corta de entrada y salida, sin librería de toasts.
