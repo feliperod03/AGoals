@@ -13,6 +13,7 @@ import {
   valoresIniciales,
   type ValoresTarea,
 } from './formularioTarea'
+import type { Acciones } from './useAccionesTarea'
 import { useGuardarTarea } from './useGuardarTarea'
 
 interface Props {
@@ -21,21 +22,32 @@ interface Props {
   alCerrar: () => void
   /** Se llama tras guardar con el mensaje de confirmación (para el aria-live de la página). */
   alGuardar: (mensaje: string) => void
+  acciones: Acciones
 }
 
 const CAMPO =
   'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-tx focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Diálogo para crear o editar una tarea (mismo formulario). El formulario se monta de nuevo cada vez que se abre. */
-export function TareaDialog({ abierto, alCerrar, alGuardar }: Props) {
+export function TareaDialog({ abierto, alCerrar, alGuardar, acciones }: Props) {
   return (
     <Dialog open={abierto !== null} onOpenChange={(open) => !open && alCerrar()}>
-      <DialogContent>{abierto && <Formulario tarea={abierto.tarea} alCerrar={alCerrar} alGuardar={alGuardar} />}</DialogContent>
+      <DialogContent>{abierto && <Formulario tarea={abierto.tarea} alCerrar={alCerrar} alGuardar={alGuardar} acciones={acciones} />}</DialogContent>
     </Dialog>
   )
 }
 
-function Formulario({ tarea, alCerrar, alGuardar }: { tarea?: Tarea; alCerrar: () => void; alGuardar: (mensaje: string) => void }) {
+function Formulario({
+  tarea,
+  alCerrar,
+  alGuardar,
+  acciones,
+}: {
+  tarea?: Tarea
+  alCerrar: () => void
+  alGuardar: (mensaje: string) => void
+  acciones: Acciones
+}) {
   const guardar = useGuardarTarea()
   const {
     register,
@@ -140,21 +152,58 @@ function Formulario({ tarea, alCerrar, alGuardar }: { tarea?: Tarea; alCerrar: (
         </Campo>
       </div>
 
-      {guardar.error && (
+      {(guardar.error || acciones.error) && (
         <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
-          {guardar.error.message}
+          {guardar.error?.message ?? acciones.error}
         </p>
       )}
 
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={alCerrar}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={guardar.isPending}>
-          {guardar.isPending ? 'Guardando…' : 'Guardar'}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {tarea ? <AccionesDeLaTarea tarea={tarea} acciones={acciones} bloqueado={guardar.isPending} /> : <span />}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={alCerrar}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={guardar.isPending || acciones.pendiente}>
+            {guardar.isPending ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </div>
       </div>
     </form>
+  )
+}
+
+/** Acciones rápidas en el pie del diálogo de edición (actúan sobre la tarea guardada, no sobre lo escrito en el formulario). */
+function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; acciones: Acciones; bloqueado: boolean }) {
+  const deshabilitado = bloqueado || acciones.pendiente
+  const cancelada = tarea.estado === 'CANCELADO'
+  const hecha = tarea.estado === 'HECHO'
+  return (
+    <div className="flex flex-wrap gap-2">
+      {cancelada ? (
+        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.ejecutar('reactivar', tarea)}>
+          Reactivar
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={deshabilitado}
+          onClick={() => acciones.ejecutar(hecha ? 'reabrir' : 'hecha', tarea)}
+        >
+          {hecha ? 'Reabrir' : 'Marcar hecha'}
+        </Button>
+      )}
+      {!cancelada && !hecha && (
+        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.ejecutar('posponer', tarea)}>
+          Posponer
+        </Button>
+      )}
+      <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirBorrado(tarea)}>
+        Borrar
+      </Button>
+    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, requestConEstado, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -98,5 +98,16 @@ describe('validaciones de horas', () => {
     expect(validarHoraFin('10:00', '09:00')).toMatch(/posterior/)
     expect(validarHoraFin('10:00', '10:01')).toBeUndefined()
     expect(validarHoraFin('', '09:00')).toBeUndefined()
+  })
+})
+
+describe('requestConEstado', () => {
+  it('cambia solo el estado y conserva el resto de los campos', () => {
+    const base = requestConEstado(TAREA, 'CANCELADO')
+    expect(base.estado).toBe('CANCELADO')
+    expect(base).toEqual({ ...aRequest(valoresIniciales(TAREA), TAREA), estado: 'CANCELADO' })
+    expect(base.padreId).toBe(TAREA.padreId)
+    expect(base.titulo).toBe('Informe')
+    expect(base.prioridad).toBe('ALTA')
   })
 })

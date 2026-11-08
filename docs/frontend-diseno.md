@@ -10,6 +10,7 @@
 - date-fns (todo el manejo de fechas en `src/lib/fechas.ts`, con tests).
 - react-hook-form (zod solo si hace falta). Se instala en 8.2a.
 - `@radix-ui/react-dialog` (vía el Dialog de shadcn): aprobada para 8.2a, por el foco y la accesibilidad de los diálogos.
+- `@radix-ui/react-dropdown-menu` (vía el DropdownMenu de shadcn): aprobada para 8.2b, por el teclado y los roles ARIA del menú de acciones de cada tarea.
 - Vitest + Testing Library.
 - Fuentes autoalojadas con paquetes `@fontsource` (Fraunces e Inter).
 - **Lista cerrada de dependencias:** cualquier otra requiere aprobación de Felipe.
@@ -54,7 +55,7 @@ Lugar para tareas que hay que hacer "en algún momento", sin fecha. **No requier
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
 - 8.1 Agenda del día en lectura (tareas + eventos, lista del día y horas, próximos recordatorios y eventos): hecha (commit `e9ba44d`).
 - 8.2a Crear y editar tareas, hecha (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
-- 8.2b Acciones rápidas (hecha, reabrir, posponer, borrar; aviso al cerrar una tarea con recordatorio; errores 409 legibles).
+- 8.2b Acciones rápidas, hecha (hecha, reabrir, posponer +1 día, cancelar, reactivar, borrar con confirmación; pregunta por el recordatorio pendiente al marcar hecha o cancelar; errores 409 legibles).
 - 8.3 Recomendación (+ agendar con/sin subtareas; tareas del cofre marcadas).
 - 8.3b Cofre (vista propia con filtros y agendar).
 - 8.4 Proyectos, objetivos e ideas.
@@ -96,3 +97,6 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 - Filtro por defecto de la vista del cofre (todas vs. solo sueltas).
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
 - Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
+- Mensaje de confirmación: debería ser un aviso flotante pequeño abajo, con una animación corta de entrada y salida, sin librería de toasts.
+- Selector de hora del formulario: hoy es el input nativo y se ve feo; mejorarlo.
+- Al posponer una tarea, su recordatorio pendiente no se mueve con ella (queda en la fecha original).

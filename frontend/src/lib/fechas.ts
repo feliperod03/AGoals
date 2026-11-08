@@ -109,3 +109,8 @@ export function mensajeGuardada(fecha: string | null): string {
   if (!fecha) return 'Guardada en el cofre'
   return `Guardada para el ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
 }
+
+/** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
+export function mensajePospuesta(fecha: string): string {
+  return `Pospuesta al ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
+}

@@ -28,7 +28,7 @@ Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: qu
 - Colores solo con los tokens de `src/index.css` (`bg-card`, `text-mut`, ...), nunca hex sueltos.
 - Cada funcionalidad nueva lleva tests (Vitest + Testing Library).
 - **Lista cerrada de dependencias.** Cualquier otra requiere consultarla antes con Felipe.
-  - Aplicación: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `date-fns`, `tailwindcss`, `@tailwindcss/vite`, `@fontsource/fraunces`, `@fontsource/inter`, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `@radix-ui/react-slot`, `@radix-ui/react-dialog`, `react-hook-form`, `tw-animate-css`.
+  - Aplicación: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `date-fns`, `tailwindcss`, `@tailwindcss/vite`, `@fontsource/fraunces`, `@fontsource/inter`, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `@radix-ui/react-slot`, `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`, `react-hook-form`, `tw-animate-css`.
   - Desarrollo: `vite`, `@vitejs/plugin-react`, `typescript`, `@types/node`, `@types/react`, `@types/react-dom`, `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`.
   - Aprobadas pero aún sin instalar: `zod` (solo si hace falta).
   - Descartadas: Next.js, Redux/Zustand, MUI/Ant, axios, generar tipos desde OpenAPI.

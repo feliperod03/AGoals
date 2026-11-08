@@ -113,8 +113,8 @@ describe('HoyPage: datos', () => {
     expect(within(lista).getByText('Hecha')).toHaveClass('sr-only')
     expect(within(lista).getByText('En progreso')).toBeInTheDocument()
     expect(within(lista).queryByRole('checkbox')).not.toBeInTheDocument()
-    // Cada tarea de la lista es un botón (abre la edición).
-    expect(within(lista).getAllByRole('button')).toHaveLength(3)
+    // Cada tarea de la lista son tres botones hermanos: estado, título (abre la edición) y menú de acciones.
+    expect(within(lista).getAllByRole('button')).toHaveLength(9)
 
     const plan = screen.getByRole('heading', { name: 'Planificación por horas' }).closest('section')!
     expect(within(plan).getByText('TAREA · 09:30–10:30')).toBeInTheDocument()
@@ -280,10 +280,15 @@ describe('HoyPage: estados de la página', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor (500).')
   })
 
-  it('solo ofrece crear y editar: botón "Nueva tarea" y una fila por tarea', async () => {
+  it('ofrece crear y, por cada tarea, estado, edición y menú de acciones', async () => {
     configurar({ agenda: { fecha: '2026-11-10', conHora: [], sinHora: [tarea({ titulo: 'Comprar pan' })] } })
     renderizar()
     await screen.findByText('Comprar pan')
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Nueva tarea', 'PendienteComprar pan'])
+    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+      'Nueva tarea',
+      'Marcar «Comprar pan» como hecha',
+      'Comprar pan',
+      'Acciones de «Comprar pan»',
+    ])
   })
 })

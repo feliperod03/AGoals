@@ -199,7 +199,7 @@ describe('TareaDialog: editar', () => {
   it('desde la lista del día abre el diálogo con los valores actuales', async () => {
     const user = userEvent.setup()
     renderizar(agenda)
-    await user.click(await screen.findByRole('button', { name: /Comprar pan/ }))
+    await user.click(await screen.findByRole('button', { name: /^Comprar pan/ }))
     expect(await screen.findByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
     expect(screen.getByLabelText('Título')).toHaveValue('Comprar pan')
     expect(screen.getByLabelText('Prioridad')).toHaveValue('BAJA')

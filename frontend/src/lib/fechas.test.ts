@@ -10,6 +10,7 @@ import {
   formatearMinutos,
   hoy,
   mensajeGuardada,
+  mensajePospuesta,
   minutosDeHora,
   minutosDelDia,
   rangoDelDia,
@@ -150,5 +151,12 @@ describe('mensajeGuardada', () => {
   it('con fecha la escribe en español', () => {
     expect(mensajeGuardada('2026-11-12')).toBe('Guardada para el 12 de noviembre')
     expect(mensajeGuardada('2026-12-01')).toBe('Guardada para el 1 de diciembre')
+  })
+})
+
+describe('mensajePospuesta', () => {
+  it('escribe la fecha en español', () => {
+    expect(mensajePospuesta('2026-11-10')).toBe('Pospuesta al 10 de noviembre')
+    expect(mensajePospuesta('2026-12-01')).toBe('Pospuesta al 1 de diciembre')
   })
 })

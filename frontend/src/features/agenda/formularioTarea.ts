@@ -1,5 +1,5 @@
 import { formatearHora } from '@/lib/fechas'
-import type { Prioridad, Tarea, TareaRequest } from '@/types/tarea'
+import type { Estado, Prioridad, Tarea, TareaRequest } from '@/types/tarea'
 
 // Lógica pura del formulario de tarea (sin React): valores iniciales, validación y cuerpo a enviar.
 
@@ -51,6 +51,14 @@ export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea): Tare
     request.padreId = original.padreId
   }
   return request
+}
+
+/**
+ * Cuerpo del PUT para cambiar solo el estado (cancelar / reactivar): no hay endpoint propio y el PUT
+ * reemplaza todo, así que se reenvían los demás campos tal cual.
+ */
+export function requestConEstado(tarea: Tarea, estado: Estado): TareaRequest {
+  return { ...aRequest(valoresIniciales(tarea), tarea), estado }
 }
 
 function vacioANull(valor: string | undefined): string | null {
