@@ -1,4 +1,4 @@
-import type { Agenda, Tarea, TareaRequest } from '@/types/tarea'
+import type { Agenda, AgendarRequest, OrdenRecomendacion, SentidoOrden, Tarea, TareaRecomendada, TareaRequest } from '@/types/tarea'
 import { del, get, patch, post, put } from './client'
 
 /** Agenda de un día (`fecha` = YYYY-MM-DD): tareas con hora y lista del día. */
@@ -35,4 +35,25 @@ export function posponerTarea(id: number): Promise<Tarea> {
 /** 409 si la tarea tiene subtareas. */
 export function borrarTarea(id: number): Promise<void> {
   return del(`/api/tareas/${id}`)
+}
+
+export interface ParamsRecomendacion {
+  /** El "hoy" del cliente (YYYY-MM-DD). */
+  fecha: string
+  orden?: OrdenRecomendacion
+  sentido?: SentidoOrden
+  limite?: number
+  /** Solo el vínculo directo de la tarea. */
+  proyectoId?: number
+  objetivoId?: number
+}
+
+/** Tareas abiertas sin fecha o atrasadas, con sus subtareas anidadas. Los params sin valor no se envían. */
+export function getRecomendacion(params: ParamsRecomendacion): Promise<TareaRecomendada[]> {
+  return get<TareaRecomendada[]>('/api/tareas/recomendacion', { ...params })
+}
+
+/** Devuelve las tareas modificadas, la madre primero. 409 si la madre está cerrada; 400 si `fecha` < `hoy`. */
+export function agendarTarea(id: number, request: AgendarRequest): Promise<Tarea[]> {
+  return patch<Tarea[]>(`/api/tareas/${id}/agendar`, request)
 }

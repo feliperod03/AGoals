@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { RecomendacionDialog } from '@/features/recomendacion/RecomendacionDialog'
 import type { Tarea } from '@/types/tarea'
 import { ProximosEventos, ProximosRecordatorios } from './ColumnaLateral'
 import { DialogosAcciones } from './DialogosAcciones'
@@ -30,6 +31,7 @@ export function HoyPage() {
   const proximosRecordatorios = useProximosRecordatorios(ahora)
   // `{}` = diálogo para crear; `{ tarea }` = para editar; `null` = cerrado.
   const [dialogo, setDialogo] = useState<{ tarea?: Tarea } | null>(null)
+  const [recomendacionAbierta, setRecomendacionAbierta] = useState(false)
   const confirmacion = useMensajeTemporal()
   // Si el diálogo de edición está abierto sobre una tarea que acaba de cambiar, se cierra: así no se
   // guarda después el estado viejo del formulario encima del nuevo.
@@ -47,7 +49,7 @@ export function HoyPage() {
 
   return (
     <div>
-      <EncabezadoHoy fecha={hoy} tareasAbiertas={tareasAbiertas} eventos={cantidadEventos} alNuevaTarea={() => setDialogo({})} />
+      <EncabezadoHoy fecha={hoy} tareasAbiertas={tareasAbiertas} eventos={cantidadEventos} alNuevaTarea={() => setDialogo({})} alRecomendacion={() => setRecomendacionAbierta(true)} />
       {/* Región viva: el lector de pantalla anuncia la confirmación al guardar. */}
       <p role="status" aria-live="polite" className={confirmacion.mensaje ? '-mt-3 mb-4 text-sm text-tx' : 'sr-only'}>
         {confirmacion.mensaje}
@@ -77,6 +79,13 @@ export function HoyPage() {
       </div>
 
       <TareaDialog abierto={dialogo} alCerrar={() => setDialogo(null)} alGuardar={confirmacion.mostrar} acciones={acciones} />
+      <RecomendacionDialog
+        abierto={recomendacionAbierta}
+        alCerrar={() => setRecomendacionAbierta(false)}
+        hoy={hoy}
+        aviso={confirmacion.mensaje}
+        alAvisar={confirmacion.mostrar}
+      />
       <DialogosAcciones acciones={acciones} />
     </div>
   )

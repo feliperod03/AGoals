@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
@@ -8,12 +9,16 @@ import type { Recordatorio } from '@/types/recordatorio'
 import type { Agenda, Tarea } from '@/types/tarea'
 import { HoyPage } from './HoyPage'
 
-vi.mock('@/api/tareas', () => ({ getAgenda: vi.fn(), getTarea: vi.fn() }))
+vi.mock('@/api/tareas', () => ({ getAgenda: vi.fn(), getTarea: vi.fn(), getRecomendacion: vi.fn(), agendarTarea: vi.fn() }))
+vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn() }))
+vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn() }))
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn(), getEvento: vi.fn() }))
 vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn() }))
 import { getEventos } from '@/api/eventos'
 import { getRecordatorios } from '@/api/recordatorios'
-import { getAgenda, getTarea } from '@/api/tareas'
+import { getObjetivos } from '@/api/objetivos'
+import { getProyectos } from '@/api/proyectos'
+import { agendarTarea, getAgenda, getRecomendacion, getTarea } from '@/api/tareas'
 
 function tarea(parcial: Partial<Tarea>): Tarea {
   return {
@@ -285,10 +290,43 @@ describe('HoyPage: estados de la página', () => {
     renderizar()
     await screen.findByText('Comprar pan')
     expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+      'Recomendación',
       'Nueva tarea',
       'Marcar «Comprar pan» como hecha',
       'Comprar pan',
       'Acciones de «Comprar pan»',
     ])
+  })
+})
+
+describe('HoyPage: recomendación', () => {
+  it('el botón abre el diálogo y agendar actualiza la agenda', async () => {
+    const user = userEvent.setup()
+    configurar()
+    const pendiente = tarea({ id: 7, titulo: 'Ordenar el cofre', fecha: null })
+    vi.mocked(getProyectos).mockResolvedValue([])
+    vi.mocked(getObjetivos).mockResolvedValue([])
+    vi.mocked(getRecomendacion).mockResolvedValue([{ tarea: pendiente, subtareas: [] }])
+    vi.mocked(agendarTarea).mockImplementation(async () => {
+      // Desde ahora la agenda del día trae la tarea agendada.
+      vi.mocked(getAgenda).mockResolvedValue({ fecha: '2026-11-10', conHora: [], sinHora: [{ ...pendiente, fecha: '2026-11-10' }] })
+      return [{ ...pendiente, fecha: '2026-11-10' }]
+    })
+    renderizar()
+    await screen.findByText('No tienes tareas sin hora para hoy.')
+
+    await user.click(screen.getByRole('button', { name: 'Recomendación' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Recomendación' })
+    expect(getRecomendacion).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-11-10' }))
+
+    await user.click(await within(dialogo).findByRole('button', { name: 'Agendar «Ordenar el cofre» para hoy' }))
+
+    expect(agendarTarea).toHaveBeenCalledWith(7, { fecha: '2026-11-10', hoy: '2026-11-10', incluirSubtareas: false })
+    // El aviso aparece en la región viva del diálogo y la agenda de atrás ya muestra la tarea.
+    expect(await within(dialogo).findByRole('status')).toHaveTextContent('«Ordenar el cofre» agendada para hoy')
+    await waitFor(() => expect(getAgenda).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.click(within(dialogo).getByRole('button', { name: 'Cerrar' }))
+    expect(await screen.findByText('Ordenar el cofre')).toBeInTheDocument()
   })
 })

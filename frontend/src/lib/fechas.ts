@@ -114,3 +114,20 @@ export function mensajeGuardada(fecha: string | null): string {
 export function mensajePospuesta(fecha: string): string {
   return `Pospuesta al ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
 }
+
+/** `2026-11-03` -> `3 de noviembre`. */
+export function formatearDiaMes(fecha: string): string {
+  return format(parseISO(fecha), "d 'de' MMMM", { locale: es })
+}
+
+/** Una tarea con fecha anterior a `hoy` está atrasada (las fechas `YYYY-MM-DD` se comparan como texto). */
+export function esAtrasada(fecha: string | null, hoy: string): boolean {
+  return fecha !== null && fecha < hoy
+}
+
+/** Confirmación al agendar para hoy: `subtareas` = subtareas que también se agendaron. */
+export function mensajeAgendada(titulo: string, subtareas: number): string {
+  const base = `«${titulo}» agendada para hoy`
+  if (subtareas <= 0) return base
+  return `${base} (con ${subtareas} ${subtareas === 1 ? 'subtarea' : 'subtareas'})`
+}

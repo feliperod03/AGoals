@@ -43,3 +43,20 @@ export interface TareaRequest {
   horaFin: string | null
   padreId?: number | null
 }
+
+export type OrdenRecomendacion = 'prioridad' | 'antiguedad'
+
+export type SentidoOrden = 'desc' | 'asc'
+
+/** Tarea sugerida con sus subtareas candidatas (anidadas en todos los niveles; la jerarquía viene armada del backend). */
+export interface TareaRecomendada {
+  tarea: Tarea
+  subtareas: TareaRecomendada[]
+}
+
+/** Cuerpo de PATCH /api/tareas/{id}/agendar. `incluirSubtareas` es true por defecto en el backend. */
+export interface AgendarRequest {
+  fecha: string
+  hoy: string
+  incluirSubtareas?: boolean
+}

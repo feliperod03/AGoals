@@ -2,13 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   aFechaLocal,
   aIsoConDesfase,
+  esAtrasada,
   ahora,
   formatearDesfase,
+  formatearDiaMes,
   formatearFechaHoraCorta,
   formatearFechaLarga,
   formatearHora,
   formatearMinutos,
   hoy,
+  mensajeAgendada,
   mensajeGuardada,
   mensajePospuesta,
   minutosDeHora,
@@ -158,5 +161,30 @@ describe('mensajePospuesta', () => {
   it('escribe la fecha en español', () => {
     expect(mensajePospuesta('2026-11-10')).toBe('Pospuesta al 10 de noviembre')
     expect(mensajePospuesta('2026-12-01')).toBe('Pospuesta al 1 de diciembre')
+  })
+})
+
+describe('formatearDiaMes', () => {
+  it('escribe día y mes en español', () => {
+    expect(formatearDiaMes('2026-11-03')).toBe('3 de noviembre')
+  })
+})
+
+describe('esAtrasada', () => {
+  it('es verdadera solo si la fecha es anterior a hoy', () => {
+    expect(esAtrasada('2026-11-09', '2026-11-10')).toBe(true)
+    expect(esAtrasada('2026-11-10', '2026-11-10')).toBe(false)
+    expect(esAtrasada('2026-11-11', '2026-11-10')).toBe(false)
+    expect(esAtrasada(null, '2026-11-10')).toBe(false)
+  })
+})
+
+describe('mensajeAgendada', () => {
+  it('sin subtareas no lleva paréntesis', () => {
+    expect(mensajeAgendada('Comprar pan', 0)).toBe('«Comprar pan» agendada para hoy')
+  })
+  it('con subtareas dice cuántas, en singular o plural', () => {
+    expect(mensajeAgendada('Informe', 1)).toBe('«Informe» agendada para hoy (con 1 subtarea)')
+    expect(mensajeAgendada('Informe', 3)).toBe('«Informe» agendada para hoy (con 3 subtareas)')
   })
 })

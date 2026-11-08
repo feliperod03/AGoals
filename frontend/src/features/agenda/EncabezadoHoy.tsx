@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { Lightbulb, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { formatearFechaLarga } from '@/lib/fechas'
@@ -13,11 +13,13 @@ export function EncabezadoHoy({
   tareasAbiertas,
   eventos,
   alNuevaTarea,
+  alRecomendacion,
 }: {
   fecha: string
   tareasAbiertas: number | undefined
   eventos: number | undefined
   alNuevaTarea: () => void
+  alRecomendacion: () => void
 }) {
   const partes = [
     tareasAbiertas !== undefined && plural(tareasAbiertas, 'tarea abierta', 'tareas abiertas'),
@@ -31,10 +33,16 @@ export function EncabezadoHoy({
         <p className="mt-1 text-sm text-mut first-letter:uppercase">{formatearFechaLarga(fecha)}</p>
         {partes.length > 0 && <p className="mt-1 text-sm text-mut">{partes.join(', ')}</p>}
       </div>
-      <Button onClick={alNuevaTarea}>
-        <Plus aria-hidden="true" />
-        Nueva tarea
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={alRecomendacion}>
+          <Lightbulb aria-hidden="true" />
+          Recomendación
+        </Button>
+        <Button onClick={alNuevaTarea}>
+          <Plus aria-hidden="true" />
+          Nueva tarea
+        </Button>
+      </div>
     </header>
   )
 }
