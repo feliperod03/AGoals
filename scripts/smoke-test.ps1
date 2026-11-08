@@ -2,15 +2,17 @@
 # (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
 # proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir, recomendacion
 # y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
-# reabrir y 409 al borrar un proyecto u objetivo con ideas).
+# reabrir y 409 al borrar un proyecto u objetivo con ideas), y eventos (CRUD, PUT completo, listado por
+# solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
-# Crea tareas con fecha 2099-12-31, y proyectos, objetivos e ideas "smoke-*", y los borra al terminar.
+# Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
 param(
     [string]$Base = "http://localhost:8080/api/tareas",
     [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
     [string]$BaseObjetivos = "http://localhost:8080/api/objetivos",
-    [string]$BaseIdeas = "http://localhost:8080/api/ideas"
+    [string]$BaseIdeas = "http://localhost:8080/api/ideas",
+    [string]$BaseEventos = "http://localhost:8080/api/eventos"
 )
 
 $fecha = "2099-12-31"
@@ -19,6 +21,7 @@ $ids = @()
 $proyectoIds = @()
 $objetivoIds = @()
 $ideaIds = @()
+$eventoIds = @()
 
 function Llamar($metodo, $url, $body = $null) {
     $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
@@ -518,12 +521,106 @@ try {
     Verificar "borrar proyecto sin ideas -> 204" ($dp2.Status -eq 204) "status $($dp2.Status)"
     $do2 = Llamar "DELETE" ($BaseObjetivos + "/" + $io.Json.id)
     Verificar "borrar objetivo sin ideas -> 204" ($do2.Status -eq 204) "status $($do2.Status)"
+
+    # --- Eventos: CRUD, PUT completo, solapamiento con rango y validaciones ---
+    # Fechas en 2098 con desfase -03:00 para no mezclarse con eventos reales. Los limites abiertos (sin desde
+    # y/o sin hasta) tambien traen eventos reales del usuario: se verifica por ids propios, nunca por tamaño.
+    function Inst($v) {
+        # Compara instantes (UTC), no cadenas: el desfase de la respuesta depende de la zona de la JVM.
+        if ($v -is [DateTime]) { return $v.ToUniversalTime() }
+        return [DateTimeOffset]::Parse([string]$v).UtcDateTime
+    }
+    function IdsEv($resp) { return @($resp.Json | ForEach-Object { $_.id }) }
+    function NuevoEv($json) {
+        $r = Llamar "POST" $BaseEventos $json
+        if (-not $r.Json) { throw "No se pudo crear el evento de prueba: $json $($r.Raw)" }
+        $script:eventoIds += $r.Json.id
+        return $r
+    }
+
+    $evA = NuevoEv '{"titulo":"smoke-ev-A en el dia","descripcion":"d","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T11:00:00-03:00","prioridad":"ALTA"}'
+    Verificar "crear evento: 201 con todos los campos" (($evA.Status -eq 201) -and ($evA.Json.titulo -eq "smoke-ev-A en el dia") -and ($evA.Json.descripcion -eq "d") -and ($evA.Json.prioridad -eq "ALTA") -and ((Inst $evA.Json.fechaHoraInicio) -eq [DateTimeOffset]::Parse("2098-03-10T13:00:00Z").UtcDateTime) -and ((Inst $evA.Json.fechaHoraFin) -eq [DateTimeOffset]::Parse("2098-03-10T14:00:00Z").UtcDateTime)) $evA.Raw
+    $evB = NuevoEv '{"titulo":"smoke-ev-B cruza medianoche","fechaHoraInicio":"2098-03-10T23:00:00-03:00","fechaHoraFin":"2098-03-11T01:00:00-03:00"}'
+    Verificar "crear evento sin opcionales: descripcion vacia y prioridad null" (($evB.Status -eq 201) -and ($evB.Json.descripcion -eq "") -and (-not $evB.Json.prioridad)) $evB.Raw
+    $evC = NuevoEv '{"titulo":"smoke-ev-C termina en desde","fechaHoraInicio":"2098-03-09T22:00:00-03:00","fechaHoraFin":"2098-03-10T00:00:00-03:00"}'
+    $evD = NuevoEv '{"titulo":"smoke-ev-D empieza en hasta","fechaHoraInicio":"2098-03-11T00:00:00-03:00","fechaHoraFin":"2098-03-11T01:00:00-03:00"}'
+
+    $evG = Llamar "GET" ($BaseEventos + "/" + $evA.Json.id)
+    Verificar "obtener evento por id" (($evG.Status -eq 200) -and ($evG.Json.id -eq $evA.Json.id) -and ($evG.Json.titulo -eq "smoke-ev-A en el dia")) $evG.Raw
+
+    # Rango del dia 2098-03-10 (-03:00): entran A y B; C termina justo en desde y D empieza justo en hasta: no entran.
+    $d10 = "desde=2098-03-10T00:00:00-03:00"
+    $h10 = "hasta=2098-03-11T00:00:00-03:00"
+    $l1 = IdsEv (Llamar "GET" ($BaseEventos + "?" + $d10 + "&" + $h10))
+    Verificar "eventos del dia: entran A y B; no C (termina en desde) ni D (empieza en hasta)" (($l1 -contains $evA.Json.id) -and ($l1 -contains $evB.Json.id) -and ($l1 -notcontains $evC.Json.id) -and ($l1 -notcontains $evD.Json.id)) ($l1 -join ",")
+    $l2 = IdsEv (Llamar "GET" ($BaseEventos + "?desde=2098-03-11T00:00:00-03:00&hasta=2098-03-12T00:00:00-03:00"))
+    Verificar "el evento que cruza la medianoche entra tambien en el dia siguiente (con D, sin A)" (($l2 -contains $evB.Json.id) -and ($l2 -contains $evD.Json.id) -and ($l2 -notcontains $evA.Json.id) -and ($l2 -notcontains $evC.Json.id)) ($l2 -join ",")
+    # El mismo instante escrito con otro desfase (+03:00 con el + codificado como %2B) da el mismo resultado.
+    $l3 = IdsEv (Llamar "GET" ($BaseEventos + "?desde=2098-03-10T06:00:00%2B03:00&hasta=2098-03-11T06:00:00%2B03:00"))
+    Verificar "el rango se evalua por instantes: mismo dia escrito con desfase +03:00" ((($l3 -join ",") -eq ($l1 -join ",")) -and ($l3 -contains $evA.Json.id)) ($l3 -join ",")
+    $l4 = IdsEv (Llamar "GET" ($BaseEventos + "?" + $d10))
+    Verificar "solo desde: trae A, B y D; no C" (($l4 -contains $evA.Json.id) -and ($l4 -contains $evB.Json.id) -and ($l4 -contains $evD.Json.id) -and ($l4 -notcontains $evC.Json.id)) ($l4 -join ",")
+    $l5 = IdsEv (Llamar "GET" ($BaseEventos + "?" + $h10))
+    Verificar "solo hasta: trae C, A y B; no D" (($l5 -contains $evC.Json.id) -and ($l5 -contains $evA.Json.id) -and ($l5 -contains $evB.Json.id) -and ($l5 -notcontains $evD.Json.id)) ($l5 -join ",")
+    $l6 = IdsEv (Llamar "GET" $BaseEventos)
+    Verificar "sin desde ni hasta: trae los cuatro (y quiza eventos reales)" (($l6 -contains $evA.Json.id) -and ($l6 -contains $evB.Json.id) -and ($l6 -contains $evC.Json.id) -and ($l6 -contains $evD.Json.id)) ($l6 -join ",")
+    $mios = @($evA.Json.id, $evB.Json.id, $evC.Json.id, $evD.Json.id)
+    $l7 = @(IdsEv (Llamar "GET" ($BaseEventos + "?desde=2098-03-09T00:00:00-03:00&hasta=2098-03-12T00:00:00-03:00")) | Where-Object { $mios -contains $_ })
+    Verificar "orden por inicio ascendente" (($l7 -join ",") -eq (@($evC.Json.id, $evA.Json.id, $evB.Json.id, $evD.Json.id) -join ",")) ($l7 -join ",")
+
+    # Errores de listado
+    $le1 = Llamar "GET" ($BaseEventos + "?desde=2098-03-10T00:00:00-03:00&hasta=2098-03-10T00:00:00-03:00")
+    Verificar "hasta igual a desde -> 400" ($le1.Status -eq 400) "status $($le1.Status)"
+    $le2 = Llamar "GET" ($BaseEventos + "?desde=2098-03-11T00:00:00-03:00&hasta=2098-03-10T00:00:00-03:00")
+    Verificar "hasta anterior a desde -> 400" ($le2.Status -eq 400) "status $($le2.Status)"
+    $le3 = Llamar "GET" ($BaseEventos + "?desde=abc")
+    Verificar "desde mal formado -> 400" (($le3.Status -eq 400) -and ($le3.Raw -match "desde")) "status $($le3.Status) $($le3.Raw)"
+    $le4 = Llamar "GET" ($BaseEventos + "?hasta=2098-03-10")
+    Verificar "hasta sin hora ni desfase -> 400" (($le4.Status -eq 400) -and ($le4.Raw -match "hasta")) "status $($le4.Status) $($le4.Raw)"
+
+    # Validaciones al crear
+    $ve1 = Llamar "POST" $BaseEventos '{"titulo":"smoke-ev-x","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T10:00:00-03:00"}'
+    Verificar "crear con fin igual al inicio -> 400" ($ve1.Status -eq 400) "status $($ve1.Status)"
+    $ve2 = Llamar "POST" $BaseEventos '{"titulo":"smoke-ev-x","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T09:00:00-03:00"}'
+    Verificar "crear con fin anterior al inicio -> 400" ($ve2.Status -eq 400) "status $($ve2.Status)"
+    # 10:00-03:00 = 13:00Z; el fin 15:00+05:00 = 10:00Z es anterior aunque "15" > "10" como texto.
+    $ve3 = Llamar "POST" $BaseEventos '{"titulo":"smoke-ev-x","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T15:00:00+05:00"}'
+    Verificar "el fin se compara por instantes, no por el reloj de cada desfase -> 400" ($ve3.Status -eq 400) "status $($ve3.Status)"
+    $ve4 = Llamar "POST" $BaseEventos '{"titulo":"","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T11:00:00-03:00"}'
+    Verificar "crear con titulo vacio -> 400" ($ve4.Status -eq 400) "status $($ve4.Status)"
+    $ve5 = Llamar "POST" $BaseEventos ('{"titulo":"' + ("x" * 201) + '","fechaHoraInicio":"2098-03-10T10:00:00-03:00","fechaHoraFin":"2098-03-10T11:00:00-03:00"}')
+    Verificar "crear con titulo de mas de 200 caracteres -> 400" ($ve5.Status -eq 400) "status $($ve5.Status)"
+    $ve6 = Llamar "POST" $BaseEventos '{"titulo":"smoke-ev-x"}'
+    Verificar "crear sin fechas -> 400" ($ve6.Status -eq 400) "status $($ve6.Status)"
+    $ve7 = Llamar "POST" $BaseEventos '{"titulo":"smoke-ev-x","fechaHoraInicio":"10/03/2098","fechaHoraFin":"2098-03-10T11:00:00-03:00"}'
+    Verificar "crear con fecha mal formada -> 400" ($ve7.Status -eq 400) "status $($ve7.Status)"
+    foreach ($x in @($ve1, $ve2, $ve3, $ve4, $ve5, $ve6, $ve7)) { if ($x.Json -and $x.Json.id) { $eventoIds += $x.Json.id } }
+
+    # PUT = reemplazo completo: lo opcional que no viene queda vacio / null
+    $eu1 = Llamar "PUT" ($BaseEventos + "/" + $evA.Json.id) '{"titulo":"smoke-ev-A editado","fechaHoraInicio":"2098-03-10T14:00:00-03:00","fechaHoraFin":"2098-03-10T15:00:00-03:00"}'
+    Verificar "PUT completo: descripcion queda vacia, prioridad null y cambian las fechas" (($eu1.Status -eq 200) -and ($eu1.Json.titulo -eq "smoke-ev-A editado") -and ($eu1.Json.descripcion -eq "") -and (-not $eu1.Json.prioridad) -and ((Inst $eu1.Json.fechaHoraInicio) -eq [DateTimeOffset]::Parse("2098-03-10T17:00:00Z").UtcDateTime)) $eu1.Raw
+    $eu2 = Llamar "PUT" ($BaseEventos + "/" + $evA.Json.id) '{"titulo":"smoke-ev-A editado","fechaHoraInicio":"2098-03-10T14:00:00-03:00","fechaHoraFin":"2098-03-10T13:00:00-03:00"}'
+    Verificar "PUT con fin anterior al inicio -> 400" ($eu2.Status -eq 400) "status $($eu2.Status)"
+    $eu3 = Llamar "PUT" ("$BaseEventos/999999") '{"titulo":"x","fechaHoraInicio":"2098-03-10T14:00:00-03:00","fechaHoraFin":"2098-03-10T15:00:00-03:00"}'
+    Verificar "PUT de evento inexistente -> 404" ($eu3.Status -eq 404) "status $($eu3.Status)"
+    $eg = Llamar "GET" ($BaseEventos + "/999999")
+    Verificar "evento inexistente -> 404" ($eg.Status -eq 404) "status $($eg.Status)"
+
+    # Borrar (sin 409: ningun modulo depende de un evento hoy)
+    $ed1 = Llamar "DELETE" ($BaseEventos + "/" + $evA.Json.id)
+    Verificar "borrar evento -> 204" ($ed1.Status -eq 204) "status $($ed1.Status)"
+    $ed2 = Llamar "GET" ($BaseEventos + "/" + $evA.Json.id)
+    Verificar "el evento borrado ya no existe -> 404" ($ed2.Status -eq 404) "status $($ed2.Status)"
+    $ed3 = Llamar "DELETE" ($BaseEventos + "/" + $evA.Json.id)
+    Verificar "borrar evento ya borrado -> 404" ($ed3.Status -eq 404) "status $($ed3.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
     $fallos++
 }
 finally {
+    # Los eventos no tienen dependencias: se borran sin orden especial (los ya borrados dan 404, se ignora).
+    foreach ($id in $eventoIds) { [void](Llamar "DELETE" ($BaseEventos + "/" + $id)) }
     # Las ideas primero: la API da 409 al borrar un proyecto u objetivo que todavia las tiene.
     foreach ($id in $ideaIds) { [void](Llamar "DELETE" ($BaseIdeas + "/" + $id)) }
     # Orden inverso al de creacion: las subtareas (creadas despues) se borran antes que sus madres,

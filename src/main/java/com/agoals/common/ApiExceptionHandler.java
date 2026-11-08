@@ -1,5 +1,7 @@
 package com.agoals.common;
 
+import com.agoals.evento.EventoInvalidoException;
+import com.agoals.evento.EventoNoEncontradoException;
 import com.agoals.idea.IdeaEstadoInvalidaException;
 import com.agoals.idea.IdeaInvalidaException;
 import com.agoals.idea.IdeaNoEncontradaException;
@@ -93,6 +95,16 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(IdeaEstadoInvalidaException.class)
 	public ResponseEntity<ErrorResponse> ideaEstadoInvalido(IdeaEstadoInvalidaException e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(EventoNoEncontradoException.class)
+	public ResponseEntity<ErrorResponse> eventoNoEncontrado(EventoNoEncontradoException e) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(EventoInvalidoException.class)
+	public ResponseEntity<ErrorResponse> eventoInvalido(EventoInvalidoException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
 	}
 
 	// Un parámetro de URL con tipo inválido (p. ej. ?estado=RARO o ?fecha=06-11-2026): 400 con mensaje claro.

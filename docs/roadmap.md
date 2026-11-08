@@ -14,6 +14,9 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
 6. **Ideas** (hecha): `/api/ideas`. Libres o ligadas a un proyecto o a un objetivo (nunca a ambos), estado PLANTEADA/CONCLUIDA (`EstadoIdea`), conclusión opcional y fecha de cierre; filtros por estado, proyecto, objetivo y `libres`; `PATCH /concluir` y `/reabrir`.
    - Sin ciclos de beans: `ProyectoConsultaService` (solo `ProyectoRepository`, con su test guardián) y `ObjetivoConsultaService` validan los ids desde `IdeaService`; `ProyectoService` y `ObjetivoService` preguntan a `IdeaService` si hay ideas ligadas.
    - `DELETE` de proyecto y de objetivo responden 409 si tienen ideas ligadas.
-7. **Eventos y Recordatorios**: citas y avisos (primero dentro de la app).
+7. **Eventos y Recordatorios**, en dos partes:
+   - **7a Eventos** (hecha): `/api/eventos`. Citas con `fechaHoraInicio`/`fechaHoraFin` (`OffsetDateTime`), CRUD con PUT de reemplazo completo y `GET ?desde=&hasta=` por **solapamiento** (`inicio < hasta` y `fin > desde`; el cliente decide qué es "un día"). Sin recurrencia ni detección de choques. El borrado no da 409: un evento con recordatorio se borra y la base borra el recordatorio en cascada.
+     - El filtro por rango vive en `EventoService` (el repository trae los eventos del usuario ordenados): un `@Query` con `OffsetDateTime` opcional falla en PostgreSQL con "could not determine data type of parameter" cuando el valor es null (verificado contra Postgres real).
+   - **7b Recordatorios** (pendiente de planificar): avisos de una tarea, de un evento o sueltos (primero dentro de la app).
 8. **Frontend React**: agenda del día primero, luego el resto.
 9. **Calendario**: vistas mensual y semanal (librería, no a mano).
