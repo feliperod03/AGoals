@@ -6,7 +6,7 @@ Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: qu
 ## Stack
 - Java 21, Spring Boot 4.1.x (Maven, wrapper `mvnw`), Spring Web MVC, Spring Data JPA, Validation
 - PostgreSQL 16 en Docker Compose, migraciones con Flyway
-- Frontend (más adelante): React, en una carpeta `frontend/` separada
+- Frontend: Vite + React + TypeScript (strict) en `frontend/`, separado del backend. Decisiones de diseño en `docs/frontend-diseno.md`. Tailwind v4 + shadcn/ui, TanStack Query, React Router, date-fns. TypeScript fijado en 6.x (`typescript-eslint` aún no soporta 7).
 - Spring Boot 4 cambió paquetes y starters respecto a Boot 3: ante la duda, consulta la documentación de esta versión y no asumas APIs de Boot 3.
 
 ## Comandos
@@ -14,7 +14,26 @@ Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: qu
 - Correr la app: `./mvnw spring-boot:run` (en PowerShell: `.\mvnw spring-boot:run`)
 - Tests: `./mvnw test` (los que cargan el contexto de Spring necesitan la base de datos levantada)
 
-## Arquitectura
+### Frontend (desde `frontend/`)
+- Instalar: `npm install`
+- Desarrollo: `npm run dev` (http://localhost:5173; el proxy de Vite manda `/api` a `http://localhost:8080`, así que hay que tener el backend y la base levantados)
+- Tests: `npm test` (Vitest; `npm run test:watch` para modo continuo). La zona horaria de los tests se fija en `vitest.config.ts` (Buenos Aires)
+- Build (incluye el chequeo de tipos con `tsc`): `npm run build`
+- Lint: `npm run lint`
+
+## Frontend: convenciones
+- Capas: componentes → hooks de `features/` → `api/`. Solo `api/` llama a `fetch`.
+- Todo el manejo de fechas va en `src/lib/fechas.ts` (con tests). Nunca `toISOString()`: da UTC y desplaza el día.
+- Idioma: interfaz en español. Código en inglés para lo técnico/genérico (`Button`, `ApiError`, `useTema`, `formatDate`) y en español para el dominio y lo que viene de la API (`Tarea`, `useAgendaDelDia`, `fechaHoraInicio`).
+- Colores solo con los tokens de `src/index.css` (`bg-card`, `text-mut`, ...), nunca hex sueltos.
+- Cada funcionalidad nueva lleva tests (Vitest + Testing Library).
+- **Lista cerrada de dependencias.** Cualquier otra requiere consultarla antes con Felipe.
+  - Aplicación: `react`, `react-dom`, `react-router-dom`, `@tanstack/react-query`, `date-fns`, `tailwindcss`, `@tailwindcss/vite`, `@fontsource/fraunces`, `@fontsource/inter`, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `@radix-ui/react-slot`, `tw-animate-css`.
+  - Desarrollo: `vite`, `@vitejs/plugin-react`, `typescript`, `@types/node`, `@types/react`, `@types/react-dom`, `vitest`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`.
+  - Aprobadas pero aún sin instalar: `react-hook-form` (rebanada 8.2; `zod` solo si hace falta).
+  - Descartadas: Next.js, Redux/Zustand, MUI/Ant, axios, generar tipos desde OpenAPI.
+
+## Arquitectura (backend)
 Monolito modular, organizado por dominio y con capas dentro de cada módulo:
 
 ```

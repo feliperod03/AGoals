@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* El modo oscuro se activa con la clase `.dark` en <html> (ver app/useTema.ts). */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tokens de docs/frontend-diseno.md. Todo el color de la app sale de estas variables:
+ * los componentes usan clases como `bg-card` o `text-mut`, nunca hex sueltos.
+ */
+:root {
+  --bg: #f3ecdd;
+  --side: #ece2ce;
+  --card: #fbf7ee;
+  --line: #ddd0b5;
+  --tx: #2b2418;
+  --mut: #655942;
+  --acc: #8a6a3a;
+  --acc-tx: #ffffff;
+  --gold: #a9803f;
+  --alta: #8c3b24;
+  --alta-tx: #ffffff;
+  --media: #e6cf9c;
+  --media-tx: #4a3a12;
+  --baja: #8f8366;
+  --baja-tx: #5a4f39;
+  --tarea: #e9dabb;
+  --tarea-tx: #33290f;
+  --evento: #243350;
+  --evento-tx: #f3ecdd;
+  --ahora: #b5452b;
+  --ahora-tx: #ffffff;
+  --radius: 1.125rem; /* ~18 px */
+  --sombra-card: 0 1px 2px rgb(43 36 24 / 0.06), 0 4px 14px rgb(43 36 24 / 0.07);
+}
+
+.dark {
+  --bg: #101826;
+  --side: #0c121d;
+  --card: #172236;
+  --line: #26334b;
+  --tx: #ede3d0;
+  --mut: #a9a08c;
+  --acc: #d8c3a0;
+  --acc-tx: #17202f;
+  --gold: #d8c3a0;
+  --alta: #ebb8a1;
+  --alta-tx: #34150a;
+  --media: #cdb98a;
+  --media-tx: #2a2310;
+  --baja: #6f7a92;
+  --baja-tx: #c9c1af;
+  --tarea: #24334f;
+  --tarea-tx: #ede3d0;
+  --evento: #d8c3a0;
+  --evento-tx: #17202f;
+  --ahora: #f08a6a;
+  --ahora-tx: #2a1007;
+  --sombra-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 14px rgb(0 0 0 / 0.25);
+}
+
+/* Nombres de utilidades de Tailwind (bg-card, text-mut, border-line, ...). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-side: var(--side);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-tx: var(--tx);
+  --color-mut: var(--mut);
+  --color-acc: var(--acc);
+  --color-acc-tx: var(--acc-tx);
+  --color-gold: var(--gold);
+  --color-alta: var(--alta);
+  --color-alta-tx: var(--alta-tx);
+  --color-media: var(--media);
+  --color-media-tx: var(--media-tx);
+  --color-baja: var(--baja);
+  --color-baja-tx: var(--baja-tx);
+  --color-tarea: var(--tarea);
+  --color-tarea-tx: var(--tarea-tx);
+  --color-evento: var(--evento);
+  --color-evento-tx: var(--evento-tx);
+  --color-ahora: var(--ahora);
+  --color-ahora-tx: var(--ahora-tx);
+
+  /* Nombres que esperan los componentes de shadcn/ui, apuntando a nuestros tokens. */
+  --color-background: var(--bg);
+  --color-foreground: var(--tx);
+  --color-primary: var(--acc);
+  --color-primary-foreground: var(--acc-tx);
+  --color-secondary: var(--tarea);
+  --color-secondary-foreground: var(--tarea-tx);
+  --color-muted: var(--side);
+  --color-muted-foreground: var(--mut);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--acc);
+  --color-destructive: var(--alta);
+
+  --radius-card: var(--radius);
+  --shadow-card: var(--sombra-card);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--tx);
+    font-family: var(--font-sans);
+    /* Cifras tabulares: las horas y fechas se alinean en columna. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Títulos y números grandes en Fraunces; lo pequeño queda en Inter. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: 2px;
+  }
+}
