@@ -119,6 +119,22 @@ class TareaServiceTest {
 	}
 
 	@Test
+	void validarExisteNoHaceNadaSiLaTareaExiste() {
+		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(tarea("a")));
+
+		service.validarExiste(1L);
+	}
+
+	@Test
+	void validarExisteLanza400ConElMensajeDelEstiloDeLosOtrosModulos() {
+		when(repository.findByIdAndUsuarioId(7L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.validarExiste(7L))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessage("La tarea no existe: 7");
+	}
+
+	@Test
 	void listarDevuelveTodasMapeadas() {
 		when(repository.findByUsuarioIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID))
 				.thenReturn(List.of(tarea("a"), tarea("b")));

@@ -146,6 +146,24 @@ class EventoServiceTest {
 				.hasMessageContaining("9");
 	}
 
+	// ---- validarExiste (lo usa el módulo recordatorio) ----
+
+	@Test
+	void validarExisteNoHaceNadaSiElEventoExiste() {
+		existe(evento(1, "2026-11-10T15:00:00-03:00", "2026-11-10T16:00:00-03:00"));
+
+		service.validarExiste(1L);
+	}
+
+	@Test
+	void validarExisteLanza400ConElMensajeDelEstiloDeLosOtrosModulos() {
+		noExiste(7);
+
+		assertThatThrownBy(() -> service.validarExiste(7L))
+				.isInstanceOf(EventoInvalidoException.class)
+				.hasMessage("El evento no existe: 7");
+	}
+
 	// ---- Actualizar (PUT = reemplazo completo) ----
 
 	@Test

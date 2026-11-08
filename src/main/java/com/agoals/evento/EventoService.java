@@ -34,6 +34,14 @@ public class EventoService {
 		return aRespuesta(buscar(id));
 	}
 
+	/** Solo lectura, para otros módulos (recordatorio): 400 si el evento no existe, para validar el cuerpo de una petición. */
+	@Transactional(readOnly = true)
+	public void validarExiste(Long id) {
+		if (repository.findByIdAndUsuarioId(id, USUARIO_ID).isEmpty()) {
+			throw new EventoInvalidoException("El evento no existe: " + id);
+		}
+	}
+
 	/**
 	 * Eventos que se solapan con [desde, hasta]: inicio < hasta y fin > desde (los bordes exactos no entran).
 	 * Un extremo null no acota ese lado. El servidor no calcula días: el cliente manda el rango que quiere.

@@ -3,7 +3,8 @@
 # proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir, recomendacion
 # y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
 # reabrir y 409 al borrar un proyecto u objetivo con ideas), y eventos (CRUD, PUT completo, listado por
-# solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones).
+# solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones), y recordatorios (de tarea,
+# de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
@@ -12,7 +13,8 @@ param(
     [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
     [string]$BaseObjetivos = "http://localhost:8080/api/objetivos",
     [string]$BaseIdeas = "http://localhost:8080/api/ideas",
-    [string]$BaseEventos = "http://localhost:8080/api/eventos"
+    [string]$BaseEventos = "http://localhost:8080/api/eventos",
+    [string]$BaseRecordatorios = "http://localhost:8080/api/recordatorios"
 )
 
 $fecha = "2099-12-31"
@@ -22,6 +24,7 @@ $proyectoIds = @()
 $objetivoIds = @()
 $ideaIds = @()
 $eventoIds = @()
+$recordatorioIds = @()
 
 function Llamar($metodo, $url, $body = $null) {
     $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
@@ -613,12 +616,139 @@ try {
     Verificar "el evento borrado ya no existe -> 404" ($ed2.Status -eq 404) "status $($ed2.Status)"
     $ed3 = Llamar "DELETE" ($BaseEventos + "/" + $evA.Json.id)
     Verificar "borrar evento ya borrado -> 404" ($ed3.Status -eq 404) "status $($ed3.Status)"
+
+    # --- Recordatorios: de tarea, de evento o sueltos; vencidos, PUT, marcar-enviado y cascada ---
+    # Fechas en 2098 con desfase -03:00. Las listas sin filtro de tarea/evento tambien traen recordatorios reales
+    # del usuario: se verifica por ids propios, nunca por tamaño.
+    function IdsRec($resp) { return @($resp.Json | ForEach-Object { $_.id }) }
+    function NuevoRec($json) {
+        $r = Llamar "POST" $BaseRecordatorios $json
+        if (-not $r.Json) { throw "No se pudo crear el recordatorio de prueba: $json $($r.Raw)" }
+        $script:recordatorioIds += $r.Json.id
+        return $r
+    }
+
+    $rtT = Llamar "POST" $Base '{"titulo":"smoke-rec tarea"}'
+    if ($rtT.Json) { $ids += $rtT.Json.id }
+    if (-not $rtT.Json) { throw "No se pudo crear la tarea de recordatorios." }
+    $rtE = Llamar "POST" $BaseEventos '{"titulo":"smoke-rec evento","fechaHoraInicio":"2098-04-10T15:00:00-03:00","fechaHoraFin":"2098-04-10T16:00:00-03:00"}'
+    if ($rtE.Json) { $eventoIds += $rtE.Json.id }
+    if (-not $rtE.Json) { throw "No se pudo crear el evento de recordatorios." }
+
+    $rc1 = NuevoRec ('{"tareaId":' + $rtT.Json.id + ',"fechaHora":"2098-04-10T09:00:00-03:00","descripcion":"avisar tarea"}')
+    Verificar "crear recordatorio de una tarea: 201, APP, enviado false" (($rc1.Status -eq 201) -and ($rc1.Json.tareaId -eq $rtT.Json.id) -and (-not $rc1.Json.eventoId) -and ($rc1.Json.canal -eq "APP") -and ($rc1.Json.enviado -eq $false) -and ($rc1.Json.descripcion -eq "avisar tarea") -and ((Inst $rc1.Json.fechaHora) -eq [DateTimeOffset]::Parse("2098-04-10T12:00:00Z").UtcDateTime)) $rc1.Raw
+    $rc2 = NuevoRec ('{"eventoId":' + $rtE.Json.id + ',"fechaHora":"2098-04-10T10:00:00-03:00"}')
+    Verificar "crear recordatorio de un evento: descripcion vacia" (($rc2.Status -eq 201) -and ($rc2.Json.eventoId -eq $rtE.Json.id) -and ($rc2.Json.descripcion -eq "")) $rc2.Raw
+    $rc3 = NuevoRec '{"fechaHora":"2098-04-10T11:00:00-03:00","canal":"APP","descripcion":"smoke-rec suelto"}'
+    Verificar "crear recordatorio suelto con descripcion" (($rc3.Status -eq 201) -and (-not $rc3.Json.tareaId) -and (-not $rc3.Json.eventoId)) $rc3.Raw
+
+    # Validaciones al crear
+    $rv = @()
+    $rv += , (Llamar "POST" $BaseRecordatorios ('{"tareaId":' + $rtT.Json.id + ',"eventoId":' + $rtE.Json.id + ',"fechaHora":"2098-04-10T09:00:00-03:00"}'))
+    Verificar "crear con tarea y evento a la vez -> 400" ($rv[0].Status -eq 400) "status $($rv[0].Status)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"tareaId":999999,"fechaHora":"2098-04-10T09:00:00-03:00"}')
+    Verificar "crear con tareaId inexistente -> 400 'La tarea no existe'" (($rv[1].Status -eq 400) -and ($rv[1].Raw -match "La tarea no existe: 999999")) "status $($rv[1].Status) $($rv[1].Raw)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"eventoId":999999,"fechaHora":"2098-04-10T09:00:00-03:00"}')
+    Verificar "crear con eventoId inexistente -> 400 'El evento no existe'" (($rv[2].Status -eq 400) -and ($rv[2].Raw -match "El evento no existe: 999999")) "status $($rv[2].Status) $($rv[2].Raw)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"fechaHora":"2098-04-10T09:00:00-03:00"}')
+    Verificar "crear suelto sin descripcion -> 400" ($rv[3].Status -eq 400) "status $($rv[3].Status)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"fechaHora":"2098-04-10T09:00:00-03:00","descripcion":"   "}')
+    Verificar "crear suelto con descripcion en blanco -> 400" ($rv[4].Status -eq 400) "status $($rv[4].Status)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"fechaHora":"2098-04-10T09:00:00-03:00","canal":"CORREO","descripcion":"x"}')
+    Verificar "canal CORREO -> 400 (todavia no disponible)" (($rv[5].Status -eq 400) -and ($rv[5].Raw -match "todav")) "status $($rv[5].Status) $($rv[5].Raw)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"fechaHora":"2098-04-10T09:00:00-03:00","canal":"raro","descripcion":"x"}')
+    Verificar "canal inexistente -> 400 con los valores validos" (($rv[6].Status -eq 400) -and ($rv[6].Raw -match "canal") -and ($rv[6].Raw -match "APP")) "status $($rv[6].Status) $($rv[6].Raw)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"descripcion":"x"}')
+    Verificar "crear sin fechaHora -> 400" ($rv[7].Status -eq 400) "status $($rv[7].Status)"
+    $rv += , (Llamar "POST" $BaseRecordatorios '{"fechaHora":"10/04/2098","descripcion":"x"}')
+    Verificar "crear con fechaHora mal formada -> 400" ($rv[8].Status -eq 400) "status $($rv[8].Status)"
+    $rv += , (Llamar "POST" $BaseRecordatorios ('{"tareaId":' + $rtT.Json.id + ',"fechaHora":"2098-04-11T09:00:00-03:00"}'))
+    Verificar "segunda vez para la misma tarea -> 409" (($rv[9].Status -eq 409) -and ($rv[9].Raw -match "ya tiene")) "status $($rv[9].Status) $($rv[9].Raw)"
+    $rv += , (Llamar "POST" $BaseRecordatorios ('{"eventoId":' + $rtE.Json.id + ',"fechaHora":"2098-04-11T09:00:00-03:00"}'))
+    Verificar "segunda vez para el mismo evento -> 409" (($rv[10].Status -eq 409) -and ($rv[10].Raw -match "ya tiene")) "status $($rv[10].Status) $($rv[10].Raw)"
+    foreach ($x in $rv) { if ($x.Json -and $x.Json.id) { $recordatorioIds += $x.Json.id } }
+
+    # Obtener y listar
+    $rg = Llamar "GET" ($BaseRecordatorios + "/" + $rc1.Json.id)
+    Verificar "obtener recordatorio por id" (($rg.Status -eq 200) -and ($rg.Json.id -eq $rc1.Json.id)) $rg.Raw
+    $rl1 = IdsRec (Llamar "GET" ($BaseRecordatorios + "?tareaId=" + $rtT.Json.id))
+    Verificar "listar por tareaId: solo el de la tarea" (($rl1 -join ",") -eq [string]$rc1.Json.id) ($rl1 -join ",")
+    $rl2 = IdsRec (Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $rtE.Json.id))
+    Verificar "listar por eventoId: solo el del evento" (($rl2 -join ",") -eq [string]$rc2.Json.id) ($rl2 -join ",")
+    $rl3 = Llamar "GET" ($BaseRecordatorios + "?tareaId=" + $rtT.Json.id + "&eventoId=" + $rtE.Json.id)
+    Verificar "listar con tareaId y eventoId a la vez: vacio" (($rl3.Status -eq 200) -and (@($rl3.Json).Count -eq 0)) $rl3.Raw
+    $rlt = IdsRec (Llamar "GET" $BaseRecordatorios)
+    $mios = @($rc1.Json.id, $rc2.Json.id, $rc3.Json.id)
+    $rlp = @($rlt | Where-Object { $mios -contains $_ })
+    Verificar "listar sin filtros: los tres propios, ordenados por fechaHora" (($rlp -join ",") -eq ($mios -join ",")) ($rlp -join ",")
+    $rl4 = Llamar "GET" ($BaseRecordatorios + "?tareaId=abc")
+    Verificar "tareaId mal formado -> 400" ($rl4.Status -eq 400) "status $($rl4.Status)"
+    $rl5 = Llamar "GET" ($BaseRecordatorios + "/999999")
+    Verificar "recordatorio inexistente -> 404" ($rl5.Status -eq 404) "status $($rl5.Status)"
+
+    # Vencidos (ahora lo manda el cliente): enviado = false y fechaHora <= ahora
+    $rvv1 = IdsRec (Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=2098-04-10T10:00:00-03:00"))
+    Verificar "vencidos: fechaHora == ahora entra (R1 y R2), el de las 11:00 no" (($rvv1 -contains $rc1.Json.id) -and ($rvv1 -contains $rc2.Json.id) -and ($rvv1 -notcontains $rc3.Json.id)) ($rvv1 -join ",")
+    $rvv2 = IdsRec (Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=2098-04-10T09:59:59-03:00"))
+    Verificar "vencidos: un instante antes de las 10:00 no entra R2" (($rvv2 -contains $rc1.Json.id) -and ($rvv2 -notcontains $rc2.Json.id)) ($rvv2 -join ",")
+    $rvv3 = IdsRec (Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=2098-04-10T15:00:00%2B03:00"))
+    Verificar "vencidos: se evalua por instantes (15:00+03:00 = 09:00-03:00, entra R1 y no R2)" (($rvv3 -contains $rc1.Json.id) -and ($rvv3 -notcontains $rc2.Json.id)) ($rvv3 -join ",")
+    $rvv4 = @(IdsRec (Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=2098-04-10T12:00:00-03:00")) | Where-Object { $mios -contains $_ })
+    Verificar "vencidos: orden por fechaHora" (($rvv4 -join ",") -eq ($mios -join ",")) ($rvv4 -join ",")
+    $rve1 = Llamar "GET" ($BaseRecordatorios + "/vencidos")
+    Verificar "vencidos sin ahora -> 400" ($rve1.Status -eq 400) "status $($rve1.Status)"
+    $rve2 = Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=abc")
+    Verificar "vencidos con ahora mal formado -> 400" ($rve2.Status -eq 400) "status $($rve2.Status)"
+
+    # Marcar enviado (idempotente) y su efecto en vencidos
+    $rm1 = Llamar "PATCH" ($BaseRecordatorios + "/" + $rc1.Json.id + "/marcar-enviado")
+    Verificar "marcar-enviado -> enviado true" (($rm1.Status -eq 200) -and ($rm1.Json.enviado -eq $true)) $rm1.Raw
+    $rm2 = Llamar "PATCH" ($BaseRecordatorios + "/" + $rc1.Json.id + "/marcar-enviado")
+    Verificar "marcar-enviado otra vez (idempotente)" (($rm2.Status -eq 200) -and ($rm2.Json.enviado -eq $true)) $rm2.Raw
+    $rvv5 = IdsRec (Llamar "GET" ($BaseRecordatorios + "/vencidos?ahora=2098-04-10T12:00:00-03:00"))
+    Verificar "un recordatorio enviado ya no sale en vencidos" (($rvv5 -notcontains $rc1.Json.id) -and ($rvv5 -contains $rc2.Json.id)) ($rvv5 -join ",")
+    $rm3 = Llamar "PATCH" ($BaseRecordatorios + "/999999/marcar-enviado")
+    Verificar "marcar-enviado inexistente -> 404" ($rm3.Status -eq 404) "status $($rm3.Status)"
+
+    # PUT = reemplazo completo. R1 esta enviado.
+    $ru1 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc1.Json.id) ('{"tareaId":' + $rtT.Json.id + ',"fechaHora":"2098-04-10T12:00:00Z"}')
+    Verificar "PUT sin cambiar la fecha (mismo instante, otro desfase) ni el vinculo: 200, conserva enviado y descripcion vacia" (($ru1.Status -eq 200) -and ($ru1.Json.enviado -eq $true) -and ($ru1.Json.descripcion -eq "")) $ru1.Raw
+    $ru2 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc1.Json.id) ('{"tareaId":' + $rtT.Json.id + ',"fechaHora":"2098-04-10T13:00:00-03:00","descripcion":"movido"}')
+    Verificar "PUT que cambia fechaHora: enviado vuelve a false" (($ru2.Status -eq 200) -and ($ru2.Json.enviado -eq $false) -and ($ru2.Json.descripcion -eq "movido")) $ru2.Raw
+    $ru3 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc3.Json.id) ('{"eventoId":' + $rtE.Json.id + ',"fechaHora":"2098-04-10T11:00:00-03:00"}')
+    Verificar "PUT que cambia a un evento que ya tiene recordatorio -> 409" ($ru3.Status -eq 409) "status $($ru3.Status) $($ru3.Raw)"
+    $ru4 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc3.Json.id) ('{"tareaId":' + $rtT.Json.id + ',"fechaHora":"2098-04-10T11:00:00-03:00"}')
+    Verificar "PUT que cambia a una tarea que ya tiene recordatorio -> 409" ($ru4.Status -eq 409) "status $($ru4.Status) $($ru4.Raw)"
+    $ru5 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc3.Json.id) '{"fechaHora":"2098-04-10T11:00:00-03:00"}'
+    Verificar "PUT de un suelto sin descripcion -> 400" ($ru5.Status -eq 400) "status $($ru5.Status)"
+    $ru6 = Llamar "PUT" ($BaseRecordatorios + "/" + $rc3.Json.id) ('{"tareaId":' + $rtT.Json.id + ',"eventoId":' + $rtE.Json.id + ',"fechaHora":"2098-04-10T11:00:00-03:00"}')
+    Verificar "PUT con tarea y evento a la vez -> 400" ($ru6.Status -eq 400) "status $($ru6.Status)"
+    $ru7 = Llamar "PUT" ($BaseRecordatorios + "/999999") '{"fechaHora":"2098-04-10T11:00:00-03:00","descripcion":"x"}'
+    Verificar "PUT inexistente -> 404" ($ru7.Status -eq 404) "status $($ru7.Status)"
+
+    # Cascada: borrar la tarea o el evento borra su recordatorio (la base, ON DELETE CASCADE; sin 409)
+    $cd1 = Llamar "DELETE" ($Base + "/" + $rtT.Json.id)
+    Verificar "borrar la tarea con recordatorio -> 204 (sin 409)" ($cd1.Status -eq 204) "status $($cd1.Status) $($cd1.Raw)"
+    $cd2 = Llamar "GET" ($BaseRecordatorios + "/" + $rc1.Json.id)
+    Verificar "el recordatorio de la tarea borrada desaparece (cascada) -> 404" ($cd2.Status -eq 404) "status $($cd2.Status)"
+    $cd3 = Llamar "DELETE" ($BaseEventos + "/" + $rtE.Json.id)
+    Verificar "borrar el evento con recordatorio -> 204 (sin 409)" ($cd3.Status -eq 204) "status $($cd3.Status) $($cd3.Raw)"
+    $cd4 = Llamar "GET" ($BaseRecordatorios + "/" + $rc2.Json.id)
+    Verificar "el recordatorio del evento borrado desaparece (cascada) -> 404" ($cd4.Status -eq 404) "status $($cd4.Status)"
+
+    # Borrar
+    $rd1 = Llamar "DELETE" ($BaseRecordatorios + "/" + $rc3.Json.id)
+    Verificar "borrar recordatorio -> 204" ($rd1.Status -eq 204) "status $($rd1.Status)"
+    $rd2 = Llamar "DELETE" ($BaseRecordatorios + "/" + $rc3.Json.id)
+    Verificar "borrar recordatorio ya borrado -> 404" ($rd2.Status -eq 404) "status $($rd2.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
     $fallos++
 }
 finally {
+    # Los recordatorios primero (los ya borrados, o borrados en cascada con su tarea/evento, dan 404 y se ignoran).
+    foreach ($id in $recordatorioIds) { [void](Llamar "DELETE" ($BaseRecordatorios + "/" + $id)) }
     # Los eventos no tienen dependencias: se borran sin orden especial (los ya borrados dan 404, se ignora).
     foreach ($id in $eventoIds) { [void](Llamar "DELETE" ($BaseEventos + "/" + $id)) }
     # Las ideas primero: la API da 409 al borrar un proyecto u objetivo que todavia las tiene.

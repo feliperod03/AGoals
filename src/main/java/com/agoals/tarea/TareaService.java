@@ -48,6 +48,14 @@ public class TareaService {
 		return aRespuesta(buscar(id));
 	}
 
+	/** Solo lectura, para otros módulos (recordatorio): 400 si la tarea no existe, para validar el cuerpo de una petición. */
+	@Transactional(readOnly = true)
+	public void validarExiste(Long id) {
+		if (repository.findByIdAndUsuarioId(id, USUARIO_ID).isEmpty()) {
+			throw new TareaInvalidaException("La tarea no existe: " + id);
+		}
+	}
+
 	@Transactional(readOnly = true)
 	public List<TareaResponse> listar() {
 		return repository.findByUsuarioIdOrderByFechaAscIdAsc(USUARIO_ID).stream()

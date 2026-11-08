@@ -11,6 +11,9 @@ import com.agoals.objetivo.ObjetivoNoEncontradoException;
 import com.agoals.proyecto.ProyectoConDependenciasException;
 import com.agoals.proyecto.ProyectoInvalidoException;
 import com.agoals.proyecto.ProyectoNoEncontradoException;
+import com.agoals.recordatorio.RecordatorioConflictoException;
+import com.agoals.recordatorio.RecordatorioInvalidoException;
+import com.agoals.recordatorio.RecordatorioNoEncontradoException;
 import com.agoals.tarea.TareaConDependenciasException;
 import com.agoals.tarea.TareaEstadoInvalidaException;
 import com.agoals.tarea.TareaInvalidaException;
@@ -105,6 +108,21 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(EventoInvalidoException.class)
 	public ResponseEntity<ErrorResponse> eventoInvalido(EventoInvalidoException e) {
 		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(RecordatorioNoEncontradoException.class)
+	public ResponseEntity<ErrorResponse> recordatorioNoEncontrado(RecordatorioNoEncontradoException e) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(RecordatorioInvalidoException.class)
+	public ResponseEntity<ErrorResponse> recordatorioInvalido(RecordatorioInvalidoException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(RecordatorioConflictoException.class)
+	public ResponseEntity<ErrorResponse> recordatorioConflicto(RecordatorioConflictoException e) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
 	}
 
 	// Un parámetro de URL con tipo inválido (p. ej. ?estado=RARO o ?fecha=06-11-2026): 400 con mensaje claro.

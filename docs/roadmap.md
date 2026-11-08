@@ -17,6 +17,8 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
 7. **Eventos y Recordatorios**, en dos partes:
    - **7a Eventos** (hecha): `/api/eventos`. Citas con `fechaHoraInicio`/`fechaHoraFin` (`OffsetDateTime`), CRUD con PUT de reemplazo completo y `GET ?desde=&hasta=` por **solapamiento** (`inicio < hasta` y `fin > desde`; el cliente decide qué es "un día"). Sin recurrencia ni detección de choques. El borrado no da 409: un evento con recordatorio se borra y la base borra el recordatorio en cascada.
      - El filtro por rango vive en `EventoService` (el repository trae los eventos del usuario ordenados): un `@Query` con `OffsetDateTime` opcional falla en PostgreSQL con "could not determine data type of parameter" cuando el valor es null (verificado contra Postgres real).
-   - **7b Recordatorios** (pendiente de planificar): avisos de una tarea, de un evento o sueltos (primero dentro de la app).
+   - **7b Recordatorios** (hecha): `/api/recordatorios`. Avisos de una tarea, de un evento o sueltos (nunca de tarea y evento a la vez), máximo uno por tarea y por evento (409 si ya existe), solo canal APP (CORREO responde 400 "todavía no disponible"). CRUD con PUT de reemplazo completo, `GET ?tareaId=&eventoId=`, `GET /vencidos?ahora=` (el cliente manda `ahora`) y `PATCH /{id}/marcar-enviado`. Borrar una tarea o un evento borra su recordatorio en cascada (la base).
+     - `RecordatorioService → TareaService, EventoService` (solo `validarExiste`, 400 si no existen); tarea y evento **no** conocen a recordatorio, sin ciclo de beans.
+     - Limitación conocida: el módulo no mira el estado de la tarea; la resuelve el frontend (ver `modelo-datos.md`).
 8. **Frontend React**: agenda del día primero, luego el resto.
 9. **Calendario**: vistas mensual y semanal (librería, no a mano).
