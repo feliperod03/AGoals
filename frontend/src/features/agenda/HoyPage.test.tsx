@@ -9,7 +9,14 @@ import type { Recordatorio } from '@/types/recordatorio'
 import type { Agenda, Tarea } from '@/types/tarea'
 import { HoyPage } from './HoyPage'
 
-vi.mock('@/api/tareas', () => ({ getAgenda: vi.fn(), getTarea: vi.fn(), getRecomendacion: vi.fn(), agendarTarea: vi.fn() }))
+vi.mock('@/api/tareas', () => ({
+  getAgenda: vi.fn(),
+  getTarea: vi.fn(),
+  getTareas: vi.fn(),
+  getRecomendacion: vi.fn(),
+  agendarTarea: vi.fn(),
+  actualizarTarea: vi.fn(),
+}))
 vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn() }))
 vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn() }))
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn(), getEvento: vi.fn() }))
@@ -18,7 +25,7 @@ import { getEventos } from '@/api/eventos'
 import { getRecordatorios } from '@/api/recordatorios'
 import { getObjetivos } from '@/api/objetivos'
 import { getProyectos } from '@/api/proyectos'
-import { agendarTarea, getAgenda, getRecomendacion, getTarea } from '@/api/tareas'
+import { actualizarTarea, agendarTarea, getAgenda, getRecomendacion, getTarea, getTareas } from '@/api/tareas'
 
 function tarea(parcial: Partial<Tarea>): Tarea {
   return {
@@ -296,6 +303,27 @@ describe('HoyPage: estados de la página', () => {
       'Comprar pan',
       'Acciones de «Comprar pan»',
     ])
+  })
+})
+
+describe('HoyPage: cambiar la madre', () => {
+  it('desde Hoy se puede pasar una subtarea a otra madre', async () => {
+    const madre = tarea({ id: 3, titulo: 'Mudanza' })
+    const otra = tarea({ id: 4, titulo: 'Viaje' })
+    const hija = tarea({ id: 8, titulo: 'Embalar', padreId: 3 })
+    configurar({ agenda: { fecha: '2026-11-10', conHora: [], sinHora: [hija] } })
+    vi.mocked(getTarea).mockResolvedValue(madre)
+    vi.mocked(getTareas).mockResolvedValue([madre, otra, hija])
+    vi.mocked(actualizarTarea).mockResolvedValue({ ...hija, padreId: 4 })
+    const user = userEvent.setup()
+    renderizar()
+    await user.click(await screen.findByRole('button', { name: /^Embalar/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cambiar' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Cambiar' }))
+    await user.click(screen.getByRole('button', { name: /^Viaje/ }))
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(actualizarTarea).toHaveBeenCalledWith(8, expect.objectContaining({ padreId: 4 })))
+    expect(await screen.findByRole('status')).toHaveTextContent('«Embalar» ahora es subtarea de «Viaje»')
   })
 })
 

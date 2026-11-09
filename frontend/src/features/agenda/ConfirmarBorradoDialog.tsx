@@ -84,7 +84,11 @@ function Contenido({ borrado }: { borrado: Borrado }) {
             elegido={modo}
             alElegir={setModo}
             etiqueta="Borrar también las subtareas"
-            ayuda={`Se borran las ${plural(descendientes)} y sus recordatorios. No se puede deshacer.`}
+            ayuda={
+              descendientes === 1
+                ? 'Se borra la subtarea y sus recordatorios. No se puede deshacer.'
+                : `Se borran las ${plural(descendientes)} y sus recordatorios. No se puede deshacer.`
+            }
             peligro
           />
         </fieldset>

@@ -1,10 +1,13 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { mensajeGuardada, mensajeSubtareaAgregada } from '@/lib/fechas'
+import { mensajeGuardada, mensajeMadreCambiada, mensajeSubtareaAgregada } from '@/lib/fechas'
 import type { Tarea } from '@/types/tarea'
+import { candidatasMadre } from './candidatasMadre'
+import { SelectorMadre } from './SelectorMadre'
+import { useTodasLasTareas } from './useTodasLasTareas'
 import {
   MAX_TITULO,
   aRequest,
@@ -39,10 +42,22 @@ const CAMPO =
 
 /** Diálogo para crear o editar una tarea (mismo formulario). El formulario se monta de nuevo cada vez que se abre. */
 export function TareaDialog({ abierto, alCerrar, alGuardar, acciones }: Props) {
+  // Lo escribe el selector de madre: con la lista abierta, Escape cierra solo la lista y no el diálogo.
+  // Radix escucha Escape en el documento (fase de captura), antes que cualquier onKeyDown de React.
+  const selectorAbierto = useRef(false)
   return (
     <Dialog open={abierto !== null} onOpenChange={(open) => !open && alCerrar()}>
-      <DialogContent>
-        {abierto && <Formulario tarea={abierto.tarea} padre={abierto.padre} alCerrar={alCerrar} alGuardar={alGuardar} acciones={acciones} />}
+      <DialogContent onEscapeKeyDown={(e) => selectorAbierto.current && e.preventDefault()}>
+        {abierto && (
+          <Formulario
+            tarea={abierto.tarea}
+            padre={abierto.padre}
+            alCerrar={alCerrar}
+            alGuardar={alGuardar}
+            acciones={acciones}
+            selectorAbierto={selectorAbierto}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -54,15 +69,18 @@ function Formulario({
   alCerrar,
   alGuardar,
   acciones,
+  selectorAbierto,
 }: {
   tarea?: Tarea
   padre?: Tarea
   alCerrar: () => void
   alGuardar: (mensaje: string) => void
   acciones: Acciones
+  selectorAbierto: MutableRefObject<boolean>
 }) {
   const guardar = useGuardarTarea()
-  const tituloMadre = useTareaMadre(tarea?.padreId)
+  // `undefined` = el usuario no tocó el campo "Madre": el PUT conserva el padreId original.
+  const [madreElegida, setMadreElegida] = useState<MadreElegida>()
   const {
     register,
     handleSubmit,
@@ -83,12 +101,19 @@ function Formulario({
   }, [fecha, setValue])
 
   const enviar = handleSubmit((valores) => {
-    const request = aRequest(valores, tarea, padre?.id)
+    const request = aRequest(valores, tarea, tarea ? madreElegida?.id : padre?.id)
     guardar.mutate(
       { id: tarea?.id, request },
       {
         onSuccess: () => {
-          alGuardar(padre ? mensajeSubtareaAgregada(padre.titulo) : mensajeGuardada(request.fecha))
+          const cambioMadre = tarea !== undefined && request.padreId !== tarea.padreId
+          alGuardar(
+            padre
+              ? mensajeSubtareaAgregada(padre.titulo)
+              : cambioMadre
+                ? mensajeMadreCambiada(request.titulo, madreElegida?.titulo ?? null)
+                : mensajeGuardada(request.fecha),
+          )
           alCerrar()
         },
       },
@@ -102,7 +127,6 @@ function Formulario({
         <DialogDescription>
           {tarea ? 'Cambia lo que necesites y guarda.' : padre ? 'Anota el paso que falta.' : 'Anota lo que tienes que hacer.'}
         </DialogDescription>
-        {tituloMadre && <p className="mt-1 text-sm text-mut">Subtarea de «{tituloMadre}»</p>}
       </div>
 
       <Campo id="tarea-titulo" etiqueta="Título" error={errors.titulo?.message}>
@@ -121,6 +145,16 @@ function Formulario({
           })}
         />
       </Campo>
+
+      {tarea && (
+        <CampoMadre
+          tarea={tarea}
+          elegida={madreElegida}
+          alElegir={setMadreElegida}
+          bloqueado={guardar.isPending}
+          abiertoRef={selectorAbierto}
+        />
+      )}
 
       <Campo id="tarea-descripcion" etiqueta="Descripción">
         <textarea id="tarea-descripcion" rows={3} className={CAMPO} {...register('descripcion')} />
@@ -187,6 +221,54 @@ function Formulario({
         </div>
       </div>
     </form>
+  )
+}
+
+interface MadreElegida {
+  id: number | null
+  titulo: string | null
+}
+
+/**
+ * Campo "Madre" del diálogo de edición. Vive aparte para que las consultas (todas las tareas y la madre
+ * actual) solo se hagan al editar. Sin la lista (cargando o fallida) queda deshabilitado mostrando la
+ * madre actual, y como `elegida` sigue sin definir el PUT conserva el padreId original.
+ */
+function CampoMadre({
+  tarea,
+  elegida,
+  alElegir,
+  bloqueado,
+  abiertoRef,
+}: {
+  tarea: Tarea
+  elegida: MadreElegida | undefined
+  alElegir: (madre: MadreElegida) => void
+  bloqueado: boolean
+  abiertoRef: MutableRefObject<boolean>
+}) {
+  const lista = useTodasLasTareas()
+  const tituloMadreActual = useTareaMadre(tarea.padreId)
+  const candidatas = useMemo(() => (lista.data ? candidatasMadre(tarea, lista.data) : undefined), [tarea, lista.data])
+
+  const tituloActual = elegida
+    ? elegida.titulo
+    : tarea.padreId === null
+      ? null
+      : (lista.data?.find((t) => t.id === tarea.padreId)?.titulo ?? tituloMadreActual ?? `Tarea n.º ${tarea.padreId}`)
+
+  return (
+    <SelectorMadre
+      tituloActual={tituloActual}
+      idActual={elegida ? elegida.id : tarea.padreId}
+      candidatas={candidatas}
+      deshabilitado={!lista.data || lista.isError || bloqueado}
+      nota={
+        lista.isError ? 'No se pudo cargar la lista de tareas; la madre se conserva.' : !lista.data ? 'Cargando tareas…' : undefined
+      }
+      abiertoRef={abiertoRef}
+      alElegir={(id, titulo) => alElegir({ id, titulo })}
+    />
   )
 }
 

@@ -115,6 +115,11 @@ export function mensajeSubtareaAgregada(tituloMadre: string): string {
   return `Subtarea agregada a «${tituloMadre}»`
 }
 
+/** Confirmación al cambiar la madre: `tituloMadre` null = la tarea quedó sin madre. */
+export function mensajeMadreCambiada(titulo: string, tituloMadre: string | null): string {
+  return tituloMadre === null ? `«${titulo}» ya no es subtarea` : `«${titulo}» ahora es subtarea de «${tituloMadre}»`
+}
+
 /** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
 export function mensajePospuesta(fecha: string): string {
   return `Pospuesta al ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`

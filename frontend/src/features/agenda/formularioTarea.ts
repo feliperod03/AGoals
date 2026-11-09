@@ -36,8 +36,11 @@ export function valoresIniciales(tarea?: Tarea, fecha = ''): ValoresTarea {
  * Al editar (`original`) se reenvían `estado` y `padreId`: el PUT reemplaza todo y, si faltan, la
  * tarea vuelve a PENDIENTE y suelta a su padre. Al crear no se envía `estado` (nace PENDIENTE) y solo
  * se envía `padreId` si se crea una subtarea (`padreId` del tercer parámetro).
+ *
+ * Al editar, el tercer parámetro es la madre elegida en el formulario: `undefined` = sin tocar (se
+ * conserva la original), `null` = sin madre, número = nueva madre.
  */
-export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea, padreId?: number): TareaRequest {
+export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea, padreId?: number | null): TareaRequest {
   const fecha = vacioANull(valores.fecha)
   const request: TareaRequest = {
     titulo: (valores.titulo ?? '').trim(),
@@ -49,8 +52,9 @@ export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea, padre
   }
   if (original) {
     request.estado = original.estado
-    request.padreId = original.padreId
-  } else if (padreId !== undefined) {
+    // `padreId` sin definir = campo "Madre" sin tocar: se reenvía la original. `null` = "Sin madre".
+    request.padreId = padreId === undefined ? original.padreId : padreId
+  } else if (padreId != null) {
     request.padreId = padreId
   }
   return request

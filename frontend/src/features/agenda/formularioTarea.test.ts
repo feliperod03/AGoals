@@ -75,6 +75,18 @@ describe('aRequest', () => {
     expect(r).toMatchObject({ fecha: null, horaInicio: null, horaFin: null, estado: 'HECHO', padreId: 3 })
   })
 
+  it('editar con la madre sin tocar (undefined) conserva la original', () => {
+    expect(aRequest(valoresIniciales(TAREA), TAREA, undefined).padreId).toBe(3)
+    expect(aRequest(valoresIniciales({ ...TAREA, padreId: null }), { ...TAREA, padreId: null }).padreId).toBeNull()
+  })
+
+  it('editar con otra madre manda su id y con "sin madre" manda null, conservando el estado', () => {
+    expect(aRequest(valoresIniciales(TAREA), TAREA, 9)).toMatchObject({ padreId: 9, estado: 'HECHO' })
+    const sinMadre = aRequest(valoresIniciales(TAREA), TAREA, null)
+    expect(sinMadre).toMatchObject({ padreId: null, estado: 'HECHO' })
+    expect(sinMadre).toHaveProperty('padreId', null)
+  })
+
   it('crear una subtarea envía padreId y sigue sin enviar estado', () => {
     const r = aRequest({ titulo: 'Paso', fecha: '' }, undefined, 12)
     expect(r.padreId).toBe(12)

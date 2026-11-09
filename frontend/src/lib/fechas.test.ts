@@ -20,6 +20,7 @@ import {
   puedePosponerAManana,
   sumarDias,
   mensajePospuesta,
+  mensajeMadreCambiada,
   mensajeSubtareaAgregada,
   minutosDeHora,
   minutosDelDia,
@@ -167,6 +168,15 @@ describe('mensajeGuardada', () => {
 describe('mensajeSubtareaAgregada', () => {
   it('nombra a la madre entre comillas angulares', () => {
     expect(mensajeSubtareaAgregada('Mudanza')).toBe('Subtarea agregada a «Mudanza»')
+  })
+})
+
+describe('mensajeMadreCambiada', () => {
+  it('con madre nueva', () => {
+    expect(mensajeMadreCambiada('Embalar', 'Mudanza')).toBe('«Embalar» ahora es subtarea de «Mudanza»')
+  })
+  it('sin madre', () => {
+    expect(mensajeMadreCambiada('Embalar', null)).toBe('«Embalar» ya no es subtarea')
   })
 })
 

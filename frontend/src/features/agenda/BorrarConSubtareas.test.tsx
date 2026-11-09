@@ -149,6 +149,16 @@ describe('Borrar con subtareas', () => {
     await waitFor(() => expect(invalidar).toHaveBeenCalledWith({ queryKey: ['recordatorios'] }))
   })
 
+  it('la ayuda de borrar va en singular con una sola subtarea', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTareas).mockResolvedValue([MADRE, tarea({ id: 8, titulo: 'Hija A', padreId: 7 })])
+    renderizar()
+    const dialogo = await abrirDialogoBorrar(user)
+    await user.click(await within(dialogo).findByRole('radio', { name: /Borrar también las subtareas/ }))
+    expect(within(dialogo).getByText('Se borra la subtarea y sus recordatorios. No se puede deshacer.')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Borrar la tarea y 1 subtarea' })).toBeInTheDocument()
+  })
+
   it('mientras carga la lista avisa "Comprobando subtareas…" y no deja confirmar', async () => {
     const user = userEvent.setup()
     let resolver: (t: Tarea[]) => void = () => {}
