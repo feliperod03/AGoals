@@ -20,6 +20,8 @@ export interface Acciones {
   pedirPosponer: (tarea: Tarea) => void
   /** Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. */
   posponer: { tarea: Tarea; cancelar: () => void } | null
+  /** Abre la creación de una subtarea de `madre` (reemplaza el diálogo de edición, si había uno). */
+  pedirSubtarea: (madre: Tarea) => void
   /** Abre la confirmación de borrado (el DELETE solo se manda al confirmar). */
   pedirBorrado: (tarea: Tarea) => void
   /** Hay una acción en curso: los botones se deshabilitan. */
@@ -41,6 +43,8 @@ interface Opciones {
   alMensaje: (mensaje: string) => void
   /** Una acción sobre esta tarea terminó: si su diálogo de edición está abierto, hay que cerrarlo. */
   alTerminar: (tareaId: number) => void
+  /** Se pidió agregar una subtarea a `madre`: la página abre el diálogo de creación con ese padre. */
+  alSubtarea: (madre: Tarea) => void
 }
 
 const MENSAJES = {
@@ -74,7 +78,7 @@ function ejecutarAccion(tipo: TipoAccion, tarea: Tarea, fecha?: string): Promise
  * Al marcar hecha o cancelar consulta si la tarea tiene un recordatorio sin enviar y, si lo hay, deja
  * `preguntaRecordatorio` para que la página pregunte si se borra o se conserva.
  */
-export function useAccionesTarea({ alMensaje, alTerminar }: Opciones): Acciones {
+export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones): Acciones {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
@@ -145,6 +149,10 @@ export function useAccionesTarea({ alMensaje, alTerminar }: Opciones): Acciones 
       setAPosponer(tarea)
     },
     posponer: aPosponer ? { tarea: aPosponer, cancelar: () => setAPosponer(null) } : null,
+    pedirSubtarea: (madre) => {
+      setError(null)
+      alSubtarea(madre)
+    },
     pedirBorrado: (tarea) => {
       setErrorBorrado(null)
       setABorrar(tarea)

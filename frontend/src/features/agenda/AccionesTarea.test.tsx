@@ -112,9 +112,9 @@ describe('Acciones: menú (Radix)', () => {
     boton.focus()
     await user.keyboard('{Enter}')
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Posponer', 'Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Cancelar', 'Borrar'])
     await user.keyboard('{ArrowDown}')
-    expect(within(menu).getByRole('menuitem', { name: 'Cancelar' })).toHaveFocus()
+    expect(within(menu).getByRole('menuitem', { name: 'Posponer' })).toHaveFocus()
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     expect(boton).toHaveFocus()
@@ -129,6 +129,33 @@ describe('Acciones: menú (Radix)', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     menu = await abrirMenu(user, 'B')
     expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Reactivar', 'Borrar'])
+  })
+
+  it('"Agregar subtarea" aparece en tareas abiertas y no en hechas ni canceladas', async () => {
+    const user = userEvent.setup()
+    renderizar([
+      tarea({ id: 1, titulo: 'A', estado: 'EN_PROGRESO' }),
+      tarea({ id: 2, titulo: 'B', estado: 'HECHO' }),
+      tarea({ id: 3, titulo: 'C', estado: 'CANCELADO' }),
+    ])
+    let menu = await abrirMenu(user, 'A')
+    expect(within(menu).getByRole('menuitem', { name: 'Agregar subtarea' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    for (const titulo of ['B', 'C']) {
+      menu = await abrirMenu(user, titulo)
+      expect(within(menu).queryByRole('menuitem', { name: 'Agregar subtarea' })).not.toBeInTheDocument()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    }
+  })
+
+  it('"Agregar subtarea" abre el diálogo de creación con la madre', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 1, titulo: 'Comprar pan' })])
+    const menu = await abrirMenu(user, 'Comprar pan')
+    await user.click(within(menu).getByRole('menuitem', { name: 'Agregar subtarea' }))
+    expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Comprar pan»' })).toBeInTheDocument()
   })
 })
 

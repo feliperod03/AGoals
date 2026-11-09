@@ -110,6 +110,11 @@ export function mensajeGuardada(fecha: string | null): string {
   return `Guardada para el ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
 }
 
+/** Confirmación al crear una subtarea. */
+export function mensajeSubtareaAgregada(tituloMadre: string): string {
+  return `Subtarea agregada a «${tituloMadre}»`
+}
+
 /** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
 export function mensajePospuesta(fecha: string): string {
   return `Pospuesta al ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`

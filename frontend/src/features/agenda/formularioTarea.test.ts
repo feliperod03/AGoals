@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, puedeAgendarParaHoy, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, puedeAgendarParaHoy, puedeAgregarSubtarea, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -73,6 +73,25 @@ describe('aRequest', () => {
   it('editar: vaciar la fecha envía fecha y horas null, conservando estado y padreId', () => {
     const r = aRequest({ ...valoresIniciales(TAREA), fecha: '', horaInicio: undefined, horaFin: undefined }, TAREA)
     expect(r).toMatchObject({ fecha: null, horaInicio: null, horaFin: null, estado: 'HECHO', padreId: 3 })
+  })
+
+  it('crear una subtarea envía padreId y sigue sin enviar estado', () => {
+    const r = aRequest({ titulo: 'Paso', fecha: '' }, undefined, 12)
+    expect(r.padreId).toBe(12)
+    expect(r).not.toHaveProperty('estado')
+  })
+
+  it('crear sin padre no envía padreId', () => {
+    expect(aRequest({ titulo: 'A', fecha: '' })).not.toHaveProperty('padreId')
+  })
+})
+
+describe('puedeAgregarSubtarea', () => {
+  it('solo las tareas abiertas admiten subtareas', () => {
+    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'PENDIENTE' })).toBe(true)
+    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'EN_PAUSA' })).toBe(true)
+    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'HECHO' })).toBe(false)
+    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'CANCELADO' })).toBe(false)
   })
 })
 

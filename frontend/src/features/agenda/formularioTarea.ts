@@ -34,9 +34,10 @@ export function valoresIniciales(tarea?: Tarea, fecha = ''): ValoresTarea {
  * vacío o ausente se trata como null. Sin fecha no hay horas, aunque el estado del formulario las tenga.
  *
  * Al editar (`original`) se reenvían `estado` y `padreId`: el PUT reemplaza todo y, si faltan, la
- * tarea vuelve a PENDIENTE y suelta a su padre. Al crear no se envían (nace PENDIENTE y sin padre).
+ * tarea vuelve a PENDIENTE y suelta a su padre. Al crear no se envía `estado` (nace PENDIENTE) y solo
+ * se envía `padreId` si se crea una subtarea (`padreId` del tercer parámetro).
  */
-export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea): TareaRequest {
+export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea, padreId?: number): TareaRequest {
   const fecha = vacioANull(valores.fecha)
   const request: TareaRequest = {
     titulo: (valores.titulo ?? '').trim(),
@@ -49,6 +50,8 @@ export function aRequest(valores: Partial<ValoresTarea>, original?: Tarea): Tare
   if (original) {
     request.estado = original.estado
     request.padreId = original.padreId
+  } else if (padreId !== undefined) {
+    request.padreId = padreId
   }
   return request
 }
@@ -67,6 +70,11 @@ export function requestConEstado(tarea: Tarea, estado: Estado): TareaRequest {
  */
 export function requestSinFecha(tarea: Tarea): TareaRequest {
   return { ...requestConEstado(tarea, tarea.estado), fecha: null, horaInicio: null, horaFin: null }
+}
+
+/** Una tarea abierta (ni hecha ni cancelada) admite que le agreguen subtareas. */
+export function puedeAgregarSubtarea(tarea: Tarea): boolean {
+  return tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO'
 }
 
 /** Posponer solo tiene sentido en tareas abiertas con fecha (las sin fecha se agendan desde Recomendación). */

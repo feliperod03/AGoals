@@ -3,11 +3,12 @@ import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { mensajeGuardada } from '@/lib/fechas'
+import { mensajeGuardada, mensajeSubtareaAgregada } from '@/lib/fechas'
 import type { Tarea } from '@/types/tarea'
 import {
   MAX_TITULO,
   aRequest,
+  puedeAgregarSubtarea,
   puedePosponer,
   validarHoraFin,
   validarHoraInicio,
@@ -16,10 +17,17 @@ import {
 } from './formularioTarea'
 import type { Acciones } from './useAccionesTarea'
 import { useGuardarTarea } from './useGuardarTarea'
+import { useTareaMadre } from './useTareaMadre'
+
+/** `{}` crea una tarea; `{ tarea }` edita; `{ padre }` crea una subtarea de `padre`. */
+export interface EstadoTareaDialog {
+  tarea?: Tarea
+  padre?: Tarea
+}
 
 interface Props {
-  /** Cerrado si es `null`; con `{}` crea y con `{ tarea }` edita. */
-  abierto: { tarea?: Tarea } | null
+  /** Cerrado si es `null`. */
+  abierto: EstadoTareaDialog | null
   alCerrar: () => void
   /** Se llama tras guardar con el mensaje de confirmación (para el aria-live de la página). */
   alGuardar: (mensaje: string) => void
@@ -33,23 +41,28 @@ const CAMPO =
 export function TareaDialog({ abierto, alCerrar, alGuardar, acciones }: Props) {
   return (
     <Dialog open={abierto !== null} onOpenChange={(open) => !open && alCerrar()}>
-      <DialogContent>{abierto && <Formulario tarea={abierto.tarea} alCerrar={alCerrar} alGuardar={alGuardar} acciones={acciones} />}</DialogContent>
+      <DialogContent>
+        {abierto && <Formulario tarea={abierto.tarea} padre={abierto.padre} alCerrar={alCerrar} alGuardar={alGuardar} acciones={acciones} />}
+      </DialogContent>
     </Dialog>
   )
 }
 
 function Formulario({
   tarea,
+  padre,
   alCerrar,
   alGuardar,
   acciones,
 }: {
   tarea?: Tarea
+  padre?: Tarea
   alCerrar: () => void
   alGuardar: (mensaje: string) => void
   acciones: Acciones
 }) {
   const guardar = useGuardarTarea()
+  const tituloMadre = useTareaMadre(tarea?.padreId)
   const {
     register,
     handleSubmit,
@@ -70,12 +83,12 @@ function Formulario({
   }, [fecha, setValue])
 
   const enviar = handleSubmit((valores) => {
-    const request = aRequest(valores, tarea)
+    const request = aRequest(valores, tarea, padre?.id)
     guardar.mutate(
       { id: tarea?.id, request },
       {
         onSuccess: () => {
-          alGuardar(mensajeGuardada(request.fecha))
+          alGuardar(padre ? mensajeSubtareaAgregada(padre.titulo) : mensajeGuardada(request.fecha))
           alCerrar()
         },
       },
@@ -85,8 +98,11 @@ function Formulario({
   return (
     <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
       <div>
-        <DialogTitle>{tarea ? 'Editar tarea' : 'Nueva tarea'}</DialogTitle>
-        <DialogDescription>{tarea ? 'Cambia lo que necesites y guarda.' : 'Anota lo que tienes que hacer.'}</DialogDescription>
+        <DialogTitle>{tarea ? 'Editar tarea' : padre ? `Nueva subtarea de «${padre.titulo}»` : 'Nueva tarea'}</DialogTitle>
+        <DialogDescription>
+          {tarea ? 'Cambia lo que necesites y guarda.' : padre ? 'Anota el paso que falta.' : 'Anota lo que tienes que hacer.'}
+        </DialogDescription>
+        {tituloMadre && <p className="mt-1 text-sm text-mut">Subtarea de «{tituloMadre}»</p>}
       </div>
 
       <Campo id="tarea-titulo" etiqueta="Título" error={errors.titulo?.message}>
@@ -194,6 +210,13 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
           onClick={() => acciones.ejecutar(hecha ? 'reabrir' : 'hecha', tarea)}
         >
           {hecha ? 'Reabrir' : 'Marcar hecha'}
+        </Button>
+      )}
+      {puedeAgregarSubtarea(tarea) && (
+        // Ojo: a diferencia de Posponer y Borrar (que abren su diálogo encima de este), esto REEMPLAZA la
+        // edición por la creación, así que lo escrito en el formulario y sin guardar se pierde.
+        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirSubtarea(tarea)}>
+          Agregar subtarea
         </Button>
       )}
       {puedePosponer(tarea) && (

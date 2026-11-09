@@ -10,7 +10,7 @@ import { HoyPage } from './HoyPage'
 vi.mock('@/api/tareas', () => ({ getAgenda: vi.fn(), getTarea: vi.fn(), crearTarea: vi.fn(), actualizarTarea: vi.fn() }))
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn().mockResolvedValue([]), getEvento: vi.fn() }))
 vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn().mockResolvedValue([]) }))
-import { actualizarTarea, crearTarea, getAgenda } from '@/api/tareas'
+import { actualizarTarea, crearTarea, getAgenda, getTarea } from '@/api/tareas'
 
 function tarea(parcial: Partial<Tarea>): Tarea {
   return {
@@ -249,6 +249,106 @@ describe('TareaDialog: editar', () => {
       expect.objectContaining({ fecha: null, horaInicio: null, horaFin: null, estado: 'HECHO', padreId: 3 }),
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Guardada en el cofre')
+  })
+})
+
+describe('TareaDialog: subtareas', () => {
+  const madre = tarea({ id: 3, titulo: 'Mudanza' })
+  const subtarea = tarea({ id: 8, titulo: 'Embalar libros', padreId: 3 })
+  async function abrirSubtarea(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Mudanza»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Agregar subtarea' }))
+    return screen.findByRole('dialog')
+  }
+
+  it('el diálogo se titula "Nueva subtarea de «X»" y guardar manda padreId y avisa', async () => {
+    const user = userEvent.setup()
+    const { invalidar } = renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [madre] })
+    await abrirSubtarea(user)
+    expect(screen.getByRole('heading', { name: 'Nueva subtarea de «Mudanza»' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Fecha')).toHaveValue('')
+    await user.type(screen.getByLabelText('Título'), 'Embalar libros')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(crearTarea).toHaveBeenCalledTimes(1))
+    expect(crearTarea).toHaveBeenCalledWith({
+      titulo: 'Embalar libros',
+      descripcion: null,
+      prioridad: null,
+      fecha: null,
+      horaInicio: null,
+      horaFin: null,
+      padreId: 3,
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent('Subtarea agregada a «Mudanza»')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['agenda'] })
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['tareas'] })
+  })
+
+  it.each([
+    [400, 'Los datos no son válidos: padre_id'],
+    [404, 'No se encontró lo que buscabas.'],
+    [409, 'La acción choca con el estado actual de los datos.'],
+  ])('muestra el error %i al guardar la subtarea y no cierra el diálogo', async (status, mensaje) => {
+    vi.mocked(crearTarea).mockRejectedValue(new ApiError(status, mensaje))
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [madre] })
+    await abrirSubtarea(user)
+    await user.type(screen.getByLabelText('Título'), 'Paso')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByText(mensaje)).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Guardar' })).toBeEnabled()
+  })
+
+  it('el diálogo de edición ofrece "Agregar subtarea" en una tarea abierta y lo reemplaza por la creación', async () => {
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [madre] })
+    await user.click(await screen.findByRole('button', { name: /^Mudanza/ }))
+    expect(await screen.findByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Agregar subtarea' }))
+    expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Mudanza»' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Editar tarea' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  it.each(['HECHO', 'CANCELADO'] as const)('el diálogo de edición de una tarea %s no ofrece "Agregar subtarea"', async (estado) => {
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [tarea({ id: 7, titulo: 'Informe', estado, horaInicio: '09:30:00', horaFin: '10:30:00' })], sinHora: [] })
+    await user.click(await screen.findByRole('button', { name: /Informe/ }))
+    expect(await screen.findByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Agregar subtarea' })).not.toBeInTheDocument()
+  })
+
+  it('al editar una subtarea muestra "Subtarea de «X»" con el título de la madre', async () => {
+    vi.mocked(getTarea).mockResolvedValue(madre)
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [subtarea] })
+    await user.click(await screen.findByRole('button', { name: /^Embalar libros/ }))
+    expect(await screen.findByText('Subtarea de «Mudanza»')).toBeInTheDocument()
+    expect(getTarea).toHaveBeenCalledWith(3)
+  })
+
+  it('si la madre no carga, no muestra la línea y el diálogo funciona igual', async () => {
+    vi.mocked(getTarea).mockRejectedValue(new ApiError(404, 'No se encontró lo que buscabas.'))
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [subtarea] })
+    await user.click(await screen.findByRole('button', { name: /^Embalar libros/ }))
+    expect(await screen.findByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
+    await waitFor(() => expect(getTarea).toHaveBeenCalledWith(3))
+    expect(screen.queryByText(/^Subtarea de/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Título')).toHaveValue('Embalar libros')
+  })
+
+  it('una tarea sin madre no consulta getTarea ni muestra la línea', async () => {
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [madre] })
+    await user.click(await screen.findByRole('button', { name: /^Mudanza/ }))
+    await screen.findByRole('heading', { name: 'Editar tarea' })
+    expect(getTarea).not.toHaveBeenCalled()
+    expect(screen.queryByText(/^Subtarea de/)).not.toBeInTheDocument()
   })
 })
 

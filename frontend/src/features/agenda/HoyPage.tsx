@@ -1,14 +1,13 @@
 import { useState } from 'react'
 
 import { RecomendacionDialog } from '@/features/recomendacion/RecomendacionDialog'
-import type { Tarea } from '@/types/tarea'
 import { ProximosEventos, ProximosRecordatorios } from './ColumnaLateral'
 import { DialogosAcciones } from './DialogosAcciones'
 import { EncabezadoHoy } from './EncabezadoHoy'
 import { armarBloques } from './horario'
 import { ListaDelDia } from './ListaDelDia'
 import { PlanificacionPorHoras } from './PlanificacionPorHoras'
-import { TareaDialog } from './TareaDialog'
+import { TareaDialog, type EstadoTareaDialog } from './TareaDialog'
 import { useAccionesTarea } from './useAccionesTarea'
 import { useAgendaDelDia } from './useAgendaDelDia'
 import { useAhora } from './useAhora'
@@ -29,8 +28,8 @@ export function HoyPage() {
   const eventosDelDia = useEventosDelDia(hoy)
   const proximosEventos = useProximosEventos()
   const proximosRecordatorios = useProximosRecordatorios(ahora)
-  // `{}` = diálogo para crear; `{ tarea }` = para editar; `null` = cerrado.
-  const [dialogo, setDialogo] = useState<{ tarea?: Tarea } | null>(null)
+  // `{}` = diálogo para crear; `{ tarea }` = para editar; `{ padre }` = subtarea de `padre`; `null` = cerrado.
+  const [dialogo, setDialogo] = useState<EstadoTareaDialog | null>(null)
   const [recomendacionAbierta, setRecomendacionAbierta] = useState(false)
   const confirmacion = useMensajeTemporal()
   // Si el diálogo de edición está abierto sobre una tarea que acaba de cambiar, se cierra: así no se
@@ -38,6 +37,7 @@ export function HoyPage() {
   const acciones = useAccionesTarea({
     alMensaje: confirmacion.mostrar,
     alTerminar: (tareaId) => setDialogo((actual) => (actual?.tarea?.id === tareaId ? null : actual)),
+    alSubtarea: (madre) => setDialogo({ padre: madre }),
   })
 
   const bloques = armarBloques(agenda.data?.conHora ?? [], eventosDelDia.data ?? [], hoy)

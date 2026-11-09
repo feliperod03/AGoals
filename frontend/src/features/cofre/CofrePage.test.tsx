@@ -310,6 +310,25 @@ describe('CofrePage: acciones', () => {
     expect(await screen.findByText('Nueva idea')).toBeInTheDocument()
     expect(crearTarea).toHaveBeenCalledWith(expect.objectContaining({ titulo: 'Nueva idea', fecha: null }))
   })
+
+  it('"Agregar subtarea" crea la subtarea con padreId y aparece anidada bajo la madre', async () => {
+    const madre = tarea({ id: 1, titulo: 'Madre' })
+    const hija = tarea({ id: 9, titulo: 'Paso nuevo', padreId: 1 })
+    vi.mocked(getTareas).mockResolvedValueOnce([madre]).mockResolvedValue([madre, hija])
+    vi.mocked(crearTarea).mockResolvedValue(hija)
+    const user = userEvent.setup()
+    renderizar()
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Madre»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Agregar subtarea' }))
+    expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Madre»' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Título'), 'Paso nuevo')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(crearTarea).toHaveBeenCalledWith(expect.objectContaining({ titulo: 'Paso nuevo', fecha: null, padreId: 1 }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Subtarea agregada a «Madre»')
+    const fila = (await screen.findByText('Madre')).closest('li')!
+    expect(await within(fila).findByText('Paso nuevo')).toBeInTheDocument()
+  })
 })
 
 describe('CofrePage: agendar para hoy', () => {

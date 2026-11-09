@@ -19,6 +19,7 @@ import {
   puedePosponerAManana,
   sumarDias,
   mensajePospuesta,
+  mensajeSubtareaAgregada,
   minutosDeHora,
   minutosDelDia,
   rangoDelDia,
@@ -159,6 +160,12 @@ describe('mensajeGuardada', () => {
   it('con fecha la escribe en español', () => {
     expect(mensajeGuardada('2026-11-12')).toBe('Guardada para el 12 de noviembre')
     expect(mensajeGuardada('2026-12-01')).toBe('Guardada para el 1 de diciembre')
+  })
+})
+
+describe('mensajeSubtareaAgregada', () => {
+  it('nombra a la madre entre comillas angulares', () => {
+    expect(mensajeSubtareaAgregada('Mudanza')).toBe('Subtarea agregada a «Mudanza»')
   })
 })
 

@@ -5,7 +5,7 @@ import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
 import { Button } from '@/components/ui/button'
 import { DialogosAcciones } from '@/features/agenda/DialogosAcciones'
 import { puedeAgendarParaHoy } from '@/features/agenda/formularioTarea'
-import { TareaDialog } from '@/features/agenda/TareaDialog'
+import { TareaDialog, type EstadoTareaDialog } from '@/features/agenda/TareaDialog'
 import { useAccionesTarea } from '@/features/agenda/useAccionesTarea'
 import { useAgendarTarea } from '@/features/agenda/useAgendarTarea'
 import { useAhora } from '@/features/agenda/useAhora'
@@ -25,13 +25,14 @@ import { useCofre } from './useCofre'
 export function CofrePage() {
   const { hoy } = useAhora()
   const cofre = useCofre(hoy)
-  // `{}` = diálogo para crear; `{ tarea }` = para editar; `null` = cerrado.
-  const [dialogo, setDialogo] = useState<{ tarea?: Tarea } | null>(null)
+  // `{}` = diálogo para crear; `{ tarea }` = para editar; `{ padre }` = subtarea de `padre`; `null` = cerrado.
+  const [dialogo, setDialogo] = useState<EstadoTareaDialog | null>(null)
   const [aAgendar, setAAgendar] = useState<{ tarea: Tarea; candidatas: number } | null>(null)
   const confirmacion = useMensajeTemporal()
   const acciones = useAccionesTarea({
     alMensaje: confirmacion.mostrar,
     alTerminar: (tareaId) => setDialogo((actual) => (actual?.tarea?.id === tareaId ? null : actual)),
+    alSubtarea: (madre) => setDialogo({ padre: madre }),
   })
   const agendar = useAgendarTarea({ hoy, alAgendar: confirmacion.mostrar })
 
