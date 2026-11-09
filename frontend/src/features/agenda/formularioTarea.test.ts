@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, requestConEstado, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -109,5 +109,30 @@ describe('requestConEstado', () => {
     expect(base.padreId).toBe(TAREA.padreId)
     expect(base.titulo).toBe('Informe')
     expect(base.prioridad).toBe('ALTA')
+  })
+})
+
+describe('requestSinFecha', () => {
+  it('pone fecha y horas en null y conserva el resto, incluidos estado y padreId', () => {
+    expect(requestSinFecha({ ...TAREA, estado: 'EN_PROGRESO' })).toEqual({
+      titulo: 'Informe',
+      descripcion: 'Detalle',
+      estado: 'EN_PROGRESO',
+      prioridad: 'ALTA',
+      fecha: null,
+      horaInicio: null,
+      horaFin: null,
+      padreId: 3,
+    })
+  })
+})
+
+describe('puedePosponer', () => {
+  it('solo tareas abiertas con fecha', () => {
+    expect(puedePosponer({ ...TAREA, estado: 'PENDIENTE' })).toBe(true)
+    expect(puedePosponer({ ...TAREA, estado: 'EN_PAUSA' })).toBe(true)
+    expect(puedePosponer({ ...TAREA, estado: 'HECHO' })).toBe(false)
+    expect(puedePosponer({ ...TAREA, estado: 'CANCELADO' })).toBe(false)
+    expect(puedePosponer({ ...TAREA, estado: 'PENDIENTE', fecha: null })).toBe(false)
   })
 })

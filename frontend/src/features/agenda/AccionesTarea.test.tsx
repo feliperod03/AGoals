@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -149,16 +149,6 @@ describe('Acciones: peticiones y mensajes', () => {
     await user.click(await screen.findByRole('button', { name: 'Reabrir «Comprar pan»' }))
     await waitFor(() => expect(reabrirTarea).toHaveBeenCalledWith(7))
     expect(await screen.findByRole('status')).toHaveTextContent('Reabierta')
-  })
-
-  it('posponer manda PATCH /posponer y el mensaje usa la fecha que devuelve el backend', async () => {
-    const user = userEvent.setup()
-    vi.mocked(posponerTarea).mockResolvedValue(tarea({ id: 7, fecha: '2026-11-11' }))
-    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
-    await abrirMenu(user, 'Comprar pan')
-    await user.click(screen.getByRole('menuitem', { name: 'Posponer' }))
-    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7))
-    expect(await screen.findByRole('status')).toHaveTextContent('Pospuesta al 11 de noviembre')
   })
 
   it('cancelar manda un PUT con estado CANCELADO y el resto de los campos', async () => {
@@ -313,13 +303,24 @@ describe('Acciones: desde el diálogo de edición', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Marcada como hecha')
   })
 
-  it('Posponer manda el PATCH y confirma con la fecha', async () => {
+  it('Posponer abre el selector; al elegir Mañana manda la fecha, confirma y cierra ambos diálogos', async () => {
     const user = userEvent.setup()
     renderizar([], [informe])
     await user.click(within(await abrirEdicion(user)).getByRole('button', { name: 'Posponer' }))
-    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7))
+    expect(posponerTarea).not.toHaveBeenCalled()
+    const selector = await screen.findByRole('dialog', { name: 'Posponer tarea' })
+    await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
+    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7, '2026-11-11'))
     expect(await screen.findByRole('status')).toHaveTextContent('Pospuesta al 11 de noviembre')
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar tarea' })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('una tarea sin fecha no ofrece Posponer', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 8, titulo: 'Suelta', fecha: null })])
+    await user.click(await screen.findByRole('button', { name: /^Suelta/ }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Editar tarea' })
+    expect(within(dialogo).queryByRole('button', { name: 'Posponer' })).not.toBeInTheDocument()
   })
 
   it('Borrar pide confirmación y, al confirmar, borra y cierra la edición', async () => {
@@ -357,5 +358,140 @@ describe('Acciones: desde el diálogo de edición', () => {
     const dialogo = await abrirEdicion(user)
     await user.click(within(dialogo).getByRole('button', { name: 'Marcar hecha' }))
     expect(await within(dialogo).findByRole('alert')).toHaveTextContent('Tarea no encontrada: 7')
+  })
+})
+
+describe('Posponer: selector', () => {
+  async function abrirSelector(user: Usuario, titulo: string) {
+    await abrirMenu(user, titulo)
+    await user.click(screen.getByRole('menuitem', { name: 'Posponer' }))
+    return screen.findByRole('dialog', { name: 'Posponer tarea' })
+  }
+
+  it('Mañana manda hoy + 1 explícito, avisa, invalida y refresca la lista', async () => {
+    const user = userEvent.setup()
+    const { invalidar } = renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-05' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+    expect(posponerTarea).not.toHaveBeenCalled()
+    vi.mocked(getAgenda).mockClear()
+
+    await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
+
+    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7, '2026-11-11'))
+    expect(await screen.findByRole('status')).toHaveTextContent('Pospuesta al 11 de noviembre')
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['agenda'] })
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['tareas'] })
+    await waitFor(() => expect(getAgenda).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('Mañana no aparece si la tarea ya es de mañana o posterior', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-11' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+    expect(within(selector).queryByRole('button', { name: /^Mañana/ })).not.toBeInTheDocument()
+    expect(within(selector).getByLabelText('Elegir fecha')).toBeInTheDocument()
+  })
+
+  it('Elegir fecha respeta el mínimo y deshabilita confirmar sin fecha válida', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-14' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+    const campo = within(selector).getByLabelText('Elegir fecha')
+    const confirmar = within(selector).getByRole('button', { name: 'Posponer a esa fecha' })
+    // Mínimo: el mayor entre fecha de la tarea + 1 (15) y hoy + 1 (11).
+    expect(campo).toHaveAttribute('min', '2026-11-15')
+    expect(confirmar).toBeDisabled()
+
+    fireEvent.change(campo, { target: { value: '2026-11-14' } })
+    expect(confirmar).toBeDisabled()
+
+    fireEvent.change(campo, { target: { value: '2026-11-20' } })
+    expect(confirmar).toBeEnabled()
+    await user.click(confirmar)
+
+    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7, '2026-11-20'))
+  })
+
+  it('el mínimo de una tarea atrasada es mañana', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-01' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+    expect(within(selector).getByLabelText('Elegir fecha')).toHaveAttribute('min', '2026-11-11')
+  })
+
+  it('Dejar sin fecha manda el PUT con fecha y horas en null, conservando estado y padreId', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', estado: 'EN_PROGRESO', prioridad: 'ALTA', padreId: 3, horaInicio: '09:00:00', horaFin: '10:00:00' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+
+    await user.click(within(selector).getByRole('button', { name: 'Dejar sin fecha' }))
+
+    await waitFor(() => expect(actualizarTarea).toHaveBeenCalled())
+    expect(actualizarTarea).toHaveBeenCalledWith(7, {
+      titulo: 'Comprar pan',
+      descripcion: 'Detalle',
+      estado: 'EN_PROGRESO',
+      prioridad: 'ALTA',
+      fecha: null,
+      horaInicio: null,
+      horaFin: null,
+      padreId: 3,
+    })
+    expect(posponerTarea).not.toHaveBeenCalled()
+    expect(await screen.findByRole('status')).toHaveTextContent('Sin fecha: la verás en Recomendación')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('un 400 se ve dentro del selector, que sigue abierto y con los botones habilitados', async () => {
+    const user = userEvent.setup()
+    vi.mocked(posponerTarea).mockRejectedValue(new ApiError(400, 'La nueva fecha debe ser posterior a la actual'))
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-05' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+
+    await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
+
+    expect(await within(selector).findByRole('alert')).toHaveTextContent('La nueva fecha debe ser posterior a la actual')
+    expect(screen.getByRole('dialog', { name: 'Posponer tarea' })).toBeInTheDocument()
+    expect(within(selector).getByRole('button', { name: /^Mañana/ })).toBeEnabled()
+  })
+
+  it('un 409 se ve legible dentro del selector', async () => {
+    const user = userEvent.setup()
+    vi.mocked(actualizarTarea).mockRejectedValue(new ApiError(409, 'La tarea está cerrada'))
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+
+    await user.click(within(selector).getByRole('button', { name: 'Dejar sin fecha' }))
+
+    expect(await within(selector).findByRole('alert')).toHaveTextContent('La tarea está cerrada')
+  })
+
+  it('deshabilita todo mientras la mutación está en curso', async () => {
+    const user = userEvent.setup()
+    vi.mocked(posponerTarea).mockReturnValue(new Promise(() => {}))
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan', fecha: '2026-11-05' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+
+    await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
+
+    await waitFor(() => expect(within(selector).getByRole('button', { name: /^Mañana/ })).toBeDisabled())
+    expect(within(selector).getByRole('button', { name: 'Posponer a esa fecha' })).toBeDisabled()
+    expect(within(selector).getByRole('button', { name: 'Dejar sin fecha' })).toBeDisabled()
+    expect(within(selector).getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    expect(within(selector).getByLabelText('Elegir fecha')).toBeDisabled()
+  })
+
+  it('Cancelar cierra sin pedir nada y una tarea cerrada no ofrece Posponer en el menú', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' }), tarea({ id: 8, titulo: 'Vieja', estado: 'HECHO' })])
+    const selector = await abrirSelector(user, 'Comprar pan')
+    await user.click(within(selector).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(posponerTarea).not.toHaveBeenCalled()
+    expect(actualizarTarea).not.toHaveBeenCalled()
+
+    const menu = await abrirMenu(user, 'Vieja')
+    expect(within(menu).queryByRole('menuitem', { name: 'Posponer' })).not.toBeInTheDocument()
   })
 })

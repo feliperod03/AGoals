@@ -55,11 +55,19 @@ Inventario de **todas** las tareas, con filtros. Nació como lugar para las tare
 - **No hay posposición automática:** una tarea no completada queda en su fecha como atrasada; se ve en el cofre (filtro "Atrasadas") y en la recomendación.
 - **Consecuencia conocida:** hasta que llegue 8.3b, una tarea guardada sin fecha solo se ve en la recomendación (8.3).
 
+## Posponer (8.2c)
+Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fecha de la tarea (una atrasada podía seguir atrasada). El backend ya acepta `{fecha}` opcional, así que no hay cambios de backend. El menú de posponer ofrece:
+- Mañana: manda `hoy + 1` explícito; solo si la fecha actual de la tarea es anterior a mañana.
+- Elegir fecha: input date nativo, mínimo = el mayor entre (fecha de la tarea + 1) y (hoy + 1).
+- Dejar sin fecha: PUT de la tarea con fecha y horas en null, reenviando estado y padreId; no suma veces_pospuesta.
+
+Siempre se manda la fecha explícita. Solo para tareas abiertas con fecha. Pendiente conocido: el recordatorio pendiente no se mueve al posponer.
+
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
 - 8.1 Agenda del día en lectura (tareas + eventos, lista del día y horas, próximos recordatorios y eventos): hecha (commit `e9ba44d`).
 - 8.2a Crear y editar tareas, hecha (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
-- 8.2b Acciones rápidas, hecha (hecha, reabrir, posponer +1 día, cancelar, reactivar, borrar con confirmación; pregunta por el recordatorio pendiente al marcar hecha o cancelar; errores 409 legibles).
+- 8.2b Acciones rápidas, hecha (hecha, reabrir, posponer con opciones (8.2c), cancelar, reactivar, borrar con confirmación; pregunta por el recordatorio pendiente al marcar hecha o cancelar; errores 409 legibles).
 - 8.3 Recomendación (+ agendar con/sin subtareas; tareas del cofre marcadas).
 - 8.3b Cofre (inventario de todas las tareas con filtros, 3 filtros anclados, subtareas anidadas y agendar).
 - 8.4 Proyectos, objetivos e ideas.

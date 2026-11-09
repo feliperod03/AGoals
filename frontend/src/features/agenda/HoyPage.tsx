@@ -86,7 +86,7 @@ export function HoyPage() {
         aviso={confirmacion.mensaje}
         alAvisar={confirmacion.mostrar}
       />
-      <DialogosAcciones acciones={acciones} />
+      <DialogosAcciones acciones={acciones} hoy={hoy} />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { PosponerDialog } from './PosponerDialog'
 import type { Acciones } from './useAccionesTarea'
 
 function ErrorDialogo({ mensaje }: { mensaje: string | null }) {
@@ -11,11 +12,13 @@ function ErrorDialogo({ mensaje }: { mensaje: string | null }) {
   )
 }
 
-/** Confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
-export function DialogosAcciones({ acciones }: { acciones: Acciones }) {
+/** Selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
+export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: string }) {
   const { confirmarBorrado: borrado, preguntaRecordatorio: pregunta } = acciones
   return (
     <>
+      <PosponerDialog acciones={acciones} hoy={hoy} />
+
       <Dialog open={borrado !== null} onOpenChange={(open) => !open && !borrado?.pendiente && borrado?.cancelar()}>
         <DialogContent>
           {borrado && (

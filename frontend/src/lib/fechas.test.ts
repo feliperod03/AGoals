@@ -12,7 +12,11 @@ import {
   formatearMinutos,
   hoy,
   mensajeAgendada,
+  fechaMinimaParaPosponer,
   mensajeGuardada,
+  mensajeSinFecha,
+  puedePosponerAManana,
+  sumarDias,
   mensajePospuesta,
   minutosDeHora,
   minutosDelDia,
@@ -186,5 +190,41 @@ describe('mensajeAgendada', () => {
   it('con subtareas dice cuántas, en singular o plural', () => {
     expect(mensajeAgendada('Informe', 1)).toBe('«Informe» agendada para hoy (con 1 subtarea)')
     expect(mensajeAgendada('Informe', 3)).toBe('«Informe» agendada para hoy (con 3 subtareas)')
+  })
+})
+
+describe('sumarDias', () => {
+  it('suma días cruzando mes y año', () => {
+    expect(sumarDias('2026-11-10', 1)).toBe('2026-11-11')
+    expect(sumarDias('2026-11-30', 1)).toBe('2026-12-01')
+    expect(sumarDias('2026-12-31', 1)).toBe('2027-01-01')
+  })
+})
+
+describe('fechaMinimaParaPosponer', () => {
+  it('es mañana si la tarea es de hoy, atrasada o no tiene fecha', () => {
+    expect(fechaMinimaParaPosponer('2026-11-10', '2026-11-10')).toBe('2026-11-11')
+    expect(fechaMinimaParaPosponer('2026-11-05', '2026-11-10')).toBe('2026-11-11')
+    expect(fechaMinimaParaPosponer(null, '2026-11-10')).toBe('2026-11-11')
+  })
+  it('es el día siguiente a la fecha de la tarea si esta es de mañana o posterior', () => {
+    expect(fechaMinimaParaPosponer('2026-11-11', '2026-11-10')).toBe('2026-11-12')
+    expect(fechaMinimaParaPosponer('2026-11-20', '2026-11-10')).toBe('2026-11-21')
+  })
+})
+
+describe('puedePosponerAManana', () => {
+  it('solo si la fecha de la tarea es anterior a mañana', () => {
+    expect(puedePosponerAManana('2026-11-05', '2026-11-10')).toBe(true)
+    expect(puedePosponerAManana('2026-11-10', '2026-11-10')).toBe(true)
+    expect(puedePosponerAManana('2026-11-11', '2026-11-10')).toBe(false)
+    expect(puedePosponerAManana('2026-11-20', '2026-11-10')).toBe(false)
+    expect(puedePosponerAManana(null, '2026-11-10')).toBe(false)
+  })
+})
+
+describe('mensajeSinFecha', () => {
+  it('manda a Recomendación', () => {
+    expect(mensajeSinFecha()).toBe('Sin fecha: la verás en Recomendación')
   })
 })

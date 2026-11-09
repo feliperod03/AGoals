@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils'
 import type { Tarea } from '@/types/tarea'
 import { EstadoIcono } from './EstadoIcono'
+import { puedePosponer } from './formularioTarea'
 import { PrioridadChip } from './PrioridadChip'
 import { ErrorEnLinea, Tarjeta, TextoVacio } from './Tarjeta'
 import type { Acciones } from './useAccionesTarea'
@@ -82,7 +83,7 @@ function Fila({ tarea, alEditar, acciones }: { tarea: Tarea; alEditar: (tarea: T
           <Ellipsis className="size-5" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {!cerrada && <DropdownMenuItem onSelect={() => acciones.ejecutar('posponer', tarea)}>Posponer</DropdownMenuItem>}
+          {puedePosponer(tarea) && <DropdownMenuItem onSelect={() => acciones.pedirPosponer(tarea)}>Posponer</DropdownMenuItem>}
           {cancelada ? (
             <DropdownMenuItem onSelect={() => acciones.ejecutar('reactivar', tarea)}>Reactivar</DropdownMenuItem>
           ) : (

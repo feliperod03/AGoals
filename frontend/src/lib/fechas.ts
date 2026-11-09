@@ -131,3 +131,26 @@ export function mensajeAgendada(titulo: string, subtareas: number): string {
   if (subtareas <= 0) return base
   return `${base} (con ${subtareas} ${subtareas === 1 ? 'subtarea' : 'subtareas'})`
 }
+
+/** Suma (o resta) días a una fecha `YYYY-MM-DD` en calendario local. */
+export function sumarDias(fecha: string, dias: number): string {
+  return format(addDays(parseISO(fecha), dias), FORMATO_FECHA)
+}
+
+/** Fecha mínima para posponer: posterior a la de la tarea y posterior a hoy (la mayor de las dos). */
+export function fechaMinimaParaPosponer(fechaTarea: string | null, hoy: string): string {
+  const manana = sumarDias(hoy, 1)
+  if (fechaTarea === null) return manana
+  const siguiente = sumarDias(fechaTarea, 1)
+  return siguiente > manana ? siguiente : manana
+}
+
+/** "Mañana" solo vale si la fecha de la tarea es anterior a mañana (el backend exige una fecha posterior). */
+export function puedePosponerAManana(fechaTarea: string | null, hoy: string): boolean {
+  return fechaTarea !== null && fechaTarea < sumarDias(hoy, 1)
+}
+
+/** Confirmación al dejar una tarea sin fecha. */
+export function mensajeSinFecha(): string {
+  return 'Sin fecha: la verás en Recomendación'
+}

@@ -61,6 +61,19 @@ export function requestConEstado(tarea: Tarea, estado: Estado): TareaRequest {
   return { ...aRequest(valoresIniciales(tarea), tarea), estado }
 }
 
+/**
+ * Cuerpo del PUT para dejar una tarea sin fecha (y sin horas), conservando el resto. No es posponer:
+ * no pasa por `/posponer`, así que no suma `veces_pospuesta`.
+ */
+export function requestSinFecha(tarea: Tarea): TareaRequest {
+  return { ...requestConEstado(tarea, tarea.estado), fecha: null, horaInicio: null, horaFin: null }
+}
+
+/** Posponer solo tiene sentido en tareas abiertas con fecha (las sin fecha se agendan desde Recomendación). */
+export function puedePosponer(tarea: Tarea): boolean {
+  return tarea.fecha !== null && tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO'
+}
+
 function vacioANull(valor: string | undefined): string | null {
   const limpio = valor?.trim()
   return limpio ? limpio : null

@@ -8,6 +8,7 @@ import type { Tarea } from '@/types/tarea'
 import {
   MAX_TITULO,
   aRequest,
+  puedePosponer,
   validarHoraFin,
   validarHoraInicio,
   valoresIniciales,
@@ -195,8 +196,8 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
           {hecha ? 'Reabrir' : 'Marcar hecha'}
         </Button>
       )}
-      {!cancelada && !hecha && (
-        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.ejecutar('posponer', tarea)}>
+      {puedePosponer(tarea) && (
+        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirPosponer(tarea)}>
           Posponer
         </Button>
       )}

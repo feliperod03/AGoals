@@ -3,16 +3,23 @@ import { useState } from 'react'
 
 import { borrarRecordatorio, getRecordatoriosDeTarea } from '@/api/recordatorios'
 import { actualizarTarea, borrarTarea, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
-import { mensajePospuesta } from '@/lib/fechas'
+import { mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
-import { requestConEstado } from './formularioTarea'
+import { requestConEstado, requestSinFecha } from './formularioTarea'
 
-export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'cancelar' | 'reactivar'
+export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'sinFecha' | 'cancelar' | 'reactivar'
 
 export interface Acciones {
-  /** Ejecuta la acción y, si sale bien, avisa y cierra el diálogo de edición de esa tarea. */
-  ejecutar: (tipo: TipoAccion, tarea: Tarea) => void
+  /**
+   * Ejecuta la acción y, si sale bien, avisa y cierra el diálogo de edición de esa tarea.
+   * `fecha` (YYYY-MM-DD) solo la usa `'posponer'`, que siempre la manda explícita.
+   */
+  ejecutar: (tipo: TipoAccion, tarea: Tarea, fecha?: string) => void
+  /** Abre el selector de posponer (Mañana / Elegir fecha / Dejar sin fecha) para esa tarea. */
+  pedirPosponer: (tarea: Tarea) => void
+  /** Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. */
+  posponer: { tarea: Tarea; cancelar: () => void } | null
   /** Abre la confirmación de borrado (el DELETE solo se manda al confirmar). */
   pedirBorrado: (tarea: Tarea) => void
   /** Hay una acción en curso: los botones se deshabilitan. */
@@ -41,16 +48,20 @@ const MENSAJES = {
   reabrir: 'Reabierta',
   cancelar: 'Tarea cancelada',
   reactivar: 'Reactivada',
+  sinFecha: mensajeSinFecha(),
 } as const
 
-function ejecutarAccion(tipo: TipoAccion, tarea: Tarea): Promise<Tarea> {
+function ejecutarAccion(tipo: TipoAccion, tarea: Tarea, fecha?: string): Promise<Tarea> {
   switch (tipo) {
     case 'hecha':
       return marcarHecha(tarea.id)
     case 'reabrir':
       return reabrirTarea(tarea.id)
     case 'posponer':
-      return posponerTarea(tarea.id)
+      if (!fecha) return Promise.reject(new Error('Falta la fecha para posponer.'))
+      return posponerTarea(tarea.id, fecha)
+    case 'sinFecha':
+      return actualizarTarea(tarea.id, requestSinFecha(tarea))
     case 'cancelar':
       return actualizarTarea(tarea.id, requestConEstado(tarea, 'CANCELADO'))
     case 'reactivar':
@@ -66,6 +77,7 @@ function ejecutarAccion(tipo: TipoAccion, tarea: Tarea): Promise<Tarea> {
 export function useAccionesTarea({ alMensaje, alTerminar }: Opciones): Acciones {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
+  const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
   const [aBorrar, setABorrar] = useState<Tarea | null>(null)
   const [errorBorrado, setErrorBorrado] = useState<string | null>(null)
   const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null)
@@ -75,9 +87,10 @@ export function useAccionesTarea({ alMensaje, alTerminar }: Opciones): Acciones 
     Promise.all([queryClient.invalidateQueries({ queryKey: ['agenda'] }), queryClient.invalidateQueries({ queryKey: ['tareas'] })])
 
   const accion = useMutation({
-    mutationFn: ({ tipo, tarea }: { tipo: TipoAccion; tarea: Tarea }) => ejecutarAccion(tipo, tarea),
+    mutationFn: ({ tipo, tarea, fecha }: { tipo: TipoAccion; tarea: Tarea; fecha?: string }) => ejecutarAccion(tipo, tarea, fecha),
     onSuccess: async (actualizada, { tipo, tarea }) => {
       await invalidarTareas()
+      if (tipo === 'posponer' || tipo === 'sinFecha') setAPosponer(null)
       // Posponer: el mensaje usa la fecha que calculó el backend.
       alMensaje(tipo === 'posponer' ? mensajePospuesta(actualizada.fecha ?? '') : MENSAJES[tipo])
       alTerminar(tarea.id)
@@ -123,10 +136,15 @@ export function useAccionesTarea({ alMensaje, alTerminar }: Opciones): Acciones 
   })
 
   return {
-    ejecutar: (tipo, tarea) => {
+    ejecutar: (tipo, tarea, fecha) => {
       setError(null)
-      accion.mutate({ tipo, tarea })
+      accion.mutate({ tipo, tarea, fecha })
     },
+    pedirPosponer: (tarea) => {
+      setError(null)
+      setAPosponer(tarea)
+    },
+    posponer: aPosponer ? { tarea: aPosponer, cancelar: () => setAPosponer(null) } : null,
     pedirBorrado: (tarea) => {
       setErrorBorrado(null)
       setABorrar(tarea)

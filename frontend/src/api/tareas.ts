@@ -27,9 +27,12 @@ export function reabrirTarea(id: number): Promise<Tarea> {
   return patch<Tarea>(`/api/tareas/${id}/reabrir`)
 }
 
-/** Sin cuerpo: el backend suma un día a la fecha de la tarea. Devuelve la tarea con la fecha nueva. */
-export function posponerTarea(id: number): Promise<Tarea> {
-  return patch<Tarea>(`/api/tareas/${id}/posponer`)
+/**
+ * Siempre con fecha explícita (nunca el "+1" implícito del backend, que suma un día a la fecha de la
+ * tarea y no a hoy). Si la tarea tiene fecha, la nueva debe ser posterior (400 si no). Devuelve la tarea con la fecha nueva.
+ */
+export function posponerTarea(id: number, fecha: string): Promise<Tarea> {
+  return patch<Tarea>(`/api/tareas/${id}/posponer`, { fecha })
 }
 
 /** 409 si la tarea tiene subtareas. */
