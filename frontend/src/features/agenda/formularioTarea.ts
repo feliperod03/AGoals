@@ -76,6 +76,14 @@ export function requestSinFecha(tarea: Tarea): TareaRequest {
   return { ...requestConEstado(tarea, tarea.estado), fecha: null, horaInicio: null, horaFin: null }
 }
 
+/**
+ * Cuerpo del PUT para cambiar solo la madre de una tarea (vincularla como subtarea), reenviando todo lo demás.
+ * Misma base que `requestConEstado`: el PUT reemplaza todo.
+ */
+export function requestConPadre(tarea: Tarea, padreId: number | null): TareaRequest {
+  return aRequest(valoresIniciales(tarea), tarea, padreId)
+}
+
 /** Una tarea abierta (ni hecha ni cancelada) admite que le agreguen subtareas. */
 export function puedeAgregarSubtarea(tarea: Tarea): boolean {
   return tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { tarea } from '@/features/cofre/fabrica'
-import { descendientesDe } from './descendientes'
+import { ancestrosDe, descendientesDe } from './descendientes'
 
 const ids = (r: { todos: { id: number }[] }) => r.todos.map((t) => t.id).sort((a, b) => a - b)
 
@@ -31,5 +31,25 @@ describe('descendientesDe', () => {
     expect(ids(descendientesDe(1, ciclo))).toEqual([2])
     expect(descendientesDe(1, ciclo).directos).toBe(1)
     expect(descendientesDe(3, ciclo)).toEqual({ todos: [], directos: 0 })
+  })
+})
+
+describe('ancestrosDe', () => {
+  const idsDe = (r: { id: number }[]) => r.map((t) => t.id)
+
+  it('sube por las madres, de la más cercana a la más lejana', () => {
+    const todas = [tarea({ id: 1 }), tarea({ id: 2, padreId: 1 }), tarea({ id: 3, padreId: 2 })]
+    expect(idsDe(ancestrosDe(3, todas))).toEqual([2, 1])
+    expect(ancestrosDe(1, todas)).toEqual([])
+  })
+
+  it('no se cuelga con un ciclo ni se incluye a sí misma', () => {
+    const ciclo = [tarea({ id: 1, padreId: 2 }), tarea({ id: 2, padreId: 1 }), tarea({ id: 3, padreId: 3 })]
+    expect(idsDe(ancestrosDe(1, ciclo))).toEqual([2])
+    expect(ancestrosDe(3, ciclo)).toEqual([])
+  })
+
+  it('una madre inexistente corta la subida', () => {
+    expect(ancestrosDe(2, [tarea({ id: 2, padreId: 99 })])).toEqual([])
   })
 })

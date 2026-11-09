@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { normalizarTexto } from '@/lib/texto'
-import { cn } from '@/lib/utils'
+import { BuscadorTareas, Fila } from './BuscadorTareas'
 import type { CandidataMadre } from './candidatasMadre'
 
-/** Filas que se muestran a la vez; el resto se alcanza escribiendo en la búsqueda. */
-export const MAX_FILAS = 50
+export { MAX_FILAS } from './BuscadorTareas'
 
 interface Props {
   /** Texto de la selección vigente (título de la madre actual o elegida). */
@@ -23,34 +21,24 @@ interface Props {
   alElegir: (id: number | null, titulo: string | null) => void
 }
 
-const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
-const CAMPO = 'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-tx'
-
 /**
  * Selector de madre: valor actual + botón "Cambiar" que abre una búsqueda por título (en el cliente) y una
  * lista de botones nativos. Se recorre con Tab y se activa con Enter o Espacio, sin gestionar foco virtual.
  */
 export function SelectorMadre({ tituloActual, idActual, candidatas, deshabilitado, nota, abiertoRef, alElegir }: Props) {
   const [abierto, setAbierto] = useState(false)
-  const [busqueda, setBusqueda] = useState('')
   const [aviso, setAviso] = useState('')
   const botonCambiar = useRef<HTMLButtonElement>(null)
-  const cajaBusqueda = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     abiertoRef.current = abierto
-    if (abierto) cajaBusqueda.current?.focus()
     return () => {
       abiertoRef.current = false
     }
   }, [abierto, abiertoRef])
 
-  const coincidencias = (candidatas ?? []).filter((c) => normalizarTexto(c.tarea.titulo).includes(normalizarTexto(busqueda.trim())))
-  const visibles = coincidencias.slice(0, MAX_FILAS)
-
   function cerrar() {
     setAbierto(false)
-    setBusqueda('')
     botonCambiar.current?.focus()
   }
 
@@ -65,14 +53,6 @@ export function SelectorMadre({ tituloActual, idActual, candidatas, deshabilitad
       e.stopPropagation()
       cerrar()
     }
-  }
-
-  function alTeclearBusqueda(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== 'Enter') return
-    // Dentro de un <form>, Enter enviaría el formulario.
-    e.preventDefault()
-    const unica = coincidencias.length === 1 ? coincidencias[0] : undefined
-    if (unica) elegir(unica.tarea.id, unica.tarea.titulo)
   }
 
   return (
@@ -106,54 +86,20 @@ export function SelectorMadre({ tituloActual, idActual, candidatas, deshabilitad
       </p>
 
       {abierto && (
-        <div id="tarea-madre-panel" className="flex flex-col gap-2">
-          <label htmlFor="tarea-madre-buscar" className="text-sm font-medium">
-            Buscar madre
-          </label>
-          <input
-            id="tarea-madre-buscar"
-            ref={cajaBusqueda}
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            onKeyDown={alTeclearBusqueda}
-            className={cn(CAMPO, FOCO)}
-          />
-          <ul className="flex max-h-48 flex-col overflow-y-auto rounded-xl border border-line">
+        <BuscadorTareas
+          idInput="tarea-madre-buscar"
+          idPanel="tarea-madre-panel"
+          etiqueta="Buscar madre"
+          candidatas={candidatas ?? []}
+          idActual={idActual}
+          filaInicial={
             <Fila actual={idActual === null} alElegir={() => elegir(null, null)}>
               <span className="text-sm">Sin madre</span>
             </Fila>
-            {visibles.map((c) => (
-              <Fila key={c.tarea.id} actual={idActual === c.tarea.id} alElegir={() => elegir(c.tarea.id, c.tarea.titulo)}>
-                <span className="text-sm">{c.tarea.titulo}</span>
-                <span className="text-xs text-mut">{c.detalle}</span>
-              </Fila>
-            ))}
-          </ul>
-          {coincidencias.length === 0 && <p className="text-sm text-mut">Ninguna tarea coincide.</p>}
-          {coincidencias.length > MAX_FILAS && (
-            <p className="text-sm text-mut">
-              Mostrando {MAX_FILAS} de {coincidencias.length}: escribe para acotar.
-            </p>
-          )}
-        </div>
+          }
+          alElegir={(tarea) => elegir(tarea.id, tarea.titulo)}
+        />
       )}
     </div>
-  )
-}
-
-function Fila({ actual, alElegir, children }: { actual: boolean; alElegir: () => void; children: ReactNode }) {
-  return (
-    <li className="border-b border-line last:border-b-0">
-      <button
-        type="button"
-        aria-current={actual ? 'true' : undefined}
-        onClick={alElegir}
-        className={cn('flex w-full flex-col px-3 py-2 text-left hover:bg-muted', FOCO, actual && 'bg-muted font-medium')}
-      >
-        {children}
-        {actual && <span className="sr-only"> (actual)</span>}
-      </button>
-    </li>
   )
 }

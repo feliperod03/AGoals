@@ -3,14 +3,17 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ErrorDialogo } from './ErrorDialogo'
 import { ConfirmarBorradoDialog } from './ConfirmarBorradoDialog'
 import { PosponerDialog } from './PosponerDialog'
+import { SubtareaDialog } from './SubtareaDialog'
 import type { Acciones } from './useAccionesTarea'
 
-/** Selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
+/** Elección de subtarea (crear o vincular), selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
 export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: string }) {
   const { preguntaRecordatorio: pregunta } = acciones
   return (
     <>
       <PosponerDialog acciones={acciones} hoy={hoy} />
+
+      <SubtareaDialog acciones={acciones} />
 
       <ConfirmarBorradoDialog acciones={acciones} />
 

@@ -164,6 +164,7 @@ describe('Acciones: menú (Radix)', () => {
     renderizar([tarea({ id: 1, titulo: 'Comprar pan' })])
     const menu = await abrirMenu(user, 'Comprar pan')
     await user.click(within(menu).getByRole('menuitem', { name: 'Agregar subtarea' }))
+    await user.click(await screen.findByRole('button', { name: 'Crear una nueva' }))
     expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Comprar pan»' })).toBeInTheDocument()
   })
 })

@@ -24,3 +24,22 @@ export function descendientesDe(tareaId: number, todas: Tarea[]): { todos: Tarea
   }
   return { todos, directos: directas.filter((t) => visitados.has(t.id)).length }
 }
+
+/**
+ * Ancestros de una tarea (madre, abuela, …), sin incluirla. Sube por `padreId` con un conjunto de
+ * visitados que incluye a la tarea, así un ciclo en los datos no cuelga; una madre inexistente corta la subida.
+ */
+export function ancestrosDe(tareaId: number, todas: Tarea[]): Tarea[] {
+  const porId = new Map(todas.map((t) => [t.id, t]))
+  const visitados = new Set<number>([tareaId])
+  const ancestros: Tarea[] = []
+  let actual = porId.get(tareaId)
+  while (actual && actual.padreId !== null) {
+    const madre = porId.get(actual.padreId)
+    if (!madre || visitados.has(madre.id)) break
+    visitados.add(madre.id)
+    ancestros.push(madre)
+    actual = madre
+  }
+  return ancestros
+}

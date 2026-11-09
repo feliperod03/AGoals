@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, puedeAgendarParaHoy, puedeAgregarSubtarea, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, puedeAgendarParaHoy, puedeAgregarSubtarea, puedePosponer, requestConEstado, requestConPadre, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -179,5 +179,38 @@ describe('puedeAgendarParaHoy', () => {
     expect(puedeAgendarParaHoy({ ...TAREA, estado: 'PENDIENTE', fecha: hoy }, hoy)).toBe(false)
     expect(puedeAgendarParaHoy({ ...TAREA, fecha: null, estado: 'HECHO' }, hoy)).toBe(false)
     expect(puedeAgendarParaHoy({ ...TAREA, fecha: null, estado: 'CANCELADO' }, hoy)).toBe(false)
+  })
+})
+
+describe('requestConPadre', () => {
+  it('preserva la tarea exactamente salvo padreId (horas con segundos, nulls, estado)', () => {
+    const original: Tarea = {
+      ...TAREA,
+      descripcion: null,
+      prioridad: null,
+      estado: 'EN_PROGRESO',
+      fecha: '2026-11-10',
+      horaInicio: '09:00:00',
+      horaFin: '10:00:00',
+      padreId: 3,
+    }
+    // Lo que acepta el backend: horas en HH:mm; el resto tal cual.
+    const sinCambios = {
+      titulo: original.titulo,
+      descripcion: null,
+      estado: 'EN_PROGRESO',
+      prioridad: null,
+      fecha: '2026-11-10',
+      horaInicio: '09:00',
+      horaFin: '10:00',
+      padreId: 3,
+    }
+    expect(requestConPadre(original, 3)).toEqual(sinCambios)
+    expect(requestConPadre(original, 42)).toEqual({ ...sinCambios, padreId: 42 })
+  })
+
+  it('reenvía descripción y prioridad cuando existen', () => {
+    expect(requestConPadre(TAREA, 9)).toEqual({ ...aRequest(valoresIniciales(TAREA), TAREA), padreId: 9 })
+    expect(requestConPadre(TAREA, 9)).toMatchObject({ descripcion: 'Detalle', prioridad: 'ALTA', estado: 'HECHO' })
   })
 })

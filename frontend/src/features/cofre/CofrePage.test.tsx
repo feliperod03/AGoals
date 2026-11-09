@@ -357,6 +357,7 @@ describe('CofrePage: acciones', () => {
     renderizar()
     await user.click(await screen.findByRole('button', { name: 'Acciones de «Madre»' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Agregar subtarea' }))
+    await user.click(await screen.findByRole('button', { name: 'Crear una nueva' }))
     expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Madre»' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Título'), 'Paso nuevo')
     await user.click(screen.getByRole('button', { name: 'Guardar' }))

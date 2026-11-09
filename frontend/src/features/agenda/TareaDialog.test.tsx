@@ -259,6 +259,7 @@ describe('TareaDialog: subtareas', () => {
   async function abrirSubtarea(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole('button', { name: 'Acciones de «Mudanza»' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Agregar subtarea' }))
+    await user.click(await screen.findByRole('button', { name: 'Crear una nueva' }))
     return screen.findByRole('dialog')
   }
 
@@ -309,6 +310,7 @@ describe('TareaDialog: subtareas', () => {
     await user.click(await screen.findByRole('button', { name: /^Mudanza/ }))
     expect(await screen.findByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Agregar subtarea' }))
+    await user.click(await screen.findByRole('button', { name: 'Crear una nueva' }))
     expect(await screen.findByRole('heading', { name: 'Nueva subtarea de «Mudanza»' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Editar tarea' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
@@ -365,7 +367,8 @@ describe('TareaDialog: subtareas', () => {
     // Con la madre fijada, el título del diálogo sigue diciendo de quién es la subtarea.
     expect(screen.getByRole('heading', { name: 'Nueva subtarea de «Mudanza»' })).toBeInTheDocument()
     expect(screen.queryByTestId('madre-actual')).not.toBeInTheDocument()
-    expect(getTareas).not.toHaveBeenCalled()
+    // La única consulta es la del diálogo de elección (8.2g); el formulario de creación no pide otra.
+    expect(getTareas).toHaveBeenCalledTimes(1)
   })
 })
 

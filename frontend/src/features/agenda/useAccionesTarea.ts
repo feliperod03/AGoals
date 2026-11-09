@@ -4,10 +4,10 @@ import { useState } from 'react'
 import { ApiError } from '@/api/client'
 import { borrarRecordatorio, getRecordatoriosDeTarea } from '@/api/recordatorios'
 import { actualizarTarea, borrarTarea, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
-import { mensajeBorrada, mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
+import { mensajeBorrada, mensajeMadreCambiada, mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { ModoSubtareas, Tarea } from '@/types/tarea'
-import { requestConEstado, requestSinFecha } from './formularioTarea'
+import { requestConEstado, requestConPadre, requestSinFecha } from './formularioTarea'
 import { CLAVE_TODAS_LAS_TAREAS } from './useTodasLasTareas'
 
 export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'sinFecha' | 'cancelar' | 'reactivar'
@@ -27,8 +27,22 @@ export interface Acciones {
   pedirPosponer: (tarea: Tarea) => void
   /** Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. */
   posponer: { tarea: Tarea; cancelar: () => void } | null
-  /** Abre la creación de una subtarea de `madre` (reemplaza el diálogo de edición, si había uno). */
+  /**
+   * Abre la elección "Crear una nueva / Vincular una existente" para `madre` (encima del diálogo de edición,
+   * si había uno; este solo se reemplaza al elegir crear).
+   */
   pedirSubtarea: (madre: Tarea) => void
+  /** Diálogo de elección abierto; se cierra al crear, al vincular con éxito o al cancelar, y sigue abierto si falla. */
+  subtarea: {
+    madre: Tarea
+    error: string | null
+    pendiente: boolean
+    /** Cierra la elección y abre la creación de una subtarea nueva (flujo de 8.2d). */
+    crearNueva: () => void
+    /** PUT de `tarea` con `padreId` = la madre; reenvía todos sus campos. */
+    vincular: (tarea: Tarea) => void
+    cancelar: () => void
+  } | null
   /** Abre la confirmación de borrado (el DELETE solo se manda al confirmar). */
   pedirBorrado: (tarea: Tarea) => void
   /** Hay una acción en curso: los botones se deshabilitan. */
@@ -60,7 +74,7 @@ interface Opciones {
   alMensaje: (mensaje: string) => void
   /** Una acción sobre esta tarea terminó: si su diálogo de edición está abierto, hay que cerrarlo. */
   alTerminar: (tareaId: number) => void
-  /** Se pidió agregar una subtarea a `madre`: la página abre el diálogo de creación con ese padre. */
+  /** Se eligió crear una subtarea nueva de `madre`: la página abre el diálogo de creación con ese padre. */
   alSubtarea: (madre: Tarea) => void
 }
 
@@ -99,6 +113,8 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
+  const [aSubtarea, setASubtarea] = useState<Tarea | null>(null)
+  const [errorSubtarea, setErrorSubtarea] = useState<string | null>(null)
   const [aBorrar, setABorrar] = useState<Tarea | null>(null)
   const [errorBorrado, setErrorBorrado] = useState<string | null>(null)
   const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null)
@@ -133,6 +149,17 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       }
     },
     onError: (e) => setError(e.message),
+  })
+
+  const vinculo = useMutation({
+    mutationFn: ({ tarea, madre }: { tarea: Tarea; madre: Tarea }) => actualizarTarea(tarea.id, requestConPadre(tarea, madre.id)),
+    onSuccess: async (_, { tarea, madre }) => {
+      // Primero se cierra y se avisa: la invalidación refresca la lista de candidatas del diálogo.
+      setASubtarea(null)
+      alMensaje(mensajeMadreCambiada(tarea.titulo, madre.titulo))
+      await invalidarTareas()
+    },
+    onError: (e) => setErrorSubtarea(e.message),
   })
 
   const borrado = useMutation({
@@ -174,13 +201,30 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
     posponer: aPosponer ? { tarea: aPosponer, cancelar: () => setAPosponer(null) } : null,
     pedirSubtarea: (madre) => {
       setError(null)
-      alSubtarea(madre)
+      setErrorSubtarea(null)
+      setASubtarea(madre)
     },
+    subtarea: aSubtarea
+      ? {
+          madre: aSubtarea,
+          error: errorSubtarea,
+          pendiente: vinculo.isPending,
+          crearNueva: () => {
+            setASubtarea(null)
+            alSubtarea(aSubtarea)
+          },
+          vincular: (tarea) => {
+            setErrorSubtarea(null)
+            vinculo.mutate({ tarea, madre: aSubtarea })
+          },
+          cancelar: () => setASubtarea(null),
+        }
+      : null,
     pedirBorrado: (tarea) => {
       setErrorBorrado(null)
       setABorrar(tarea)
     },
-    pendiente: accion.isPending || borrado.isPending,
+    pendiente: accion.isPending || borrado.isPending || vinculo.isPending,
     error,
     confirmarBorrado: aBorrar
       ? {

@@ -28,6 +28,6 @@ export function candidatasMadre(tarea: Tarea, todas: Tarea[]): CandidataMadre[] 
     })
 }
 
-function esAbierta(t: Tarea): boolean {
+export function esAbierta(t: Tarea): boolean {
   return t.estado === 'PENDIENTE' || t.estado === 'EN_PROGRESO' || t.estado === 'EN_PAUSA'
 }

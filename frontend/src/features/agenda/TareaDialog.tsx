@@ -295,8 +295,8 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
         </Button>
       )}
       {puedeAgregarSubtarea(tarea) && (
-        // Ojo: a diferencia de Posponer y Borrar (que abren su diálogo encima de este), esto REEMPLAZA la
-        // edición por la creación, así que lo escrito en el formulario y sin guardar se pierde.
+        // La elección (crear / vincular) se abre encima, como Posponer y Borrar. Ojo: solo "Crear una nueva"
+        // REEMPLAZA la edición por la creación, y entonces lo escrito en el formulario y sin guardar se pierde.
         <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirSubtarea(tarea)}>
           Agregar subtarea
         </Button>
