@@ -93,7 +93,7 @@ describe('CofrePage: vista por defecto y estados', () => {
     renderizar()
     expect(await screen.findByText('No hay tareas sin fecha.')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Buscar por título'), 'zzz')
-    expect(screen.getByText('Ninguna tarea coincide con los filtros.')).toBeInTheDocument()
+    expect(screen.getByText('No hay tareas con estos filtros: Sin fecha, Título contiene «zzz».')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Volver a la vista por defecto' }))
     expect(screen.getByText('No hay tareas sin fecha.')).toBeInTheDocument()
     expect(screen.getByLabelText('Buscar por título')).toHaveValue('')
@@ -460,7 +460,7 @@ describe('CofrePage: agendar para hoy', () => {
     await user.click(await screen.findByRole('button', { name: 'Más filtros' }))
     await user.selectOptions(screen.getByLabelText('Fecha'), 'todas')
     await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
-    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.click(screen.getByRole('button', { name: /^Más filtros/ }))
 
     await abrirMenu(user, 'De hoy')
     expect(screen.getByRole('menuitem', { name: 'Posponer' })).toBeInTheDocument()
@@ -482,5 +482,122 @@ describe('CofrePage: agendar para hoy', () => {
     await user.keyboard('{Escape}')
     await abrirMenu(user, 'Lejana')
     expect(screen.getByRole('menuitem', { name: 'Agendar para hoy' })).toBeInTheDocument()
+  })
+})
+
+describe('CofrePage: chips de filtros activos', () => {
+  const TAREAS = [
+    tarea({ id: 1, titulo: 'Sin fecha media', prioridad: 'MEDIA' }),
+    tarea({ id: 2, titulo: 'Sin fecha alta', prioridad: 'ALTA' }),
+    tarea({ id: 3, titulo: 'Con fecha', fecha: '2026-11-20' }),
+    tarea({ id: 4, titulo: 'Pausada', estado: 'EN_PAUSA' }),
+  ]
+  const lista = () => screen.queryByRole('list', { name: 'Filtros activos' })
+  const chips = () => within(lista()!).getAllByRole('listitem').map((li) => li.textContent)
+
+  it('en la vista por defecto no hay chips ni contador (Sin fecha ya es un acceso rápido encendido)', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    expect(lista()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Más filtros' })).toBeInTheDocument()
+  })
+
+  it('un filtro de «Más filtros» deja su chip visible con el panel plegado, y la × lo quita', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.selectOptions(screen.getByLabelText('Estado'), 'EN_PAUSA')
+    await user.click(screen.getByRole('button', { name: 'Más filtros (1)' })) // pliega el panel
+    expect(screen.queryByLabelText('Estado')).not.toBeInTheDocument()
+
+    expect(chips()).toEqual(['Estado: En pausa'])
+    expect(titulos()).toEqual(['Pausada'])
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Estado: En pausa' }))
+    // El estado vuelve a «abiertas», no a «todas».
+    expect(lista()).not.toBeInTheDocument()
+    expect(titulos()).toEqual(['Sin fecha alta', 'Sin fecha media', 'Pausada'])
+    expect(screen.getByRole('button', { name: 'Más filtros' })).toBeInTheDocument()
+  })
+
+  it('chips por dimensión, contador y × que quita solo la suya', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.selectOptions(screen.getByLabelText('Fecha'), 'rango')
+    await user.type(screen.getByLabelText('Desde'), '2026-11-03')
+    await user.selectOptions(screen.getByLabelText('Prioridad'), 'MEDIA')
+    await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
+
+    expect(screen.getByRole('button', { name: 'Más filtros (3)' })).toBeInTheDocument()
+    expect(chips()).toEqual(['Desde 3 de noviembre', 'Estado: Todas', 'Prioridad media'])
+    expect(within(lista()!).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Quitar filtro: Desde 3 de noviembre',
+      'Quitar filtro: Estado: Todas',
+      'Quitar filtro: Prioridad media',
+    ])
+
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Desde 3 de noviembre' }))
+    expect(chips()).toEqual(['Estado: Todas', 'Prioridad media'])
+    // La fecha volvió a «todas» y el rango se limpió; los otros dos siguen.
+    expect(screen.getByLabelText('Fecha')).toHaveValue('todas')
+    expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Más filtros (2)' })).toBeInTheDocument()
+    expect(titulos()).toEqual(['Sin fecha media'])
+  })
+
+  it('un acceso rápido encendido no genera chip; los que no lo son, sí', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Sin fecha media')
+
+    await user.click(screen.getByRole('button', { name: 'Atrasadas' }))
+    expect(lista()).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Atrasadas' }))
+    await user.click(screen.getByRole('button', { name: 'Prioridad alta' }))
+    expect(lista()).not.toBeInTheDocument()
+
+    // «Futuras» no está anclado: genera chip. Elegir «Sin fecha» (anclado) lo hace desaparecer.
+    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.selectOptions(screen.getByLabelText('Fecha'), 'futuras')
+    expect(chips()).toEqual(['Futuras'])
+    await user.selectOptions(screen.getByLabelText('Fecha'), 'sin')
+    expect(lista()).not.toBeInTheDocument()
+  })
+
+  it('sin el acceso rápido anclado, «Sin fecha» de la vista por defecto aparece como chip', async () => {
+    localStorage.setItem(CLAVE_ANCLADOS, JSON.stringify(['atrasadas']))
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    expect(chips()).toEqual(['Sin fecha'])
+    expect(screen.getByRole('button', { name: 'Más filtros (1)' })).toBeInTheDocument()
+  })
+
+  it('el texto de vacío nombra los filtros y conserva «Volver a la vista por defecto»', async () => {
+    vi.mocked(getTareas).mockResolvedValue([tarea({ id: 1, titulo: 'Tarea mediana', prioridad: 'MEDIA' })])
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Tarea mediana')
+    await user.click(screen.getByRole('button', { name: 'Prioridad alta' }))
+    expect(screen.getByText('No hay tareas con estos filtros: Sin fecha, Prioridad alta.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Volver a la vista por defecto' }))
+    expect(await screen.findByText('Tarea mediana')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Volver a la vista por defecto' })).not.toBeInTheDocument()
+  })
+
+  it('si solo queda la línea base dice «No hay tareas abiertas.»', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('No hay tareas sin fecha.')
+    // Apagar «Sin fecha» deja fecha «todas» + abiertas: no hay nada que nombrar.
+    await user.click(screen.getByRole('button', { name: 'Sin fecha' }))
+    expect(screen.getByText('No hay tareas abiertas.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Volver a la vista por defecto' })).toBeInTheDocument()
   })
 })

@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { CAMPO, FOCO } from './estilos'
 import { FiltroVinculoCofre } from './FiltroVinculoCofre'
+import { FiltrosActivos } from './FiltrosActivos'
 import {
   MAX_ANCLADOS,
   PRESETS,
   alternarPreset,
+  chipsDeFiltros,
   hayFiltrosActivos,
   presetActivo,
   presetPorId,
@@ -17,6 +19,7 @@ import {
   type FiltroFecha,
   type FiltroPrioridad,
   type FiltrosCofre,
+  type NombresVinculo,
   type OrdenCofre,
   type PresetId,
   type SentidoCofre,
@@ -35,6 +38,8 @@ interface Props {
   proyectos: { id: number; nombre: string }[] | undefined
   objetivos: { id: number; nombre: string }[] | undefined
   errorListados: string | null
+  /** Para rotular el chip del vínculo. */
+  nombres: NombresVinculo
 }
 
 const ETIQUETA_SENTIDO: Record<OrdenCofre, Record<SentidoCofre, string>> = {
@@ -56,6 +61,7 @@ const boton = (activo: boolean) =>
 export function PanelFiltros(p: Props) {
   const [abierto, setAbierto] = useState(false)
   const f = p.filtros
+  const chips = chipsDeFiltros(f, p.anclados, p.nombres)
   const cambiar = (parche: Partial<FiltrosCofre>) => p.alCambiarFiltros({ ...f, ...parche })
 
   function alternarAncla(id: PresetId, marcado: boolean) {
@@ -108,7 +114,7 @@ export function PanelFiltros(p: Props) {
           onClick={() => setAbierto(!abierto)}
           className={cn('inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm text-mut hover:bg-muted', FOCO)}
         >
-          Más filtros
+          Más filtros{chips.length > 0 && ` (${chips.length})`}
           <ChevronDown className={cn('size-4 transition-transform', abierto && 'rotate-180')} aria-hidden="true" />
         </button>
         {hayFiltrosActivos(f) && (
@@ -117,6 +123,8 @@ export function PanelFiltros(p: Props) {
           </Button>
         )}
       </div>
+
+      <FiltrosActivos chips={chips} alQuitar={(chip) => p.alCambiarFiltros({ ...f, ...chip.quitar })} />
 
       {abierto && (
         <div id="cofre-mas-filtros" className="flex flex-col gap-4 rounded-xl border border-line p-4">

@@ -14,7 +14,7 @@ import { useMensajeTemporal } from '@/features/agenda/useMensajeTemporal'
 import type { Tarea } from '@/types/tarea'
 import { AgendarDialog } from './AgendarDialog'
 import { subtareasCandidatas } from './arbol'
-import { hayFiltrosActivos } from './filtros'
+import { hayFiltrosActivos, textoSinResultados } from './filtros'
 import { ListaCofre } from './ListaCofre'
 import { PanelFiltros } from './PanelFiltros'
 import { useCofre } from './useCofre'
@@ -39,6 +39,7 @@ export function CofrePage() {
 
   const proyectos = useMemo(() => new Map((cofre.proyectos.data ?? []).map((p) => [p.id, p.nombre])), [cofre.proyectos.data])
   const objetivos = useMemo(() => new Map((cofre.objetivos.data ?? []).map((o) => [o.id, o.nombre])), [cofre.objetivos.data])
+  const nombres = { proyectos, objetivos }
   const errorListados = cofre.proyectos.error?.message ?? cofre.objetivos.error?.message ?? null
   // Mientras se agenda también se bloquean las demás acciones.
   const accionesOcupadas = { ...acciones, pendiente: acciones.pendiente || agendar.isPending }
@@ -91,6 +92,7 @@ export function CofrePage() {
             proyectos={cofre.proyectos.data}
             objetivos={cofre.objetivos.data}
             errorListados={errorListados}
+            nombres={nombres}
           />
         </div>
 
@@ -107,7 +109,7 @@ export function CofrePage() {
           </div>
         )}
         {cofre.arbol && cofre.arbol.filtradas.length === 0 && (
-          <TextoVacio>{filtrando ? 'Ninguna tarea coincide con los filtros.' : 'No hay tareas sin fecha.'}</TextoVacio>
+          <TextoVacio>{filtrando ? textoSinResultados(cofre.filtros, nombres) : 'No hay tareas sin fecha.'}</TextoVacio>
         )}
         {cofre.arbol && cofre.arbol.filtradas.length > 0 && (
           <>

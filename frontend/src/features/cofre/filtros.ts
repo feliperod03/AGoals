@@ -1,4 +1,4 @@
-import { compararFechaHora, esAtrasada } from '@/lib/fechas'
+import { compararFechaHora, esAtrasada, formatearDiaMes } from '@/lib/fechas'
 import { normalizarTexto } from '@/lib/texto'
 import type { Estado, Prioridad, Tarea } from '@/types/tarea'
 
@@ -148,6 +148,116 @@ export function presetActivo(filtros: FiltrosCofre, preset: Preset): boolean {
 /** Pulsar un acceso rápido: lo activa, o si ya estaba activo devuelve esa dimensión a neutro. */
 export function alternarPreset(filtros: FiltrosCofre, preset: Preset): FiltrosCofre {
   return { ...filtros, ...(presetActivo(filtros, preset) ? preset.neutro : preset.parche) }
+}
+
+// --- Filtros activos (chips) ---
+
+/** Dimensiones que pueden generar un chip. La búsqueda no: su input está siempre a la vista. */
+export type DimensionFiltro = 'fecha' | 'estado' | 'prioridad' | 'vinculo'
+
+export interface FiltroActivo {
+  dimension: DimensionFiltro
+  texto: string
+  /** Lo que se aplica al pulsar la «×»: esa dimensión vuelve a su valor neutro. */
+  quitar: Partial<FiltrosCofre>
+}
+
+/** Nombres de proyectos y objetivos para rotular el chip del vínculo. */
+export interface NombresVinculo {
+  proyectos: ReadonlyMap<number, string>
+  objetivos: ReadonlyMap<number, string>
+}
+
+const TEXTO_ESTADO: Record<Exclude<FiltroEstado, 'abiertas'>, string> = {
+  PENDIENTE: 'Pendiente',
+  EN_PROGRESO: 'En progreso',
+  EN_PAUSA: 'En pausa',
+  HECHO: 'Hecha',
+  CANCELADO: 'Cancelada',
+  todas: 'Todas',
+}
+
+const TEXTO_PRIORIDAD: Record<Prioridad, string> = { ALTA: 'Prioridad alta', MEDIA: 'Prioridad media', BAJA: 'Prioridad baja' }
+
+function textoFecha(f: FiltrosCofre): string {
+  switch (f.fecha) {
+    case 'con':
+      return 'Con fecha'
+    case 'sin':
+      return 'Sin fecha'
+    case 'atrasadas':
+      return 'Atrasadas'
+    case 'futuras':
+      return 'Futuras'
+    case 'rango': {
+      if (f.desde && f.hasta) return `Desde ${formatearDiaMes(f.desde)} hasta ${formatearDiaMes(f.hasta)}`
+      if (f.desde) return `Desde ${formatearDiaMes(f.desde)}`
+      if (f.hasta) return `Hasta ${formatearDiaMes(f.hasta)}`
+      return 'Rango de fechas'
+    }
+    case 'todas':
+      return ''
+  }
+}
+
+function textoVinculo(v: FiltroVinculo, nombres: NombresVinculo): string {
+  switch (v.tipo) {
+    case 'cualquiera':
+      return ''
+    case 'suelta':
+      return 'Suelta'
+    case 'proyecto':
+      return v.id === null ? 'De un proyecto' : `Proyecto: «${nombres.proyectos.get(v.id) ?? `#${v.id}`}»`
+    case 'objetivo':
+      return v.id === null ? 'De un objetivo' : `Objetivo: «${nombres.objetivos.get(v.id) ?? `#${v.id}`}»`
+  }
+}
+
+/**
+ * Todas las dimensiones fuera de su valor neutro (fecha ≠ todas, estado ≠ abiertas, prioridad ≠ cualquiera,
+ * vínculo ≠ cualquiera), estén o no representadas por un acceso rápido. "Abiertas" es la línea base: no cuenta.
+ * Ojo: la vista por defecto tiene fecha «sin», que sí es un filtro activo.
+ */
+export function filtrosActivos(f: FiltrosCofre, nombres: NombresVinculo): FiltroActivo[] {
+  const activos: FiltroActivo[] = []
+  if (f.fecha !== 'todas') activos.push({ dimension: 'fecha', texto: textoFecha(f), quitar: { fecha: 'todas', desde: '', hasta: '' } })
+  if (f.estado !== 'abiertas') activos.push({ dimension: 'estado', texto: `Estado: ${TEXTO_ESTADO[f.estado]}`, quitar: { estado: 'abiertas' } })
+  if (f.prioridad !== 'cualquiera') {
+    activos.push({ dimension: 'prioridad', texto: f.prioridad === 'ninguna' ? 'Sin prioridad' : TEXTO_PRIORIDAD[f.prioridad], quitar: { prioridad: 'cualquiera' } })
+  }
+  if (f.vinculo.tipo !== 'cualquiera') activos.push({ dimension: 'vinculo', texto: textoVinculo(f.vinculo, nombres), quitar: { vinculo: { tipo: 'cualquiera' } } })
+  return activos
+}
+
+/** Dimensión que toca un acceso rápido (todos tocan una sola). */
+function dimensionDe(preset: Preset): DimensionFiltro {
+  if ('fecha' in preset.parche) return 'fecha'
+  if ('estado' in preset.parche) return 'estado'
+  if ('prioridad' in preset.parche) return 'prioridad'
+  return 'vinculo'
+}
+
+/** Los chips: filtros activos que no tiene ya a la vista un acceso rápido anclado y encendido. */
+export function chipsDeFiltros(f: FiltrosCofre, anclados: readonly PresetId[], nombres: NombresVinculo): FiltroActivo[] {
+  const cubiertas = new Set(
+    anclados
+      .map(presetPorId)
+      .filter((p) => presetActivo(f, p))
+      .map(dimensionDe),
+  )
+  return filtrosActivos(f, nombres).filter((a) => !cubiertas.has(a.dimension))
+}
+
+/**
+ * Texto del estado vacío cuando hay filtros distintos de la vista por defecto. Nombra todos los filtros
+ * activos (también los de accesos rápidos y la búsqueda). Si solo queda la línea base (abiertas) nunca
+ * deja una lista vacía tras los dos puntos.
+ */
+export function textoSinResultados(f: FiltrosCofre, nombres: NombresVinculo): string {
+  const nombrados = filtrosActivos(f, nombres).map((a) => a.texto)
+  const busqueda = f.busqueda.trim()
+  if (busqueda) nombrados.push(`Título contiene «${busqueda}»`)
+  return nombrados.length === 0 ? 'No hay tareas abiertas.' : `No hay tareas con estos filtros: ${nombrados.join(', ')}.`
 }
 
 // --- Orden ---

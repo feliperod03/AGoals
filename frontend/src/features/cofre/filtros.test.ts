@@ -5,13 +5,16 @@ import {
   FILTROS_POR_DEFECTO,
   PRESETS,
   alternarPreset,
+  chipsDeFiltros,
   filtrar,
   hayFiltrosActivos,
   ordenar,
   presetActivo,
   presetPorId,
   rangoInvertido,
+  textoSinResultados,
   type FiltrosCofre,
+  type PresetId,
 } from './filtros'
 
 const HOY = '2026-11-10'
@@ -143,6 +146,66 @@ describe('accesos rápidos', () => {
     const sueltas = alternarPreset(FILTROS_POR_DEFECTO, presetPorId('sueltas'))
     expect(sueltas.vinculo).toEqual({ tipo: 'suelta' })
     expect(alternarPreset(sueltas, presetPorId('sueltas')).vinculo).toEqual({ tipo: 'cualquiera' })
+  })
+})
+
+describe('filtros activos y chips', () => {
+  const nombres = { proyectos: new Map([[4, 'Mudanza']]), objetivos: new Map<number, string>() }
+  const textos = (f: FiltrosCofre, anclados: PresetId[] = []) => chipsDeFiltros(f, anclados, nombres).map((c) => c.texto)
+
+  it('la línea base (todas las fechas, abiertas, sin prioridad ni vínculo) no genera chips; la búsqueda tampoco', () => {
+    expect(textos(base())).toEqual([])
+    expect(textos(base({ busqueda: 'pan' }))).toEqual([])
+  })
+
+  it('la vista por defecto tiene «Sin fecha» como filtro activo', () => {
+    expect(textos(FILTROS_POR_DEFECTO)).toEqual(['Sin fecha'])
+  })
+
+  it('texto de cada dimensión', () => {
+    expect(textos(base({ fecha: 'con' }))).toEqual(['Con fecha'])
+    expect(textos(base({ fecha: 'atrasadas' }))).toEqual(['Atrasadas'])
+    expect(textos(base({ fecha: 'futuras' }))).toEqual(['Futuras'])
+    expect(textos(base({ fecha: 'rango', desde: '2026-11-03', hasta: '2026-11-10' }))).toEqual(['Desde 3 de noviembre hasta 10 de noviembre'])
+    expect(textos(base({ fecha: 'rango', desde: '2026-11-03' }))).toEqual(['Desde 3 de noviembre'])
+    expect(textos(base({ fecha: 'rango', hasta: '2026-11-10' }))).toEqual(['Hasta 10 de noviembre'])
+    expect(textos(base({ fecha: 'rango' }))).toEqual(['Rango de fechas'])
+    expect(textos(base({ estado: 'EN_PAUSA' }))).toEqual(['Estado: En pausa'])
+    expect(textos(base({ estado: 'todas' }))).toEqual(['Estado: Todas'])
+    expect(textos(base({ prioridad: 'MEDIA' }))).toEqual(['Prioridad media'])
+    expect(textos(base({ prioridad: 'ninguna' }))).toEqual(['Sin prioridad'])
+    expect(textos(base({ vinculo: { tipo: 'suelta' } }))).toEqual(['Suelta'])
+    expect(textos(base({ vinculo: { tipo: 'proyecto', id: null } }))).toEqual(['De un proyecto'])
+    expect(textos(base({ vinculo: { tipo: 'proyecto', id: 4 } }))).toEqual(['Proyecto: «Mudanza»'])
+    expect(textos(base({ vinculo: { tipo: 'objetivo', id: 9 } }))).toEqual(['Objetivo: «#9»'])
+  })
+
+  it('un acceso rápido anclado y encendido cubre su dimensión; apagado o sin anclar, no', () => {
+    const f = base({ fecha: 'sin', prioridad: 'ALTA', estado: 'PENDIENTE' })
+    expect(textos(f)).toEqual(['Sin fecha', 'Estado: Pendiente', 'Prioridad alta'])
+    expect(textos(f, ['sinFecha', 'prioridadAlta'])).toEqual(['Estado: Pendiente'])
+    // Anclado pero apagado (la prioridad es media, no alta): el chip sigue.
+    expect(textos(base({ prioridad: 'MEDIA' }), ['prioridadAlta'])).toEqual(['Prioridad media'])
+  })
+
+  it('la × quita solo su dimensión (fecha limpia también el rango; estado vuelve a abiertas)', () => {
+    const f = base({ fecha: 'rango', desde: '2026-11-03', hasta: '2026-11-10', estado: 'HECHO', prioridad: 'ALTA' })
+    const quitado = (dim: string) => ({ ...f, ...chipsDeFiltros(f, [], nombres).find((c) => c.dimension === dim)!.quitar })
+    expect(quitado('fecha')).toEqual({ ...f, fecha: 'todas', desde: '', hasta: '' })
+    expect(quitado('estado').estado).toBe('abiertas')
+    expect(quitado('prioridad').prioridad).toBe('cualquiera')
+  })
+
+  it('textoSinResultados nombra todos los filtros, incluidos los de accesos rápidos y la búsqueda', () => {
+    const f = { ...FILTROS_POR_DEFECTO, prioridad: 'ALTA' as const }
+    expect(textoSinResultados(f, nombres)).toBe('No hay tareas con estos filtros: Sin fecha, Prioridad alta.')
+    expect(textoSinResultados({ ...FILTROS_POR_DEFECTO, busqueda: ' zzz ' }, nombres)).toBe(
+      'No hay tareas con estos filtros: Sin fecha, Título contiene «zzz».',
+    )
+  })
+
+  it('si solo queda la línea base, no deja una lista vacía tras los dos puntos', () => {
+    expect(textoSinResultados(base(), nombres)).toBe('No hay tareas abiertas.')
   })
 })
 
