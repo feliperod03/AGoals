@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanada 8)
 
-> Fijadas el 7/11/2026; actualizadas el 9/11/2026 (8.3b y 8.2d hechas; 5d, 8.2e y 8.2f decididas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 9/11/2026 (hecho hasta P1b; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -40,23 +40,31 @@ Capas: componentes -> hooks de `features/` -> `api/`. Solo `api/` llama a `fetch
 - Interfaz en español.
 - Código: inglés para lo técnico/genérico (`Button`, `ApiClient`, `useDebounce`, `formatDate`); español para el dominio y lo que viene de la API (`Tarea`, `useTareasDelDia`, `marcarHecha`, `fechaHoraInicio`). Sin `ñ` en identificadores.
 
-## Subtareas (hecha en 8.2d; commit `ceab9d9`)
-Antes de 8.2d el frontend no podía crear subtareas (el backend sí: `padreId` en `TareaRequest`, con validación de padre existente y sin ciclos). Era un hueco funcional porque la tarea unificada y las vistas de recomendación y cofre ya anidan subtareas.
-- Ítem **"Agregar subtarea"** en el menú de acciones de cada tarea abierta (no hecha ni cancelada; Hoy y Cofre) y botón en el diálogo de edición (para las tareas de la planificación por horas, que no tienen menú). Abre el diálogo de nueva tarea titulado "Nueva subtarea de «X»" (descripción "Anota el paso que falta."), con `padreId` fijado y la línea "Subtarea de «X»"; el resto del formulario es el de siempre.
-- Una subtarea nueva sin fecha va al cofre y se ve anidada bajo su madre si la madre está en la vista. El aviso es `mensajeSubtareaAgregada`.
-- Desde el diálogo de edición, "Agregar subtarea" **reemplaza** el diálogo (los cambios sin guardar se pierden); Posponer y Borrar, en cambio, se abren encima. Está comentado en el código.
-- Fuera de alcance: cambiar la madre de una tarea existente (8.2f) y asignar proyecto u objetivo (8.4).
-- **Pendiente (pulido 1):** al crear desde Hoy una subtarea sin fecha, el aviso no dice a dónde fue; añadir el destino a `mensajeSubtareaAgregada`.
+## Subtareas (8.2d `ceab9d9`; vincular existentes en 8.2g `c6afad8`)
+Antes de 8.2d el frontend no podía crear subtareas (el backend sí: `padreId` en `TareaRequest`, con validación de padre existente y sin ciclos).
+- Ítem **"Agregar subtarea"** en el menú de acciones de cada tarea abierta (no hecha ni cancelada; Hoy y Cofre) y botón en el diálogo de edición (para las tareas de la planificación por horas, que no tienen menú). Desde 8.2g abre primero el diálogo **"Agregar subtarea a «X»"** con dos caminos: **"Crear una nueva"** (foco inicial; abre "Nueva subtarea de «X»" con `padreId` fijado, descripción "Anota el paso que falta." y el aviso `mensajeSubtareaAgregada`) y **"Vincular una existente"** (sección siguiente).
+- Una subtarea nueva sin fecha va al Cofre, y el aviso lo dice: "Subtarea agregada a «X»; sin fecha: la verás en el Cofre" (P1a).
+- Desde el diálogo de edición, el de elección se abre **encima** (cancelar o vincular deja la edición intacta); la edición solo se reemplaza al elegir "Crear una nueva" (se pierden los cambios sin guardar; está comentado en el código).
+- Fuera de alcance: asignar proyecto u objetivo (8.4).
 
-## Borrar con subtareas (decidido el 9/11/2026; backend 5d + frontend 8.2e)
-Hoy borrar una tarea con subtareas da 409 con "La tarea 687 tiene subtareas…" (el id en lugar del título y sin salida desde la UI). El 409 se mantiene como valor por defecto y se agrega una elección explícita del usuario:
-- **Backend (5d):** `DELETE /api/tareas/{id}?subtareas=borrar|conservar`. Sin el parámetro responde 409 como hoy, pero el mensaje usa el título. Valor inválido → 400. Todo en una transacción.
-  - `borrar`: elimina la tarea y todos sus descendientes (cualquier nivel). Los recordatorios caen por la cascada de la base.
-  - `conservar`: las subtareas directas pasan al padre de la tarea borrada, o quedan sin madre si no tenía. Sus propias subtareas las acompañan.
-- **Frontend (8.2e):** al confirmar el borrado de una tarea con subtareas, el diálogo dice "«X» tiene N subtareas" y ofrece **"Conservar las subtareas"** (por defecto; suben un nivel) o **"Borrar también las subtareas"** (destructiva, explícita). N sale de la lista `['tareas', 'todas']` (sirve en Hoy y en el Cofre). Los mensajes usan el título. Sin subtareas, el diálogo no cambia.
+## Vincular una subtarea existente (8.2g; commit `c6afad8`)
+- "Vincular una existente" despliega `BuscadorTareas` (búsqueda por título sin tildes ni mayúsculas, lista de botones nativos, máximo 50 filas), compartido con el selector de madre de 8.2f. Una tarea por vez.
+- Candidatas (`candidatasSubtarea`): tareas abiertas, salvo la madre, sus ancestros (evita ciclos; el backend igual da 400) y sus subtareas directas. Si la candidata ya tiene otra madre, la fila dice "Ahora es subtarea de «Z»; se moverá".
+- Al elegir: PUT de esa tarea con todos sus campos y el `padreId` nuevo (`requestConPadre`, sobre `aRequest(valoresIniciales(...))`); aviso "«Y» ahora es subtarea de «X»".
+- Lista cargando o fallida: solo "Vincular" se deshabilita; "Crear una nueva" siempre está disponible. El error del servidor se ve en el diálogo (estado propio, no el `acciones.error` compartido).
+- **Pendiente conocido:** el PUT que reenvía la tarea recorta los segundos de las horas, recorta espacios del título y convierte una descripción vacía en null (ya ocurría con cancelar y reactivar; la interfaz nunca genera segundos).
 
-## Cambiar la madre (decidido el 9/11/2026; rebanada 8.2f, solo frontend)
-Permite sacar una subtarea de su madre o pasarla a otra. El `PUT` ya acepta `padreId` (el backend valida que exista y que no haya ciclos), así que no hay cambios de backend. Se define en el plan: lo natural es un selector de madre en el diálogo de edición con "Sin madre", que excluya la propia tarea y sus descendientes (el backend igual rechaza los ciclos con 400).
+## Borrar con subtareas (5d `dc6c3c1`; 8.2e `be0913b`)
+- **Backend:** `DELETE /api/tareas/{id}?subtareas=borrar|conservar` (204). Sin el parámetro y con subtareas: 409 con el título («X» tiene subtareas: indica si quieres borrarlas o conservarlas). Valor inválido → 400; vacío = ausente. Todo en una transacción.
+  - `borrar`: elimina la tarea y todos sus descendientes (de las hojas a la raíz); los recordatorios caen por la cascada de la base.
+  - `conservar`: reasigna y persiste (flush) las subtareas directas al padre de la tarea (o sin madre) ANTES de borrar, porque la base tiene `ON DELETE CASCADE` en `padre_id`. Un test contra Postgres real lo cubre.
+- **Frontend (`ConfirmarBorradoDialog`):** con subtareas dice "«X» tiene N subtareas" (todos los niveles, de `['tareas','todas']` vía `useTodasLasTareas`, con `descendientesDe` a prueba de ciclos) y ofrece "Conservar las subtareas" (por defecto) o "Borrar también las subtareas" (destructiva). Mientras se consulta la lista ("Comprobando subtareas…") confirmar está deshabilitado; si la lista falla cae al diálogo simple; un 409 refresca la lista. Se invalida `['agenda']`, `['tareas']` y `['recordatorios']`; el aviso usa el título (`mensajeBorrada`).
+
+## Cambiar la madre (8.2f; commit `f195a8b`)
+- Campo **"Madre"** solo en el diálogo de edición (`CampoMadre` + `SelectorMadre`): muestra la madre actual y un botón "Cambiar" que abre `BuscadorTareas` con "Sin madre" primero. Candidatas (`candidatasMadre`): abiertas más la madre actual aunque esté cerrada, sin la propia tarea ni sus descendientes.
+- Si no se toca el campo, el PUT reenvía el `padreId` original (con la lista cargando o fallida el campo queda deshabilitado). `aRequest(valores, original, padreId)`: `undefined` = sin tocar, `null` = sin madre.
+- Aviso: «X» ahora es subtarea de «Y» / «X» ya no es subtarea. En edición se quitó la línea "Subtarea de «X»".
+- Escape con la lista abierta cierra solo la lista (`onEscapeKeyDown` + `preventDefault` en el diálogo). **Pendiente conocido:** con el foco fuera del selector (p. ej. en el Título), Escape no hace nada mientras la lista está abierta.
 
 ## Posponer (hecha en 8.2c; commit `2a78695`)
 Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fecha **de la tarea** (una atrasada podía seguir atrasada). El backend ya aceptaba `{fecha}` opcional, así que no hubo cambios de backend.
@@ -85,9 +93,15 @@ Inventario de **todas** las tareas, con filtros. Nació como lugar para las tare
 - **Accesos rápidos:** hasta 3, de una sola dimensión (Sin fecha, Con fecha, Atrasadas, Futuras, Prioridad alta/media, Sin prioridad, Pendientes, En progreso, Sueltas). Pulsar uno reemplaza solo su dimensión y suma al resto; si ya está activo vuelve esa dimensión a neutro (apagar uno de estado vuelve a "abiertas", no a "todas"). Por defecto: Sin fecha, Atrasadas, Prioridad alta. Se eligen en "Más filtros" y se guardan en `localStorage['agoals:cofre:anclados']` (lectura y escritura en try/catch, con validación; el estado actual de los filtros no se persiste).
 - **Subtareas anidadas:** una tarea que cumple y cuya madre también se anida bajo ella; si la madre no cumple, la hija sube a raíz con "Subtarea de «madre»"; una madre que no cumple no se muestra; "+N subtareas ocultas por el filtro". Protegido contra ciclos y padres inexistentes.
 - **Acciones:** las de Hoy (editar, hecha, reabrir, posponer, cancelar, reactivar, borrar) más "Agendar para hoy" en abiertas sin fecha, atrasadas o futuras. Sin subtareas candidatas agenda directo (el error 409/400 sale en el cartel de la página); con candidatas abre un diálogo con "Incluir N subtareas". "Nueva tarea" en el encabezado. `subtareasCandidatas` replica en el cliente la regla de "Agendar con subtareas" del backend.
-- **Pendiente (pulido 1):** hoy los filtros activos de "Más filtros" quedan invisibles al plegar el panel y parece que "faltan tareas". Se resuelve con una **fila de chips** de los filtros activos (los que no son accesos rápidos), cada uno con "×", visible aunque el panel esté plegado, un contador en el botón "Más filtros (N)" y un texto de vacío que diga qué filtros hay activos. (Se descartó desmarcarlos al plegar: se perdería la configuración justo al querer ver más lista.)
+- **Chips de filtros activos (P1b; commit `4ff8cc8`):** fila `<ul aria-label="Filtros activos">` bajo la barra, visible con "Más filtros" plegado. Un chip por dimensión fuera de su neutro (fecha ≠ todas, estado ≠ abiertas, prioridad ≠ cualquiera, vínculo ≠ cualquiera) que no tenga un acceso rápido anclado y encendido; la "×" devuelve esa dimensión a su neutro (estado a "abiertas"; fecha también limpia el rango). La búsqueda no genera chip. El botón dice "Más filtros (N)" con N = chips (sin "(0)"). Texto de vacío: "No hay tareas con estos filtros: …" (nombra todos, incluida la búsqueda), "No hay tareas abiertas." si solo queda la línea base y "No hay tareas sin fecha." en la vista por defecto. **Pendiente:** al quitar un chip el foco del teclado se pierde.
+- **A decidir tras usar el Cofre:** la vista por defecto (hoy abiertas sin fecha; apagar el acceso rápido "Sin fecha" muestra todas las abiertas) y si ofrecer orden por nombre.
 - **Opcional:** contador en Hoy que lleve al cofre.
 - **No hay posposición automática:** una tarea no completada queda en su fecha como atrasada; se ve en el cofre (filtro "Atrasadas") y en la recomendación.
+
+## Aviso flotante y color-scheme (P1a; commit `1642c9a`)
+- `components/Aviso.tsx` reemplaza el texto plano de Hoy y Cofre: burbuja abajo a la derecha (abajo y centrada en pantallas angostas) con entrada y salida cortas (`motion-safe:`), se cierra sola (6 s, salida de 200 ms por temporizador, no por `transitionend`), con "×", y se pausa con el mouse o el foco. Un aviso nuevo reemplaza al anterior.
+- La región `role="status"` es única por página y siempre está en el DOM; los diálogos conservan la suya (Radix deja la página con `aria-hidden`). Queda sobre el overlay (`z-[60]`); el "×" frena `pointerdown` para no cerrar el diálogo modal. Con un diálogo abierto el focus trap impide llegar al "×" con Tab.
+- `color-scheme: light` en `:root` y `dark` en `.dark` (`index.css`): íconos de fecha y hora, scroll y desplegables nativos se ven bien en modo oscuro.
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -99,10 +113,11 @@ Inventario de **todas** las tareas, con filtros. Nació como lugar para las tare
 - Refactor previo al cofre: hecho (commit `1e3256f`).
 - 8.3b Cofre, hecha (commit `a33fcce`).
 - 8.2d Crear subtareas, solo frontend: hecha (commit `ceab9d9`).
-- **5d Borrar tarea con subtareas** (backend): `?subtareas=borrar|conservar` y mensajes con título: **próxima**.
-- 8.2e Diálogo de borrado con opciones (solo frontend).
-- 8.2f Cambiar o quitar la madre de una tarea (solo frontend).
-- **P1 Pulido 1:** aviso flotante animado y chips de filtros activos en el Cofre.
+- 5d Borrar tarea con subtareas (backend): hecha (commit `dc6c3c1`).
+- 8.2e Diálogo de borrado con opciones: hecha (commit `be0913b`).
+- 8.2f Cambiar o quitar la madre de una tarea: hecha (commit `f195a8b`).
+- 8.2g Vincular una tarea existente como subtarea: hecha (commit `c6afad8`).
+- P1 Pulido 1: hecho (P1a `1642c9a`: aviso flotante, `color-scheme`, aviso de subtarea sin fecha; P1b `4ff8cc8`: chips de filtros activos).
 - 8.4 Proyectos, objetivos e ideas (incluye asignar tareas a proyectos/objetivos; partirla en 8.4a/b/c).
 - 8.5 Recordatorios (polling de vencidos, aviso al cerrar tarea con recordatorio).
 - 9 Calendario (librería a decidir entonces).
@@ -143,8 +158,11 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 - Librería del calendario (rebanada 9).
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
 - Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
-- **Aviso de confirmación (pulido 1):** hoy es texto plano en la página (confirmaciones al guardar, concluir, cancelar, posponer, agendar…). Debe pasar a un aviso flotante pequeño en una esquina, con una animación corta de entrada y salida y que desaparezca solo, sin librería de toasts. Hay que conservar una región `aria-live` para los lectores de pantalla (y la propia dentro de los diálogos modales como el de Recomendación).
 - Selector de hora del formulario: hoy es el input nativo y se ve feo; mejorarlo.
 - Al posponer una tarea, su recordatorio pendiente no se mueve con ella (queda en la fecha original).
 - Recomendación: el aviso de la página puede aparecer dentro del diálogo aunque venga de otra acción; el error de agendar persiste hasta el siguiente intento.
 - Cofre: filtro de vínculo con búsqueda por nombre si la lista de proyectos crece.
+- **Pulido 2 (acumulado, además de lo anterior):**
+  - Toggle manual de tema claro/oscuro: hoy sigue al sistema; guardar la elección y, sin elección, seguir al sistema.
+  - Sombreado al pasar el mouse por una fila del Cofre y de Hoy: el botón de la fila tiene `rounded-lg py-2 hover:bg-muted` sin padding horizontal, así que el sombreado empieza justo en la letra y termina justo en el chip de prioridad. Arreglo: `px-3 -mx-3`, o sombrear la fila completa con el círculo y el menú "⋯".
+  - Foco del teclado al quitar un chip del Cofre; Escape con el foco fuera del selector de madre.
