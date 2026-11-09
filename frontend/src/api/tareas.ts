@@ -1,4 +1,4 @@
-import type { Agenda, AgendarRequest, OrdenRecomendacion, SentidoOrden, Tarea, TareaRecomendada, TareaRequest } from '@/types/tarea'
+import type { Agenda, AgendarRequest, ModoSubtareas, OrdenRecomendacion, SentidoOrden, Tarea, TareaRecomendada, TareaRequest } from '@/types/tarea'
 import { del, get, patch, post, put } from './client'
 
 /** Agenda de un día (`fecha` = YYYY-MM-DD): tareas con hora y lista del día. */
@@ -40,9 +40,13 @@ export function posponerTarea(id: number, fecha: string): Promise<Tarea> {
   return patch<Tarea>(`/api/tareas/${id}/posponer`, { fecha })
 }
 
-/** 409 si la tarea tiene subtareas. */
-export function borrarTarea(id: number): Promise<void> {
-  return del(`/api/tareas/${id}`)
+/**
+ * Sin `modo` y con subtareas el backend responde 409. `'borrar'` elimina también todos los descendientes;
+ * `'conservar'` pasa las subtareas directas a la madre de la tarea (o las deja sin madre).
+ */
+export function borrarTarea(id: number, modo?: ModoSubtareas): Promise<void> {
+  const query = modo ? `?${new URLSearchParams({ subtareas: modo })}` : ''
+  return del(`/api/tareas/${id}${query}`)
 }
 
 export interface ParamsRecomendacion {

@@ -12,6 +12,7 @@ import {
   formatearMinutos,
   hoy,
   mensajeAgendada,
+  mensajeBorrada,
   fechaMinimaParaPosponer,
   mensajeGuardada,
   compararFechaHora,
@@ -242,5 +243,20 @@ describe('compararFechaHora', () => {
     expect(compararFechaHora('2026-11-01T10:00:00-03:00', '2026-11-02T10:00:00-03:00')).toBeLessThan(0)
     expect(compararFechaHora('2026-11-02T10:00:00-03:00', '2026-11-01T10:00:00-03:00')).toBeGreaterThan(0)
     expect(compararFechaHora('2026-11-01T10:00:00-03:00', '2026-11-01T13:00:00Z')).toBe(0)
+  })
+})
+
+describe('mensajeBorrada', () => {
+  it('sin modo o sin subtareas solo dice que se borró', () => {
+    expect(mensajeBorrada('Pan', 0)).toBe('«Pan» borrada')
+    expect(mensajeBorrada('Pan', 3)).toBe('«Pan» borrada')
+    expect(mensajeBorrada('Pan', 0, 'borrar')).toBe('«Pan» borrada')
+  })
+
+  it('conservar y borrar, en singular y plural', () => {
+    expect(mensajeBorrada('Pan', 3, 'conservar')).toBe('«Pan» borrada; sus 3 subtareas se conservaron')
+    expect(mensajeBorrada('Pan', 1, 'conservar')).toBe('«Pan» borrada; su subtarea se conservó')
+    expect(mensajeBorrada('Pan', 3, 'borrar')).toBe('«Pan» borrada con 3 subtareas')
+    expect(mensajeBorrada('Pan', 1, 'borrar')).toBe('«Pan» borrada con 1 subtarea')
   })
 })

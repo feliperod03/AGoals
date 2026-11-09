@@ -25,7 +25,7 @@ vi.mock('@/api/recordatorios', () => ({ getRecordatoriosDeTarea: vi.fn(), borrar
 import { getObjetivos } from '@/api/objetivos'
 import { getProyectos } from '@/api/proyectos'
 import { getRecordatoriosDeTarea } from '@/api/recordatorios'
-import { agendarTarea, crearTarea, getTareas, marcarHecha } from '@/api/tareas'
+import { agendarTarea, borrarTarea, crearTarea, getTareas, marcarHecha } from '@/api/tareas'
 
 const HOY = '2026-11-10'
 
@@ -284,6 +284,23 @@ describe('CofrePage: acciones', () => {
     expect(marcarHecha).toHaveBeenCalledWith(1)
     expect(await screen.findByRole('status')).toHaveTextContent('Marcada como hecha')
     await waitFor(() => expect(screen.queryByText('Idea')).not.toBeInTheDocument())
+  })
+
+  it('borrar una tarea con subtareas ofrece conservar o borrar y manda el modo elegido', async () => {
+    const madre = tarea({ id: 1, titulo: 'Madre' })
+    const hija = tarea({ id: 2, titulo: 'Hija', padreId: 1 })
+    vi.mocked(getTareas).mockResolvedValue([madre, hija])
+    vi.mocked(borrarTarea).mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    renderizar()
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Madre»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Borrar' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Borrar tarea' })
+    expect(await within(dialogo).findByText('«Madre» tiene 1 subtarea.')).toBeInTheDocument()
+    await user.click(within(dialogo).getByRole('radio', { name: /Borrar también las subtareas/ }))
+    await user.click(within(dialogo).getByRole('button', { name: 'Borrar la tarea y 1 subtarea' }))
+    await waitFor(() => expect(borrarTarea).toHaveBeenCalledWith(1, 'borrar'))
+    expect(await screen.findByRole('status')).toHaveTextContent('«Madre» borrada con 1 subtarea')
   })
 
   it('cada fila son tres botones hermanos con nombre accesible', async () => {

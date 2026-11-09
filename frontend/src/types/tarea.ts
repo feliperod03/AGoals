@@ -44,6 +44,9 @@ export interface TareaRequest {
   padreId?: number | null
 }
 
+/** Qué hacer con las subtareas al borrar una tarea (`?subtareas=` del DELETE). */
+export type ModoSubtareas = 'borrar' | 'conservar'
+
 export type OrdenRecomendacion = 'prioridad' | 'antiguedad'
 
 export type SentidoOrden = 'desc' | 'asc'

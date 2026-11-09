@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 
 import { getObjetivos } from '@/api/objetivos'
 import { getProyectos } from '@/api/proyectos'
-import { getTareas } from '@/api/tareas'
+import { useTodasLasTareas } from '@/features/agenda/useTodasLasTareas'
 import { guardarAnclados, leerAnclados } from './anclados'
 import { armarArbol } from './arbol'
 import {
@@ -28,7 +28,7 @@ export function useCofre(hoy: string) {
   const [sentido, setSentido] = useState<SentidoCofre>(SENTIDO_NATURAL.prioridad)
   const [anclados, setAnclados] = useState<PresetId[]>(leerAnclados)
 
-  const tareas = useQuery({ queryKey: ['tareas', 'todas'], queryFn: getTareas })
+  const tareas = useTodasLasTareas()
   const proyectos = useQuery({ queryKey: ['proyectos'], queryFn: getProyectos })
   const objetivos = useQuery({ queryKey: ['objetivos'], queryFn: getObjetivos })
 

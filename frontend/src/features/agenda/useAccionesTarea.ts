@@ -1,14 +1,21 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
+import { ApiError } from '@/api/client'
 import { borrarRecordatorio, getRecordatoriosDeTarea } from '@/api/recordatorios'
 import { actualizarTarea, borrarTarea, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
-import { mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
+import { mensajeBorrada, mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
-import type { Tarea } from '@/types/tarea'
+import type { ModoSubtareas, Tarea } from '@/types/tarea'
 import { requestConEstado, requestSinFecha } from './formularioTarea'
+import { CLAVE_TODAS_LAS_TAREAS } from './useTodasLasTareas'
 
 export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'sinFecha' | 'cancelar' | 'reactivar'
+
+export interface EleccionBorrado {
+  modo: ModoSubtareas
+  subtareas: number
+}
 
 export interface Acciones {
   /**
@@ -28,7 +35,17 @@ export interface Acciones {
   pendiente: boolean
   /** Último error legible de una acción (400/404/409); se limpia al lanzar otra. */
   error: string | null
-  confirmarBorrado: { tarea: Tarea; error: string | null; pendiente: boolean; confirmar: () => void; cancelar: () => void } | null
+  /**
+   * `confirmar()` sin argumento = borrado simple (sin `?subtareas=`). Con `eleccion`, manda el modo y usa
+   * `subtareas` (total de descendientes) solo para el aviso.
+   */
+  confirmarBorrado: {
+    tarea: Tarea
+    error: string | null
+    pendiente: boolean
+    confirmar: (eleccion?: EleccionBorrado) => void
+    cancelar: () => void
+  } | null
   preguntaRecordatorio: {
     recordatorio: Recordatorio
     error: string | null
@@ -119,14 +136,20 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   })
 
   const borrado = useMutation({
-    mutationFn: (tarea: Tarea) => borrarTarea(tarea.id),
-    onSuccess: async (_, tarea) => {
-      await Promise.all([invalidarTareas(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
+    mutationFn: ({ tarea, eleccion }: { tarea: Tarea; eleccion?: EleccionBorrado }) => borrarTarea(tarea.id, eleccion?.modo),
+    onSuccess: async (_, { tarea, eleccion }) => {
+      // Primero se cierra y se avisa: si se invalidara antes, el conteo del diálogo caería a 0 mientras sigue abierto.
       setABorrar(null)
-      alMensaje('Tarea borrada')
+      alMensaje(mensajeBorrada(tarea.titulo, eleccion?.subtareas ?? 0, eleccion?.modo))
       alTerminar(tarea.id)
+      // `['recordatorios']` siempre: la tarea borrada también pierde el suyo (y con 'borrar', los de sus descendientes).
+      await Promise.all([invalidarTareas(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
     },
-    onError: (e) => setErrorBorrado(e.message),
+    onError: (e) => {
+      setErrorBorrado(e.message)
+      // 409 por subtareas: la lista que tenía el diálogo estaba vieja; se refresca para que ofrezca las dos opciones.
+      if (e instanceof ApiError && e.status === 409) void queryClient.invalidateQueries({ queryKey: CLAVE_TODAS_LAS_TAREAS })
+    },
   })
 
   const borradoRecordatorio = useMutation({
@@ -164,9 +187,9 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
           tarea: aBorrar,
           error: errorBorrado,
           pendiente: borrado.isPending,
-          confirmar: () => {
+          confirmar: (eleccion) => {
             setErrorBorrado(null)
-            borrado.mutate(aBorrar)
+            borrado.mutate({ tarea: aBorrar, eleccion })
           },
           cancelar: () => setABorrar(null),
         }

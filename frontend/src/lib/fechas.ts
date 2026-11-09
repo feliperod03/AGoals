@@ -137,6 +137,14 @@ export function mensajeAgendada(titulo: string, subtareas: number): string {
   return `${base} (con ${subtareas} ${subtareas === 1 ? 'subtarea' : 'subtareas'})`
 }
 
+/** Confirmación al borrar una tarea; `subtareas` = total de descendientes y `modo` lo elegido en el diálogo. */
+export function mensajeBorrada(titulo: string, subtareas: number, modo?: 'borrar' | 'conservar'): string {
+  const base = `«${titulo}» borrada`
+  if (!modo || subtareas <= 0) return base
+  if (modo === 'borrar') return `${base} con ${subtareas} ${subtareas === 1 ? 'subtarea' : 'subtareas'}`
+  return subtareas === 1 ? `${base}; su subtarea se conservó` : `${base}; sus ${subtareas} subtareas se conservaron`
+}
+
 /** Compara dos instantes ISO (p. ej. `fechaCreacion`): negativo si `a` es anterior a `b`. */
 export function compararFechaHora(a: string, b: string): number {
   return parseISO(a).getTime() - parseISO(b).getTime()

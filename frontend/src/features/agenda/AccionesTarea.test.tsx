@@ -17,6 +17,7 @@ vi.mock('@/api/tareas', () => ({
   reabrirTarea: vi.fn(),
   posponerTarea: vi.fn(),
   borrarTarea: vi.fn(),
+  getTareas: vi.fn(),
 }))
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn(), getEvento: vi.fn() }))
 vi.mock('@/api/recordatorios', () => ({
@@ -26,7 +27,7 @@ vi.mock('@/api/recordatorios', () => ({
 }))
 import { getEventos } from '@/api/eventos'
 import { borrarRecordatorio, getRecordatorios, getRecordatoriosDeTarea } from '@/api/recordatorios'
-import { actualizarTarea, borrarTarea, getAgenda, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
+import { actualizarTarea, borrarTarea, getAgenda, getTareas, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
 
 function tarea(parcial: Partial<Tarea>): Tarea {
   return {
@@ -71,6 +72,13 @@ async function abrirMenu(user: Usuario, titulo: string) {
   return screen.findByRole('menu')
 }
 
+/** El botón "Borrar" arranca deshabilitado mientras el diálogo comprueba si hay subtareas. */
+async function botonBorrarHabilitado(dialogo: HTMLElement) {
+  const boton = within(dialogo).getByRole('button', { name: 'Borrar' })
+  await waitFor(() => expect(boton).toBeEnabled())
+  return boton
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-10T12:00:00-03:00'))
@@ -80,6 +88,7 @@ beforeEach(() => {
   vi.mocked(getRecordatoriosDeTarea).mockResolvedValue([])
   vi.mocked(borrarRecordatorio).mockResolvedValue(undefined)
   vi.mocked(borrarTarea).mockResolvedValue(undefined)
+  vi.mocked(getTareas).mockResolvedValue([])
   vi.mocked(marcarHecha).mockResolvedValue(tarea({ estado: 'HECHO' }))
   vi.mocked(reabrirTarea).mockResolvedValue(tarea({}))
   vi.mocked(posponerTarea).mockResolvedValue(tarea({ fecha: '2026-11-11' }))
@@ -243,9 +252,9 @@ describe('Acciones: borrar', () => {
 
     await abrirMenu(user, 'Comprar pan')
     await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
-    await user.click(within(await screen.findByRole('dialog', { name: 'Borrar tarea' })).getByRole('button', { name: 'Borrar' }))
-    await waitFor(() => expect(borrarTarea).toHaveBeenCalledWith(7))
-    expect(await screen.findByRole('status')).toHaveTextContent('Tarea borrada')
+    await user.click(await botonBorrarHabilitado(await screen.findByRole('dialog', { name: 'Borrar tarea' })))
+    await waitFor(() => expect(borrarTarea).toHaveBeenCalledWith(7, undefined))
+    expect(await screen.findByRole('status')).toHaveTextContent('«Comprar pan» borrada')
     expect(invalidar).toHaveBeenCalledWith({ queryKey: ['recordatorios'] })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
@@ -257,7 +266,7 @@ describe('Acciones: borrar', () => {
     await abrirMenu(user, 'Comprar pan')
     await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
     const dialogo = await screen.findByRole('dialog', { name: 'Borrar tarea' })
-    await user.click(within(dialogo).getByRole('button', { name: 'Borrar' }))
+    await user.click(await botonBorrarHabilitado(dialogo))
     expect(await within(dialogo).findByRole('alert')).toHaveTextContent('tiene subtareas')
     expect(dialogo).toBeInTheDocument()
     expect(within(dialogo).getByRole('button', { name: 'Borrar' })).toBeEnabled()
@@ -356,8 +365,8 @@ describe('Acciones: desde el diálogo de edición', () => {
     await user.click(within(await abrirEdicion(user)).getByRole('button', { name: 'Borrar' }))
     const confirmar = await screen.findByRole('dialog', { name: 'Borrar tarea' })
     expect(borrarTarea).not.toHaveBeenCalled()
-    await user.click(within(confirmar).getByRole('button', { name: 'Borrar' }))
-    await waitFor(() => expect(borrarTarea).toHaveBeenCalledWith(7))
+    await user.click(await botonBorrarHabilitado(confirmar))
+    await waitFor(() => expect(borrarTarea).toHaveBeenCalledWith(7, undefined))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 

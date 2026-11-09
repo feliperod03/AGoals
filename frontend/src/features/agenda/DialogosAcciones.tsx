@@ -1,47 +1,18 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { ErrorDialogo } from './ErrorDialogo'
+import { ConfirmarBorradoDialog } from './ConfirmarBorradoDialog'
 import { PosponerDialog } from './PosponerDialog'
 import type { Acciones } from './useAccionesTarea'
 
-function ErrorDialogo({ mensaje }: { mensaje: string | null }) {
-  if (!mensaje) return null
-  return (
-    <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
-      {mensaje}
-    </p>
-  )
-}
-
 /** Selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
 export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: string }) {
-  const { confirmarBorrado: borrado, preguntaRecordatorio: pregunta } = acciones
+  const { preguntaRecordatorio: pregunta } = acciones
   return (
     <>
       <PosponerDialog acciones={acciones} hoy={hoy} />
 
-      <Dialog open={borrado !== null} onOpenChange={(open) => !open && !borrado?.pendiente && borrado?.cancelar()}>
-        <DialogContent>
-          {borrado && (
-            <div className="flex flex-col gap-4">
-              <div>
-                <DialogTitle>Borrar tarea</DialogTitle>
-                <DialogDescription>
-                  ¿Borrar «{borrado.tarea.titulo}»? No se puede deshacer; si tiene un recordatorio, se borra con ella.
-                </DialogDescription>
-              </div>
-              <ErrorDialogo mensaje={borrado.error} />
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="secondary" onClick={borrado.cancelar} disabled={borrado.pendiente}>
-                  Cancelar
-                </Button>
-                <Button type="button" variant="destructive" onClick={borrado.confirmar} disabled={borrado.pendiente}>
-                  {borrado.pendiente ? 'Borrando…' : 'Borrar'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ConfirmarBorradoDialog acciones={acciones} />
 
       <Dialog open={pregunta !== null} onOpenChange={(open) => !open && !pregunta?.pendiente && pregunta?.conservar()}>
         <DialogContent>

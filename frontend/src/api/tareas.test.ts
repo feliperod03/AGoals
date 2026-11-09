@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { agendarTarea, getRecomendacion, getTareas, posponerTarea } from './tareas'
+import { agendarTarea, borrarTarea, getRecomendacion, getTareas, posponerTarea } from './tareas'
 
 const fetchMock = vi.fn()
 
@@ -54,5 +54,21 @@ describe('getTareas', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/tareas')
     expect(init.method).toBe('GET')
+  })
+})
+
+describe('borrarTarea', () => {
+  it('sin modo hace DELETE sin query', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await borrarTarea(7)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/tareas/7')
+    expect(init.method).toBe('DELETE')
+  })
+
+  it.each(['borrar', 'conservar'] as const)('con modo %s lo manda en ?subtareas=', async (modo) => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await borrarTarea(7, modo)
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(`/api/tareas/7?subtareas=${modo}`)
   })
 })
