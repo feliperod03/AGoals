@@ -10,14 +10,18 @@ const ESTADOS: Record<Estado, { icono: LucideIcon; texto: string }> = {
   CANCELADO: { icono: CircleX, texto: 'Cancelada' },
 }
 
-/** Indicador de estado, solo informativo (no es un control): icono más el estado para lectores de pantalla. */
-export function EstadoIcono({ estado }: { estado: Estado }) {
+/**
+ * Indicador de estado, solo informativo (no es un control): icono más el estado para lectores de pantalla.
+ * `decorativo` omite ese texto oculto cuando el estado ya se escribe al lado (p. ej. proyectos y objetivos,
+ * donde se dice «Hecho» y no «Hecha»).
+ */
+export function EstadoIcono({ estado, decorativo = false }: { estado: Estado; decorativo?: boolean }) {
   const { icono: Icono, texto } = ESTADOS[estado]
   const cerrada = estado === 'HECHO' || estado === 'CANCELADO'
   return (
     <span className="inline-flex shrink-0">
       <Icono className={cerrada ? 'size-5 text-mut' : 'size-5 text-gold'} aria-hidden="true" />
-      <span className="sr-only">{texto}</span>
+      {!decorativo && <span className="sr-only">{texto}</span>}
     </span>
   )
 }

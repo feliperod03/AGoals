@@ -1,11 +1,15 @@
-import type { Tarea } from '@/types/tarea'
+/** Lo mínimo que necesita el recorrido de jerarquías: sirve para tareas, proyectos y objetivos. */
+interface ConPadre {
+  id: number
+  padreId: number | null
+}
 
 /**
- * Descendientes de una tarea en todos los niveles (sin incluirla) y cuántos son directos.
+ * Descendientes de un elemento en todos los niveles (sin incluirlo) y cuántos son directos.
  * Recorre con un conjunto de visitados que incluye a la raíz, así un ciclo en los datos no la cuelga.
  */
-export function descendientesDe(tareaId: number, todas: Tarea[]): { todos: Tarea[]; directos: number } {
-  const hijasPorMadre = new Map<number, Tarea[]>()
+export function descendientesDe<T extends ConPadre>(tareaId: number, todas: T[]): { todos: T[]; directos: number } {
+  const hijasPorMadre = new Map<number, T[]>()
   for (const t of todas) {
     if (t.padreId === null) continue
     hijasPorMadre.set(t.padreId, [...(hijasPorMadre.get(t.padreId) ?? []), t])
@@ -13,7 +17,7 @@ export function descendientesDe(tareaId: number, todas: Tarea[]): { todos: Tarea
 
   const directas = (hijasPorMadre.get(tareaId) ?? []).filter((t) => t.id !== tareaId)
   const visitados = new Set<number>([tareaId])
-  const todos: Tarea[] = []
+  const todos: T[] = []
   const pendientes = [...directas]
   while (pendientes.length > 0) {
     const actual = pendientes.shift()!
@@ -26,13 +30,13 @@ export function descendientesDe(tareaId: number, todas: Tarea[]): { todos: Tarea
 }
 
 /**
- * Ancestros de una tarea (madre, abuela, …), sin incluirla. Sube por `padreId` con un conjunto de
- * visitados que incluye a la tarea, así un ciclo en los datos no cuelga; una madre inexistente corta la subida.
+ * Ancestros de un elemento (madre, abuela, …), sin incluirlo. Sube por `padreId` con un conjunto de
+ * visitados que incluye al elemento, así un ciclo en los datos no cuelga; una madre inexistente corta la subida.
  */
-export function ancestrosDe(tareaId: number, todas: Tarea[]): Tarea[] {
+export function ancestrosDe<T extends ConPadre>(tareaId: number, todas: T[]): T[] {
   const porId = new Map(todas.map((t) => [t.id, t]))
   const visitados = new Set<number>([tareaId])
-  const ancestros: Tarea[] = []
+  const ancestros: T[] = []
   let actual = porId.get(tareaId)
   while (actual && actual.padreId !== null) {
     const madre = porId.get(actual.padreId)

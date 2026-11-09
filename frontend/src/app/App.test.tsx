@@ -8,6 +8,18 @@ import { App } from './App'
 
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn().mockResolvedValue([]), getEvento: vi.fn() }))
 vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/proyectos', () => ({
+  getProyectos: vi.fn().mockResolvedValue([]),
+  crearProyecto: vi.fn(),
+  actualizarProyecto: vi.fn(),
+  borrarProyecto: vi.fn(),
+}))
+vi.mock('@/api/objetivos', () => ({
+  getObjetivos: vi.fn().mockResolvedValue([]),
+  crearObjetivo: vi.fn(),
+  actualizarObjetivo: vi.fn(),
+  borrarObjetivo: vi.fn(),
+}))
 vi.mock('@/api/tareas', () => ({
   getTarea: vi.fn(),
   getTareas: vi.fn().mockResolvedValue([]),
@@ -66,9 +78,21 @@ describe('App', () => {
 
   it('navega a una sección todavía no construida', async () => {
     renderizar('/')
-    await userEvent.click(screen.getByRole('link', { name: 'Proyectos' }))
-    expect(screen.getByRole('heading', { name: 'Proyectos' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Calendario' }))
+    expect(screen.getByRole('heading', { name: 'Calendario' })).toBeInTheDocument()
     expect(screen.getByText('Próximamente.')).toBeInTheDocument()
+  })
+
+  it('las rutas /proyectos y /objetivos muestran sus páginas', async () => {
+    renderizar('/proyectos')
+    expect(await screen.findByRole('heading', { name: 'Proyectos', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByText('Aún no tienes proyectos.')).toBeInTheDocument()
+  })
+
+  it('navega a Objetivos desde la barra lateral', async () => {
+    renderizar('/')
+    await userEvent.click(screen.getByRole('link', { name: 'Objetivos' }))
+    expect(await screen.findByText('Aún no tienes objetivos.')).toBeInTheDocument()
   })
 
   it('marca la sección activa', () => {
