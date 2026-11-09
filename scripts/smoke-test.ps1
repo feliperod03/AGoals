@@ -4,7 +4,7 @@
 # y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
 # reabrir y 409 al borrar un proyecto u objetivo con ideas), y eventos (CRUD, PUT completo, listado por
 # solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones), y recordatorios (de tarea,
-# de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada).
+# de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada), y borrar una tarea con subtareas eligiendo borrar o conservar.
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
@@ -419,6 +419,80 @@ try {
     Verificar "borrar la ultima subtarea -> 204" ($k5.Status -eq 204) "status $($k5.Status)"
     $k6 = Llamar "DELETE" ($Base + "/" + $ja.Json.id)
     Verificar "borrar la tarea ya sin subtareas -> 204" ($k6.Status -eq 204) "status $($k6.Status)"
+
+    # --- Borrar una tarea con subtareas eligiendo que pasa con ellas (?subtareas=borrar|conservar) ---
+    # Los cuerpos se envian como bytes UTF-8 (si no, PowerShell 5.1 manda las tildes en otra codificacion).
+    # El archivo se mantiene en ASCII: la tilde se arma con [char]. La respuesta de error tambien llega mal decodificada
+    # en PS 5.1, asi que el mensaje se comprueba solo en su parte ASCII.
+    $titSeccion = "smoke-bs Estudiar secci" + [char]0x00F3 + "n"
+    function NuevaBs($titulo, $padre = $null) {
+        $json = '{"titulo":"' + $titulo + '"'
+        if ($padre) { $json += ',"padreId":' + $padre }
+        $json += '}'
+        $r = Llamar "POST" $Base ([System.Text.Encoding]::UTF8.GetBytes($json))
+        if (-not $r.Json) { throw "No se pudo crear la tarea '$titulo' ($($r.Status) $($r.Raw))" }
+        $script:ids += $r.Json.id
+        return $r.Json.id
+    }
+
+    # Con abuelo: X -> Y -> (Z, W). Se borra Y y sus hijas suben a X.
+    $bsX = NuevaBs "smoke-bs X abuelo"
+    $bsY = NuevaBs $titSeccion $bsX
+    $bsZ = NuevaBs "smoke-bs Z hija" $bsY
+    $bsW = NuevaBs "smoke-bs W hija" $bsY
+    $bsV = NuevaBs "smoke-bs V nieta" $bsZ
+    $bs1 = Llamar "DELETE" ($Base + "/" + $bsY)
+    Verificar "borrar tarea con subtareas sin parametro -> 409 con el titulo" (($bs1.Status -eq 409) -and ($bs1.Raw -match "Estudiar secci") -and ($bs1.Raw -match "tiene subtareas: indica")) "status $($bs1.Status) $($bs1.Raw)"
+    $bs2 = Llamar "DELETE" ($Base + "/" + $bsY + "?subtareas=")
+    Verificar "?subtareas= vacio se trata como ausente -> 409" ($bs2.Status -eq 409) "status $($bs2.Status)"
+    $bs3 = Llamar "DELETE" ($Base + "/" + $bsY + "?subtareas=raro")
+    Verificar "?subtareas=raro -> 400 con los valores validos" (($bs3.Status -eq 400) -and ($bs3.Raw -match "borrar o conservar")) "status $($bs3.Status) $($bs3.Raw)"
+    $bs4 = Llamar "GET" ($Base + "/" + $bsY)
+    Verificar "tras el 409 y el 400 la tarea y su rama siguen existiendo" (($bs4.Status -eq 200) -and ((Llamar "GET" ($Base + "/" + $bsZ)).Status -eq 200)) "status $($bs4.Status)"
+    $bs5 = Llamar "DELETE" ($Base + "/" + $bsY + "?subtareas=Conservar")
+    Verificar "borrar Y con ?subtareas=Conservar -> 204" ($bs5.Status -eq 204) "status $($bs5.Status) $($bs5.Raw)"
+    Verificar "Y ya no existe" ((Llamar "GET" ($Base + "/" + $bsY)).Status -eq 404)
+    $bsZg = Llamar "GET" ($Base + "/" + $bsZ)
+    $bsWg = Llamar "GET" ($Base + "/" + $bsW)
+    $bsVg = Llamar "GET" ($Base + "/" + $bsV)
+    Verificar "conservar con abuelo: Z (hija) sobrevive y pasa a colgar de X" (($bsZg.Status -eq 200) -and ($bsZg.Json.padreId -eq $bsX)) "status $($bsZg.Status) $($bsZg.Raw)"
+    Verificar "conservar con abuelo: W (hija) sobrevive y pasa a colgar de X" (($bsWg.Status -eq 200) -and ($bsWg.Json.padreId -eq $bsX)) "status $($bsWg.Status) $($bsWg.Raw)"
+    Verificar "conservar: la nieta V sigue bajo Z, sin tocarse" (($bsVg.Status -eq 200) -and ($bsVg.Json.padreId -eq $bsZ) -and ($bsVg.Json.estado -eq "PENDIENTE")) "status $($bsVg.Status) $($bsVg.Raw)"
+
+    # Sin padre: P -> Q -> R. Se borra P conservando: Q queda raiz, R sigue bajo Q.
+    $bsP = NuevaBs "smoke-bs P raiz"
+    $bsQ = NuevaBs "smoke-bs Q hija" $bsP
+    $bsR = NuevaBs "smoke-bs R nieta" $bsQ
+    $bs6 = Llamar "DELETE" ($Base + "/" + $bsP + "?subtareas=CONSERVAR")
+    Verificar "conservar sin padre -> 204" ($bs6.Status -eq 204) "status $($bs6.Status) $($bs6.Raw)"
+    $bsQg = Llamar "GET" ($Base + "/" + $bsQ)
+    $bsRg = Llamar "GET" ($Base + "/" + $bsR)
+    Verificar "conservar sin padre: Q sobrevive y queda sin madre" (($bsQg.Status -eq 200) -and ($null -eq $bsQg.Json.padreId)) "status $($bsQg.Status) $($bsQg.Raw)"
+    Verificar "conservar sin padre: R sigue bajo Q" (($bsRg.Status -eq 200) -and ($bsRg.Json.padreId -eq $bsQ)) "status $($bsRg.Status) $($bsRg.Raw)"
+
+    # Borrar la rama completa, con un recordatorio en un descendiente: A -> (B -> C, D), recordatorio en C.
+    $bsA = NuevaBs "smoke-bs A rama"
+    $bsB = NuevaBs "smoke-bs B hija" $bsA
+    $bsC = NuevaBs "smoke-bs C nieta" $bsB
+    $bsD = NuevaBs "smoke-bs D hija" $bsA
+    $bsRec = Llamar "POST" $BaseRecordatorios ('{"tareaId":' + $bsC + ',"fechaHora":"2098-05-01T09:00:00-03:00"}')
+    if ($bsRec.Json) { $recordatorioIds += $bsRec.Json.id }
+    Verificar "crear recordatorio en la nieta C" ($bsRec.Status -eq 201) "status $($bsRec.Status) $($bsRec.Raw)"
+    $bs7 = Llamar "DELETE" ($Base + "/" + $bsA + "?subtareas=borrar")
+    Verificar "borrar A con ?subtareas=borrar -> 204" ($bs7.Status -eq 204) "status $($bs7.Status) $($bs7.Raw)"
+    $bsGone = @($bsA, $bsB, $bsC, $bsD) | ForEach-Object { (Llamar "GET" ($Base + "/" + $_)).Status }
+    Verificar "borrar: A, B, C y D ya no existen (404)" ((($bsGone | Where-Object { $_ -ne 404 }).Count) -eq 0) ($bsGone -join ",")
+    $bsRl = Llamar "GET" ($BaseRecordatorios + "?tareaId=" + $bsC)
+    Verificar "borrar: el recordatorio de la nieta desaparece (GET ?tareaId= vacio)" (($bsRl.Status -eq 200) -and (@($bsRl.Json).Count -eq 0)) "status $($bsRl.Status) $($bsRl.Raw)"
+    $bsXg = Llamar "GET" ($Base + "/" + $bsX)
+    Verificar "borrar no toca tareas ajenas a la rama (X sigue)" ($bsXg.Status -eq 200) "status $($bsXg.Status)"
+
+    # Una tarea sin subtareas se borra igual con o sin parametro; una inexistente es 404 con parametro.
+    $bsE = NuevaBs "smoke-bs E hoja"
+    $bs8 = Llamar "DELETE" ($Base + "/" + $bsE + "?subtareas=borrar")
+    Verificar "tarea sin subtareas con ?subtareas=borrar -> 204" ($bs8.Status -eq 204) "status $($bs8.Status)"
+    $bs9 = Llamar "DELETE" ($Base + "/999999?subtareas=conservar")
+    Verificar "tarea inexistente con ?subtareas=conservar -> 404" ($bs9.Status -eq 404) "status $($bs9.Status)"
 
     # --- Ideas: libres o ligadas a un proyecto/objetivo, concluir/reabrir y 409 al borrar ---
     $ip = Llamar "POST" $BaseProyectos '{"nombre":"smoke-id-P"}'

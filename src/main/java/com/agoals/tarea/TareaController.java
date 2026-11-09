@@ -100,7 +100,8 @@ public class TareaController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void eliminar(@PathVariable Long id) {
-		service.eliminar(id);
+	public void eliminar(@PathVariable Long id, @RequestParam(required = false) String subtareas) {
+		// subtareas llega como texto y se valida aquí (borrar|conservar): un valor desconocido responde 400.
+		service.eliminar(id, ModoSubtareas.desde(subtareas));
 	}
 }

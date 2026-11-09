@@ -10,6 +10,8 @@ import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -25,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -124,25 +127,49 @@ class TareaControllerTest {
 	}
 
 	@Test
-	void deleteDevuelve204() throws Exception {
+	void deleteSinParametroLlamaConNullYDevuelve204() throws Exception {
 		mvc.perform(delete("/api/tareas/1")).andExpect(status().isNoContent());
 
-		verify(service).eliminar(1L);
+		verify(service).eliminar(1L, null);
 	}
 
 	@Test
-	void deleteConSubtareasDevuelve409ConElMotivo() throws Exception {
-		doThrow(new TareaConDependenciasException("La tarea 1 tiene subtareas: muévelas o bórralas primero"))
-				.when(service).eliminar(1L);
+	void deleteConParametroVacioSeTrataComoAusente() throws Exception {
+		mvc.perform(delete("/api/tareas/1?subtareas=")).andExpect(status().isNoContent());
+
+		verify(service).eliminar(1L, null);
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "borrar,BORRAR", "BORRAR,BORRAR", "conservar,CONSERVAR", "Conservar,CONSERVAR", "CONSERVAR,CONSERVAR" })
+	void deleteConSubtareasValidoLlegaAlServiceConElEnum(String texto, ModoSubtareas esperado) throws Exception {
+		mvc.perform(delete("/api/tareas/1?subtareas=" + texto)).andExpect(status().isNoContent());
+
+		verify(service).eliminar(1L, esperado);
+	}
+
+	@Test
+	void deleteConSubtareasInvalidoDevuelve400YNoLlamaAlService() throws Exception {
+		mvc.perform(delete("/api/tareas/1?subtareas=raro"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("borrar o conservar")));
+
+		verifyNoInteractions(service);
+	}
+
+	@Test
+	void deleteConSubtareasSinParametroDevuelve409ConElMotivo() throws Exception {
+		doThrow(new TareaConDependenciasException("«Estudiar» tiene subtareas: indica si quieres borrarlas o conservarlas"))
+				.when(service).eliminar(1L, null);
 
 		mvc.perform(delete("/api/tareas/1"))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("subtareas")));
+				.andExpect(jsonPath("$.mensaje").value(org.hamcrest.Matchers.containsString("«Estudiar» tiene subtareas")));
 	}
 
 	@Test
 	void deleteInexistenteDevuelve404() throws Exception {
-		doThrow(new TareaNoEncontradaException(7L)).when(service).eliminar(7L);
+		doThrow(new TareaNoEncontradaException(7L)).when(service).eliminar(7L, null);
 
 		mvc.perform(delete("/api/tareas/7")).andExpect(status().isNotFound());
 	}

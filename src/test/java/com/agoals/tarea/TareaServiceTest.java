@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,7 +28,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -170,52 +174,125 @@ class TareaServiceTest {
 				.isInstanceOf(TareaInvalidaException.class);
 	}
 
-	@Test
-	void eliminarExistenteLaBorra() {
-		Tarea existente = tarea("a");
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(existente));
+	// ---- Eliminar ----
 
-		service.eliminar(1L);
+	private static Tarea conPadre(long id, String titulo, Long padreId) {
+		Tarea t = tarea(titulo);
+		ReflectionTestUtils.setField(t, "id", id);
+		t.setPadreId(padreId);
+		return t;
+	}
 
-		verify(repository).delete(existente);
+	private void hijasDe(Tarea padre, Tarea... hijas) {
+		when(repository.findByPadreIdAndUsuarioId(padre.getId(), TareaService.USUARIO_ID)).thenReturn(List.of(hijas));
 	}
 
 	@Test
-	void eliminarConSubtareasDa409YNoBorra() {
-		Tarea madre = agendada(1, "madre", DIA, null, null, Estado.PENDIENTE);
-		existe(madre);
-		when(repository.existsByPadreIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(true);
-
-		assertThatThrownBy(() -> service.eliminar(1L))
-				.isInstanceOf(TareaConDependenciasException.class)
-				.hasMessage("La tarea 1 tiene subtareas: muévelas o bórralas primero");
-		verify(repository, never()).delete(any());
-	}
-
-	@Test
-	void eliminarUnaTareaSinSubtareasLaBorra() {
-		Tarea hoja = agendada(1, "hoja", DIA, null, null, Estado.PENDIENTE);
+	void eliminarSinSubtareasLaBorraConOSinModo() {
+		Tarea hoja = conPadre(1, "hoja", null);
 		existe(hoja);
-		when(repository.existsByPadreIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(false);
+		hijasDe(hoja);
 
-		service.eliminar(1L);
+		service.eliminar(1L, null);
+		service.eliminar(1L, ModoSubtareas.BORRAR);
+		service.eliminar(1L, ModoSubtareas.CONSERVAR);
 
-		verify(repository).delete(hoja);
+		verify(repository, times(3)).delete(hoja);
 	}
 
 	@Test
-	void eliminarInexistenteNoConsultaSubtareas() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+	void eliminarConSubtareasSinModoDa409ConElTituloYNoBorra() {
+		Tarea madre = conPadre(1, "Estudiar", null);
+		existe(madre);
+		hijasDe(madre, conPadre(2, "hija", 1L));
 
-		assertThatThrownBy(() -> service.eliminar(1L)).isInstanceOf(TareaNoEncontradaException.class);
-		verify(repository, never()).existsByPadreIdAndUsuarioId(any(), any());
+		assertThatThrownBy(() -> service.eliminar(1L, null))
+				.isInstanceOf(TareaConDependenciasException.class)
+				.hasMessage("«Estudiar» tiene subtareas: indica si quieres borrarlas o conservarlas");
+		verify(repository, never()).delete(any());
+		verify(repository, never()).deleteAll(anyIterable());
 	}
 
 	@Test
-	void eliminarInexistenteFalla() {
+	void eliminarBorrarVariosNivelesBorraTodoDeLasHojasALaRaiz() {
+		Tarea raiz = conPadre(1, "raiz", null);
+		Tarea h1 = conPadre(2, "h1", 1L);
+		Tarea h2 = conPadre(3, "h2", 1L);
+		Tarea n1 = conPadre(4, "n1", 2L);
+		Tarea b1 = conPadre(5, "b1", 4L);
+		existe(raiz);
+		hijasDe(raiz, h1, h2);
+		hijasDe(h1, n1);
+		hijasDe(h2);
+		hijasDe(n1, b1);
+		hijasDe(b1);
+
+		service.eliminar(1L, ModoSubtareas.BORRAR);
+
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).deleteAll(List.of(b1));
+		orden.verify(repository).deleteAll(List.of(n1));
+		orden.verify(repository).deleteAll(List.of(h1, h2));
+		orden.verify(repository).delete(raiz);
+		orden.verify(repository).flush();
+	}
+
+	@Test
+	void eliminarBorrarNoSeCuelgaConUnCiclo() {
+		Tarea raiz = conPadre(1, "raiz", null);
+		Tarea hija = conPadre(2, "hija", 1L);
+		existe(raiz);
+		hijasDe(raiz, hija);
+		hijasDe(hija, raiz); // ciclo imposible por la API: solo red de seguridad
+
+		service.eliminar(1L, ModoSubtareas.BORRAR);
+
+		verify(repository).deleteAll(List.of(hija));
+		verify(repository).delete(raiz);
+	}
+
+	@Test
+	void eliminarConservarConPadreSubeLasHijasAlAbueloYLuegoBorra() {
+		Tarea madre = conPadre(2, "madre", 1L);
+		Tarea h1 = conPadre(3, "h1", 2L);
+		Tarea h2 = conPadre(4, "h2", 2L);
+		h1.setEstado(Estado.EN_PROGRESO);
+		h1.setFecha(DIA);
+		existe(madre);
+		hijasDe(madre, h1, h2);
+
+		service.eliminar(2L, ModoSubtareas.CONSERVAR);
+
+		assertThat(h1.getPadreId()).isEqualTo(1L);
+		assertThat(h2.getPadreId()).isEqualTo(1L);
+		assertThat(h1.getEstado()).isEqualTo(Estado.EN_PROGRESO);
+		assertThat(h1.getFecha()).isEqualTo(DIA);
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).saveAllAndFlush(List.of(h1, h2));
+		orden.verify(repository).delete(madre);
+	}
+
+	@Test
+	void eliminarConservarSinPadreDejaLasHijasSinMadre() {
+		Tarea madre = conPadre(1, "madre", null);
+		Tarea hija = conPadre(2, "hija", 1L);
+		existe(madre);
+		hijasDe(madre, hija);
+
+		service.eliminar(1L, ModoSubtareas.CONSERVAR);
+
+		assertThat(hija.getPadreId()).isNull();
+		verify(repository).delete(madre);
+	}
+
+	@Test
+	void eliminarInexistenteDa404ConCualquierModo() {
 		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> service.eliminar(1L)).isInstanceOf(TareaNoEncontradaException.class);
+		for (ModoSubtareas modo : new ModoSubtareas[] { null, ModoSubtareas.BORRAR, ModoSubtareas.CONSERVAR }) {
+			assertThatThrownBy(() -> service.eliminar(1L, modo)).isInstanceOf(TareaNoEncontradaException.class);
+		}
+		verify(repository, never()).findByPadreIdAndUsuarioId(any(), any());
 		verify(repository, never()).delete(any());
 	}
 

@@ -16,6 +16,8 @@ public interface TareaRepository extends JpaRepository<Tarea, Long> {
 
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
+	List<Tarea> findByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
+
 	List<Tarea> findByUsuarioIdOrderByFechaAscIdAsc(Long usuarioId);
 
 	List<Tarea> findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(Long usuarioId, LocalDate fecha);

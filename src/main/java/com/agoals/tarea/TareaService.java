@@ -70,15 +70,57 @@ public class TareaService {
 		return aRespuesta(repository.save(tarea));
 	}
 
-	// Desde la API nunca se borra en cascada, aunque la base tenga ON DELETE CASCADE en padre_id:
-	// hay que mover o borrar las subtareas antes (igual que proyectos y objetivos).
-	public void eliminar(Long id) {
+	/**
+	 * Borra la tarea. Si tiene subtareas hay que elegir ({@code modo}); sin elección es 409, porque la base tiene
+	 * ON DELETE CASCADE en padre_id y no queremos que se lleve el subárbol por accidente.
+	 * BORRAR: elimina todos los descendientes, de las hojas a la raíz. CONSERVAR: las subtareas directas pasan al
+	 * padre de la tarea (o quedan sin madre) y sus propias subtareas las acompañan. Todo en una transacción.
+	 */
+	public void eliminar(Long id, ModoSubtareas modo) {
 		Tarea tarea = buscar(id);
-		if (repository.existsByPadreIdAndUsuarioId(id, USUARIO_ID)) {
-			throw new TareaConDependenciasException(
-					"La tarea " + id + " tiene subtareas: muévelas o bórralas primero");
+		List<Tarea> hijas = repository.findByPadreIdAndUsuarioId(id, USUARIO_ID);
+		if (hijas.isEmpty()) {
+			repository.delete(tarea);
+			return;
 		}
-		repository.delete(tarea);
+		if (modo == null) {
+			throw new TareaConDependenciasException(
+					"«" + tarea.getTitulo() + "» tiene subtareas: indica si quieres borrarlas o conservarlas");
+		}
+		if (modo == ModoSubtareas.CONSERVAR) {
+			// Primero reasignar y hacer flush: si se borrara la tarea antes, la cascada de la base se llevaría a las hijas.
+			hijas.forEach(h -> h.setPadreId(tarea.getPadreId()));
+			repository.saveAllAndFlush(hijas);
+			repository.delete(tarea);
+		} else {
+			borrarConDescendientes(tarea, hijas);
+		}
+	}
+
+	// Recorrido por niveles; "visitados" es solo red de seguridad ante ciclos (la API los impide).
+	// Se borra del nivel más profundo a la raíz, así ninguna fila ya borrada por la cascada se vuelve a borrar.
+	private void borrarConDescendientes(Tarea raiz, List<Tarea> hijasDeRaiz) {
+		Set<Long> visitados = new HashSet<>();
+		visitados.add(raiz.getId());
+		List<List<Tarea>> niveles = new ArrayList<>();
+		List<Tarea> actual = hijasDeRaiz.stream().filter(h -> visitados.add(h.getId())).toList();
+		while (!actual.isEmpty()) {
+			niveles.add(actual);
+			List<Tarea> siguiente = new ArrayList<>();
+			for (Tarea t : actual) {
+				for (Tarea h : repository.findByPadreIdAndUsuarioId(t.getId(), USUARIO_ID)) {
+					if (visitados.add(h.getId())) {
+						siguiente.add(h);
+					}
+				}
+			}
+			actual = siguiente;
+		}
+		for (int i = niveles.size() - 1; i >= 0; i--) {
+			repository.deleteAll(niveles.get(i));
+		}
+		repository.delete(raiz);
+		repository.flush();
 	}
 
 	// Sueltas: ALTA primero, sin prioridad al final (el orden del enum es BAJA, MEDIA, ALTA), luego por id.
