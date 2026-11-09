@@ -10,6 +10,7 @@ vi.mock('@/api/eventos', () => ({ getEventos: vi.fn().mockResolvedValue([]), get
 vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/api/tareas', () => ({
   getTarea: vi.fn(),
+  getTareas: vi.fn().mockResolvedValue([]),
   getAgenda: vi.fn().mockResolvedValue({ fecha: '2026-11-10', conHora: [], sinHora: [] }),
 }))
 
@@ -50,10 +51,10 @@ afterEach(() => {
 })
 
 describe('App', () => {
-  it('la barra lateral tiene las cinco secciones', () => {
+  it('la barra lateral tiene las seis secciones', () => {
     renderizar()
     const nav = screen.getByRole('navigation', { name: 'Secciones' })
-    for (const nombre of ['Hoy', 'Calendario', 'Proyectos', 'Objetivos', 'Ideas']) {
+    for (const nombre of ['Hoy', 'Cofre', 'Calendario', 'Proyectos', 'Objetivos', 'Ideas']) {
       expect(nav).toHaveTextContent(nombre)
     }
   })

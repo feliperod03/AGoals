@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { agendarTarea, getRecomendacion, posponerTarea } from './tareas'
+import { agendarTarea, getRecomendacion, getTareas, posponerTarea } from './tareas'
 
 const fetchMock = vi.fn()
 
@@ -45,5 +45,14 @@ describe('posponerTarea', () => {
     expect(url).toBe('/api/tareas/7/posponer')
     expect(init.method).toBe('PATCH')
     expect(JSON.parse(init.body as string)).toEqual({ fecha: '2026-11-11' })
+  })
+})
+
+describe('getTareas', () => {
+  it('hace GET a /api/tareas sin parámetros', async () => {
+    await getTareas()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/tareas')
+    expect(init.method).toBe('GET')
   })
 })

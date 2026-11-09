@@ -132,6 +132,11 @@ export function mensajeAgendada(titulo: string, subtareas: number): string {
   return `${base} (con ${subtareas} ${subtareas === 1 ? 'subtarea' : 'subtareas'})`
 }
 
+/** Compara dos instantes ISO (p. ej. `fechaCreacion`): negativo si `a` es anterior a `b`. */
+export function compararFechaHora(a: string, b: string): number {
+  return parseISO(a).getTime() - parseISO(b).getTime()
+}
+
 /** Suma (o resta) días a una fecha `YYYY-MM-DD` en calendario local. */
 export function sumarDias(fecha: string, dias: number): string {
   return format(addDays(parseISO(fecha), dias), FORMATO_FECHA)
@@ -152,5 +157,5 @@ export function puedePosponerAManana(fechaTarea: string | null, hoy: string): bo
 
 /** Confirmación al dejar una tarea sin fecha. */
 export function mensajeSinFecha(): string {
-  return 'Sin fecha: la verás en Recomendación'
+  return 'Sin fecha: la verás en el Cofre y en Recomendación'
 }

@@ -74,6 +74,11 @@ export function puedePosponer(tarea: Tarea): boolean {
   return tarea.fecha !== null && tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO'
 }
 
+/** "Agendar para hoy" (Cofre): tareas abiertas cuya fecha no es hoy (sin fecha, atrasadas o futuras). */
+export function puedeAgendarParaHoy(tarea: Tarea, hoy: string): boolean {
+  return tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO' && tarea.fecha !== hoy
+}
+
 function vacioANull(valor: string | undefined): string | null {
   const limpio = valor?.trim()
   return limpio ? limpio : null

@@ -1,10 +1,11 @@
-import { CalendarDays, FolderKanban, Lightbulb, Sun, Target, type LucideIcon } from 'lucide-react'
+import { Archive, CalendarDays, FolderKanban, Lightbulb, Sun, Target, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
 
 const SECCIONES: { ruta: string; texto: string; icono: LucideIcon }[] = [
   { ruta: '/', texto: 'Hoy', icono: Sun },
+  { ruta: '/cofre', texto: 'Cofre', icono: Archive },
   { ruta: '/calendario', texto: 'Calendario', icono: CalendarDays },
   { ruta: '/proyectos', texto: 'Proyectos', icono: FolderKanban },
   { ruta: '/objetivos', texto: 'Objetivos', icono: Target },

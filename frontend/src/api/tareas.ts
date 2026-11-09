@@ -6,6 +6,11 @@ export function getAgenda(fecha: string): Promise<Agenda> {
   return get<Agenda>('/api/tareas/agenda', { fecha })
 }
 
+/** Todas las tareas, sin filtros (el Cofre filtra y ordena en el cliente). */
+export function getTareas(): Promise<Tarea[]> {
+  return get<Tarea[]>('/api/tareas')
+}
+
 export function getTarea(id: number): Promise<Tarea> {
   return get<Tarea>(`/api/tareas/${id}`)
 }

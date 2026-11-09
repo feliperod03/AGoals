@@ -8,8 +8,8 @@ import type { Acciones } from './useAccionesTarea'
 
 const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 
-/** Menú "Acciones de «título»": posponer (solo abiertas con fecha), cancelar o reactivar, y borrar. */
-export function MenuAcciones({ tarea, acciones }: { tarea: Tarea; acciones: Acciones }) {
+/** Menú "Acciones de «título»": agendar para hoy (solo si la página pasa `alAgendar`), posponer (solo abiertas con fecha), cancelar o reactivar, y borrar. */
+export function MenuAcciones({ tarea, acciones, alAgendar }: { tarea: Tarea; acciones: Acciones; alAgendar?: (tarea: Tarea) => void }) {
   const cancelada = tarea.estado === 'CANCELADO'
   return (
     <DropdownMenu>
@@ -21,6 +21,7 @@ export function MenuAcciones({ tarea, acciones }: { tarea: Tarea; acciones: Acci
         <Ellipsis className="size-5" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {alAgendar && <DropdownMenuItem onSelect={() => alAgendar(tarea)}>Agendar para hoy</DropdownMenuItem>}
         {puedePosponer(tarea) && <DropdownMenuItem onSelect={() => acciones.pedirPosponer(tarea)}>Posponer</DropdownMenuItem>}
         {cancelada ? (
           <DropdownMenuItem onSelect={() => acciones.ejecutar('reactivar', tarea)}>Reactivar</DropdownMenuItem>

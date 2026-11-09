@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, puedeAgendarParaHoy, puedePosponer, requestConEstado, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -134,5 +134,19 @@ describe('puedePosponer', () => {
     expect(puedePosponer({ ...TAREA, estado: 'HECHO' })).toBe(false)
     expect(puedePosponer({ ...TAREA, estado: 'CANCELADO' })).toBe(false)
     expect(puedePosponer({ ...TAREA, estado: 'PENDIENTE', fecha: null })).toBe(false)
+  })
+})
+
+describe('puedeAgendarParaHoy', () => {
+  const hoy = '2026-11-10'
+  it('vale para abiertas sin fecha, atrasadas o futuras', () => {
+    expect(puedeAgendarParaHoy({ ...TAREA, estado: 'PENDIENTE', fecha: null }, hoy)).toBe(true)
+    expect(puedeAgendarParaHoy({ ...TAREA, estado: 'EN_PAUSA', fecha: '2026-11-01' }, hoy)).toBe(true)
+    expect(puedeAgendarParaHoy({ ...TAREA, estado: 'PENDIENTE', fecha: '2026-11-20' }, hoy)).toBe(true)
+  })
+  it('no vale si la fecha es hoy ni si está cerrada', () => {
+    expect(puedeAgendarParaHoy({ ...TAREA, estado: 'PENDIENTE', fecha: hoy }, hoy)).toBe(false)
+    expect(puedeAgendarParaHoy({ ...TAREA, fecha: null, estado: 'HECHO' }, hoy)).toBe(false)
+    expect(puedeAgendarParaHoy({ ...TAREA, fecha: null, estado: 'CANCELADO' }, hoy)).toBe(false)
   })
 })

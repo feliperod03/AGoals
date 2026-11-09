@@ -439,7 +439,7 @@ describe('Posponer: selector', () => {
       padreId: 3,
     })
     expect(posponerTarea).not.toHaveBeenCalled()
-    expect(await screen.findByRole('status')).toHaveTextContent('Sin fecha: la verás en Recomendación')
+    expect(await screen.findByRole('status')).toHaveTextContent('Sin fecha: la verás en el Cofre y en Recomendación')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 

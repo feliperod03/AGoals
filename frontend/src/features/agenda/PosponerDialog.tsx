@@ -74,7 +74,7 @@ function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: 
         <Button type="button" variant="secondary" disabled={ocupado} onClick={() => acciones.ejecutar('sinFecha', tarea)}>
           Dejar sin fecha
         </Button>
-        <p className="text-xs text-mut">Sale de la agenda y la verás en Recomendación.</p>
+        <p className="text-xs text-mut">Sale de la agenda y la verás en el Cofre y en Recomendación.</p>
       </div>
 
       {acciones.error && (

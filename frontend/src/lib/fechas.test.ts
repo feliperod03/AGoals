@@ -14,6 +14,7 @@ import {
   mensajeAgendada,
   fechaMinimaParaPosponer,
   mensajeGuardada,
+  compararFechaHora,
   mensajeSinFecha,
   puedePosponerAManana,
   sumarDias,
@@ -224,7 +225,15 @@ describe('puedePosponerAManana', () => {
 })
 
 describe('mensajeSinFecha', () => {
-  it('manda a Recomendación', () => {
-    expect(mensajeSinFecha()).toBe('Sin fecha: la verás en Recomendación')
+  it('manda al Cofre y a Recomendación', () => {
+    expect(mensajeSinFecha()).toBe('Sin fecha: la verás en el Cofre y en Recomendación')
+  })
+})
+
+describe('compararFechaHora', () => {
+  it('ordena instantes ISO, también con distinto desfase', () => {
+    expect(compararFechaHora('2026-11-01T10:00:00-03:00', '2026-11-02T10:00:00-03:00')).toBeLessThan(0)
+    expect(compararFechaHora('2026-11-02T10:00:00-03:00', '2026-11-01T10:00:00-03:00')).toBeGreaterThan(0)
+    expect(compararFechaHora('2026-11-01T10:00:00-03:00', '2026-11-01T13:00:00Z')).toBe(0)
   })
 })
