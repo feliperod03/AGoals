@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Estado } from '@/types/tarea'
 import type { ConfigJerarquia } from './config'
 import type { FiltroEstado } from './filtros'
+import type { ValoresItem } from './formulario'
 import { mensajeBorrado, mensajeEstadoCambiado } from './mensajes'
 import type { ItemJerarquico } from './tipos'
 
@@ -31,6 +32,8 @@ export function useGuardarJerarquia<T extends ItemJerarquico, R>(config: ConfigJ
 /** `{}` = diálogo para crear; `{ item }` = para editar. */
 export interface EstadoItemDialog<T> {
   item?: T
+  /** Valores que pisan a los de un formulario nuevo (p. ej. `objetivoId` al crear desde el detalle de un objetivo). */
+  iniciales?: Partial<ValoresItem>
 }
 
 export interface AccionesJerarquia<T extends ItemJerarquico> {

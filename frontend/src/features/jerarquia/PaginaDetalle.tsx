@@ -18,14 +18,19 @@ import type { ItemJerarquico } from './tipos'
 import { useAccionesJerarquia } from './useAccionesJerarquia'
 import { useListaJerarquia } from './useListaJerarquia'
 
+/** Lo que la página presta a sus secciones: el aviso flotante, para que haya una sola región `status`. */
+export interface ContextoDetalle {
+  alMensaje: (mensaje: string) => void
+}
+
 interface Props<T extends ItemJerarquico, R> {
   config: ConfigJerarquia<T, R>
   /** El `:id` de la URL tal cual (puede no ser un número). */
   idParam: string | undefined
   /** Filas extra de los datos básicos (p. ej. el objetivo de un proyecto). */
-  datosExtra?: (item: T) => ReactNode
+  datosExtra?: (item: T, contexto: ContextoDetalle) => ReactNode
   /** Secciones propias de cada tipo, bajo los hijos (tareas ligadas, proyectos del objetivo…). */
-  secciones?: (item: T) => ReactNode
+  secciones?: (item: T, contexto: ContextoDetalle) => ReactNode
   /** Solo proyectos: los objetivos entre los que elegir al editar. */
   objetivos?: ObjetivosDisponibles
 }
@@ -53,6 +58,8 @@ export function PaginaDetalle<T extends ItemJerarquico, R>({ config, idParam, da
   const item = numero === null ? undefined : lista.data?.find((i) => i.id === numero)
   const padre = item?.padreId != null ? lista.data?.find((i) => i.id === item.padreId) : undefined
   const hijos = item && lista.data ? ordenar(filtrar(lista.data.filter((i) => i.padreId === item.id && i.id !== item.id), { estado: 'todos', busqueda: '' })) : []
+
+  const contexto: ContextoDetalle = { alMensaje: confirmacion.mostrar }
 
   const volver = (
     <Link to={config.rutaBase} className={`mb-4 inline-flex items-center gap-1 text-sm text-mut hover:text-tx ${ENLACE}`}>
@@ -133,7 +140,7 @@ export function PaginaDetalle<T extends ItemJerarquico, R>({ config, idParam, da
               </Link>
             )}
           </dd>
-          {datosExtra?.(item)}
+          {datosExtra?.(item, contexto)}
         </dl>
       </Tarjeta>
 
@@ -141,7 +148,7 @@ export function PaginaDetalle<T extends ItemJerarquico, R>({ config, idParam, da
         {hijos.length === 0 ? <TextoVacio>{config.textos.sinHijos}</TextoVacio> : <ListaEnlaces items={hijos} rutaBase={config.rutaBase} />}
       </Tarjeta>
 
-      {secciones?.(item)}
+      {secciones?.(item, contexto)}
 
       <DialogosJerarquia
         config={config}

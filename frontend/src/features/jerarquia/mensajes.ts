@@ -11,6 +11,10 @@ export const mensajeGuardado = (nombre: string) => `«${nombre}» guardado`
 
 export const mensajeBorrado = (nombre: string) => `«${nombre}» borrado`
 
+export const mensajeProyectoVinculado = (proyecto: string, objetivo: string) => `«${proyecto}» ahora es parte de «${objetivo}»`
+
+export const mensajeProyectoDesvinculado = (proyecto: string, objetivo: string) => `«${proyecto}» ya no pertenece a «${objetivo}»`
+
 /**
  * Confirmación del cambio rápido de estado. Si el nuevo estado queda fuera del filtro de la lista, avisa que
  * la fila ya no se ve (si no, parece que el elemento desapareció).

@@ -40,7 +40,7 @@ export function ItemDialog<T extends ItemJerarquico, R>({ abierto, alCerrar, ...
   return (
     <Dialog open={abierto !== null} onOpenChange={(open) => !open && alCerrar()}>
       <DialogContent onEscapeKeyDown={(e) => selectorAbierto.current && e.preventDefault()}>
-        {abierto && <Formulario item={abierto.item} alCerrar={alCerrar} selectorAbierto={selectorAbierto} {...resto} />}
+        {abierto && <Formulario item={abierto.item} iniciales={abierto.iniciales} alCerrar={alCerrar} selectorAbierto={selectorAbierto} {...resto} />}
       </DialogContent>
     </Dialog>
   )
@@ -54,23 +54,27 @@ interface PadreElegido {
 function Formulario<T extends ItemJerarquico, R>({
   config,
   item,
+  iniciales,
   alCerrar,
   alGuardar,
   todos,
   listaConError,
   objetivos,
   selectorAbierto,
-}: Omit<Props<T, R>, 'abierto'> & { item: T | undefined; selectorAbierto: MutableRefObject<boolean> }) {
+}: Omit<Props<T, R>, 'abierto'> & { item: T | undefined; iniciales: Partial<ValoresItem> | undefined; selectorAbierto: MutableRefObject<boolean> }) {
   const guardar = useGuardarJerarquia(config)
   // `undefined` = el usuario no tocó el campo "Padre": el PUT conserva el padreId original.
   const [padreElegido, setPadreElegido] = useState<PadreElegido>()
+  const valoresPorDefecto: ValoresItem = { ...valoresIniciales(item), ...iniciales }
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<ValoresItem>({ defaultValues: valoresIniciales(item) })
+  } = useForm<ValoresItem>({ defaultValues: valoresPorDefecto })
 
-  const objetivoActual = (item as { objetivoId?: number | null } | undefined)?.objetivoId ?? null
+  // Al editar sale del propio item; al crear con objetivo prefijado, de `iniciales`: así figura entre las opciones
+  // aunque esté cerrado o la lista de objetivos no haya cargado.
+  const objetivoActual = valoresPorDefecto.objetivoId === '' ? null : Number(valoresPorDefecto.objetivoId)
   const opcionesDeObjetivo = useMemo(() => (objetivos ? opcionesObjetivo(objetivos.lista, objetivoActual) : []), [objetivos, objetivoActual])
 
   const enviar = handleSubmit((valores) => {

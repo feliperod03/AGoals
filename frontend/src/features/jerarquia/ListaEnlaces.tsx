@@ -1,11 +1,23 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PrioridadChip } from '@/components/PrioridadChip'
 import { cn } from '@/lib/utils'
 import { ETIQUETA_ESTADO, esAbierto, type ItemJerarquico } from './tipos'
 
-/** Lista plana y de solo lectura de proyectos u objetivos: nombre (enlace al detalle), estado y prioridad. */
-export function ListaEnlaces<T extends ItemJerarquico>({ items, rutaBase }: { items: T[]; rutaBase: string }) {
+/**
+ * Lista plana de proyectos u objetivos: nombre (enlace al detalle), estado y prioridad. Solo lectura, salvo que
+ * se pase `accion`, que se pinta al final de cada fila (p. ej. «Quitar del objetivo»).
+ */
+export function ListaEnlaces<T extends ItemJerarquico>({
+  items,
+  rutaBase,
+  accion,
+}: {
+  items: T[]
+  rutaBase: string
+  accion?: (item: T) => ReactNode
+}) {
   return (
     <ul className="flex flex-col">
       {items.map((item) => (
@@ -21,6 +33,7 @@ export function ListaEnlaces<T extends ItemJerarquico>({ items, rutaBase }: { it
           </Link>
           {item.prioridad && <PrioridadChip prioridad={item.prioridad} />}
           <span className="text-xs text-mut">{ETIQUETA_ESTADO[item.estado]}</span>
+          {accion?.(item)}
         </li>
       ))}
     </ul>

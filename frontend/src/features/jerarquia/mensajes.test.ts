@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { mensajeBorrado, mensajeCreado, mensajeEstadoCambiado, mensajeGuardado } from './mensajes'
+import {
+  mensajeBorrado,
+  mensajeCreado,
+  mensajeEstadoCambiado,
+  mensajeGuardado,
+  mensajeProyectoDesvinculado,
+  mensajeProyectoVinculado,
+} from './mensajes'
 
 describe('mensajes de proyectos y objetivos', () => {
+  it('vincular y quitar un proyecto de un objetivo nombran a ambos', () => {
+    expect(mensajeProyectoVinculado('Plan', 'Salud')).toBe('«Plan» ahora es parte de «Salud»')
+    expect(mensajeProyectoDesvinculado('Plan', 'Salud')).toBe('«Plan» ya no pertenece a «Salud»')
+  })
+
   it('creado, guardado y borrado nombran el elemento', () => {
     expect(mensajeCreado('Proyecto', 'Mudanza')).toBe('Proyecto «Mudanza» creado')
     expect(mensajeCreado('Objetivo', 'Salud')).toBe('Objetivo «Salud» creado')

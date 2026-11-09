@@ -17,7 +17,7 @@ export interface RotulosPadre {
   principal: string
 }
 
-const porNombre = <T extends ItemJerarquico>(a: T, b: T) =>
+export const porNombre = <T extends ItemJerarquico>(a: T, b: T) =>
   normalizarTexto(a.nombre).localeCompare(normalizarTexto(b.nombre), 'es') || a.id - b.id
 
 /**

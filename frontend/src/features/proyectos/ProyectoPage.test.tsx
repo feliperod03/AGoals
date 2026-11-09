@@ -44,7 +44,7 @@ beforeEach(() => {
     proyecto({ id: 3, nombre: 'Cajas viejas', padreId: 1, estado: 'HECHO' }),
     proyecto({ id: 4, nombre: 'Otro' }),
   ]
-  objetivos = [objetivo({ id: 5, nombre: 'Mudarme' })]
+  objetivos = [objetivo({ id: 5, nombre: 'Mudarme' }), objetivo({ id: 6, nombre: 'Viajar' }), objetivo({ id: 7, nombre: 'Viejo', estado: 'HECHO' })]
   vi.mocked(getProyectos).mockImplementation(async () => datos.map((d) => ({ ...d })))
   vi.mocked(getObjetivos).mockImplementation(async () => objetivos.map((o) => ({ ...o })))
   vi.mocked(getTareas).mockResolvedValue([
@@ -75,7 +75,8 @@ describe('ProyectoPage: datos', () => {
     expect(screen.getByText('Media')).toBeInTheDocument()
     expect(screen.getByText('Sin descripción.')).toBeInTheDocument()
     expect(within(seccion('Datos')).getByRole('link', { name: 'Casa' })).toHaveAttribute('href', '/proyectos/1')
-    expect(within(seccion('Datos')).getByText('Sin objetivo')).toBeInTheDocument()
+    expect(within(seccion('Datos')).getByRole('combobox', { name: 'Objetivo de «Mudanza»' })).toHaveValue('')
+    expect(within(seccion('Datos')).queryByRole('link', { name: 'Ver objetivo' })).not.toBeInTheDocument()
     expect(within(seccion('Subproyectos')).getByText('Este proyecto no tiene subproyectos.')).toBeInTheDocument()
     expect(screen.getAllByRole('status')).toHaveLength(1)
   })
@@ -85,17 +86,24 @@ describe('ProyectoPage: datos', () => {
     await screen.findByRole('heading', { name: 'Casa', level: 1 })
     expect(screen.getByText('Todo el piso')).toBeInTheDocument()
     expect(within(seccion('Datos')).getByText('Sin padre')).toBeInTheDocument()
-    expect(within(seccion('Datos')).getByRole('link', { name: 'Mudarme' })).toHaveAttribute('href', '/objetivos/5')
+    expect(within(seccion('Datos')).getByRole('combobox', { name: 'Objetivo de «Casa»' })).toHaveValue('5')
+    expect(within(seccion('Datos')).getByRole('option', { name: 'Mudarme' })).toBeInTheDocument()
+    expect(within(seccion('Datos')).getByRole('link', { name: 'Ver objetivo' })).toHaveAttribute('href', '/objetivos/5')
     const hijos = within(seccion('Subproyectos')).getAllByRole('link')
     expect(hijos.map((a) => a.textContent)).toEqual(['Mudanza', 'Cajas viejas']) // los cerrados también se listan, al final por nombre
     expect(hijos[0]).toHaveAttribute('href', '/proyectos/2')
     expect(within(seccion('Subproyectos')).getByText('Hecho')).toBeInTheDocument()
   })
 
-  it('el objetivo se muestra con su número si la lista de objetivos no cargó', async () => {
+  it('el objetivo se muestra con su número si la lista de objetivos no cargó, y la nota lo explica', async () => {
     vi.mocked(getObjetivos).mockRejectedValue(new ApiError(500, 'Error del servidor'))
     renderizar('/proyectos/1')
-    expect(await within(await screen.findByRole('heading', { name: 'Datos', level: 2 }).then(() => seccion('Datos'))).findByRole('link', { name: 'n.º 5' })).toBeInTheDocument()
+    const datos = await screen.findByRole('heading', { name: 'Datos', level: 2 }).then(() => seccion('Datos'))
+    expect(await within(datos).findByText('No se pudo cargar la lista de objetivos.')).toBeInTheDocument()
+    const selector = within(datos).getByRole('combobox', { name: 'Objetivo de «Casa»' })
+    expect(selector).toHaveValue('5')
+    expect(within(selector).getByRole('option', { name: 'Objetivo n.º 5' })).toBeInTheDocument()
+    expect(selector).toBeEnabled() // con la lista fallida se puede al menos quitar el vínculo
   })
 
   it('las tareas ligadas son solo las de este proyecto, anidadas y SIN acciones', async () => {
@@ -128,6 +136,97 @@ describe('ProyectoPage: datos', () => {
     await screen.findByRole('heading', { name: 'Casa', level: 1 })
     expect(await within(seccion('Tareas ligadas')).findByRole('alert')).toHaveTextContent('Error del servidor')
     expect(screen.getByText('Todo el piso')).toBeInTheDocument()
+  })
+})
+
+describe('ProyectoPage: cambiar el objetivo desde «Datos»', () => {
+  const selectorDe = async (nombre: string) => {
+    await screen.findByRole('heading', { name: nombre, level: 1 })
+    return within(seccion('Datos')).getByRole('combobox', { name: `Objetivo de «${nombre}»` })
+  }
+
+  it('elegir otro objetivo manda el PUT con los seis campos, avisa y el campo lo refleja', async () => {
+    const user = userEvent.setup()
+    renderizar('/proyectos/4')
+    await user.selectOptions(await selectorDe('Otro'), '6')
+
+    await waitFor(() =>
+      expect(actualizarProyecto).toHaveBeenCalledWith(4, {
+        nombre: 'Otro',
+        descripcion: null,
+        estado: 'PENDIENTE',
+        prioridad: null,
+        padreId: null,
+        objetivoId: 6,
+      }),
+    )
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('«Otro» ahora es parte de «Viajar»'))
+    await waitFor(() => expect(within(seccion('Datos')).getByRole('combobox', { name: 'Objetivo de «Otro»' })).toHaveValue('6'))
+    expect(within(seccion('Datos')).getByRole('link', { name: 'Ver objetivo' })).toHaveAttribute('href', '/objetivos/6')
+  })
+
+  it('«Sin objetivo» lo quita y reenvía todo lo demás tal cual', async () => {
+    const user = userEvent.setup()
+    renderizar('/proyectos/1')
+    await user.selectOptions(await selectorDe('Casa'), '')
+
+    await waitFor(() =>
+      expect(actualizarProyecto).toHaveBeenCalledWith(1, {
+        nombre: 'Casa',
+        descripcion: 'Todo el piso',
+        estado: 'EN_PROGRESO',
+        prioridad: 'ALTA',
+        padreId: null,
+        objetivoId: null,
+      }),
+    )
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('«Casa» ya no pertenece a «Mudarme»'))
+    await waitFor(() => expect(within(seccion('Datos')).queryByRole('link', { name: 'Ver objetivo' })).not.toBeInTheDocument())
+  })
+
+  it('ofrece los objetivos abiertos más el actual aunque esté cerrado, igual que el diálogo de edición', async () => {
+    datos = [...datos, proyecto({ id: 6, nombre: 'Con objetivo cerrado', objetivoId: 7 })]
+    renderizar('/proyectos/6')
+    const cerrado = await selectorDe('Con objetivo cerrado')
+    await waitFor(() => expect(within(cerrado).getAllByRole('option')).toHaveLength(4))
+    expect(within(cerrado).getAllByRole('option').map((o) => o.textContent)).toEqual(['Sin objetivo', 'Mudarme', 'Viajar', 'Viejo'])
+    expect(cerrado).toHaveValue('7')
+  })
+
+  it('un objetivo cerrado que no es el actual no se ofrece', async () => {
+    renderizar('/proyectos/4')
+    const selector = await selectorDe('Otro')
+    await waitFor(() => expect(within(selector).getAllByRole('option')).toHaveLength(3))
+    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Sin objetivo', 'Mudarme', 'Viajar'])
+  })
+
+  it('si el PUT falla, el error se ve bajo el campo, no avisa y el campo vuelve al valor real', async () => {
+    vi.mocked(actualizarProyecto).mockRejectedValue(new ApiError(404, 'No existe el objetivo 6'))
+    const user = userEvent.setup()
+    renderizar('/proyectos/1')
+    const selector = await selectorDe('Casa')
+    await waitFor(() => expect(within(selector).getByRole('option', { name: 'Viajar' })).toBeInTheDocument())
+    await user.selectOptions(selector, '6')
+
+    expect(await within(seccion('Datos')).findByRole('alert')).toHaveTextContent('No existe el objetivo 6')
+    expect(selector).toHaveValue('5')
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('el select del diálogo de edición sigue funcionando: cambiar el objetivo ahí manda el nuevo', async () => {
+    const user = userEvent.setup()
+    renderizar('/proyectos/1')
+    await screen.findByRole('heading', { name: 'Casa', level: 1 })
+    await user.click(screen.getByRole('button', { name: 'Editar' }))
+    const dialogo = await screen.findByRole('dialog')
+    const select = within(dialogo).getByRole('combobox', { name: 'Objetivo' })
+    expect(select).toHaveValue('5')
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'Viajar' })).toBeInTheDocument())
+    await user.selectOptions(select, '6')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(actualizarProyecto).toHaveBeenCalledWith(1, expect.objectContaining({ nombre: 'Casa', objetivoId: 6 })))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('«Casa» guardado'))
   })
 })
 
