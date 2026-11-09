@@ -2,7 +2,7 @@ import { aFechaLocal, formatearMinutos, minutosDelDia } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import type { Tarea } from '@/types/tarea'
 import { PX_POR_HORA, calcularRango, distribuirSolapes, posicionBloque, type Bloque, type BloqueColocado, type Rango } from './horario'
-import { ErrorEnLinea, Tarjeta, TextoVacio } from './Tarjeta'
+import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
 
 interface Props {
   bloques: Bloque[]

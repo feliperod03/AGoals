@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { contarSubtareas } from './useAgendarTarea'
+import { contarSubtareas } from './contarSubtareas'
 import { useRecomendacion } from './useRecomendacion'
 import type { TareaRecomendada } from '@/types/tarea'
 

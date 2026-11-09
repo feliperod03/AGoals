@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { esAtrasada, formatearDiaMes } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import type { Tarea, TareaRecomendada } from '@/types/tarea'
-import { PrioridadChip } from '@/features/agenda/PrioridadChip'
-import { contarSubtareas } from './useAgendarTarea'
+import { PrioridadChip } from '@/components/PrioridadChip'
+import { contarSubtareas } from './contarSubtareas'
 
 interface Props {
   tareas: TareaRecomendada[]

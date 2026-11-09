@@ -1,7 +1,7 @@
 import { formatearFechaHoraCorta } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import type { Recordatorio } from '@/types/recordatorio'
-import { ErrorEnLinea, Tarjeta, TextoVacio } from './Tarjeta'
+import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
 import { useTituloRecordatorio } from './useRecordatorios'
 
 interface Consulta<T> {

@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
 
+import { normalizarTexto } from '@/lib/texto'
 import { cn } from '@/lib/utils'
 import type { FiltroVinculo as Filtro } from './useRecomendacion'
 
@@ -22,11 +23,6 @@ interface Props {
 const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 const BOTON = 'rounded-full border px-3 py-1 text-sm disabled:opacity-60'
 
-/** Sin mayúsculas ni tildes, para que "accion" encuentre "Acción". */
-function normalizar(texto: string): string {
-  return texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
-}
-
 /**
  * Filtro por vínculo directo: Todos / Proyecto / Objetivo. Al elegir un tipo se busca por nombre en una
  * lista simple (filtrada en el cliente); elegir uno la reemplaza por un chip con "×" para quitarlo.
@@ -39,7 +35,7 @@ export function FiltroVinculo({ filtro, alCambiar, proyectos, objetivos, error, 
   const tipo = filtro?.tipo ?? tipoElegido
   const opciones = (tipo === 'proyecto' ? proyectos : objetivos) ?? []
   const elegida = filtro ? opciones.find((o) => o.id === filtro.id) : undefined
-  const visibles = opciones.filter((o) => normalizar(o.nombre).includes(normalizar(busqueda)))
+  const visibles = opciones.filter((o) => normalizarTexto(o.nombre).includes(normalizarTexto(busqueda)))
 
   function elegirTipo(nuevo: 'proyecto' | 'objetivo' | null) {
     setTipoElegido(nuevo)

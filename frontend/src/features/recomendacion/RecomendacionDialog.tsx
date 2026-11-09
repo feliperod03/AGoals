@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { OrdenRecomendacion, SentidoOrden } from '@/types/tarea'
-import { ErrorEnLinea, TextoVacio } from '@/features/agenda/Tarjeta'
+import { ErrorEnLinea, TextoVacio } from '@/components/Tarjeta'
+import { useAgendarTarea } from '@/features/agenda/useAgendarTarea'
 import { FiltroVinculo } from './FiltroVinculo'
 import { ListaRecomendada } from './ListaRecomendada'
-import { useAgendarTarea } from './useAgendarTarea'
 import { useRecomendacion } from './useRecomendacion'
 
 interface Props {
@@ -104,7 +104,7 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
           proyectos={proyectos}
           objetivos={objetivos}
           pendiente={agendar.isPending}
-          alAgendar={(raiz, incluirSubtareas) => agendar.mutate({ raiz, incluirSubtareas })}
+          alAgendar={(raiz, incluirSubtareas) => agendar.mutate({ tarea: raiz.tarea, incluirSubtareas })}
         />
       )}
     </div>
