@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanada 8)
 
-> Fijadas el 7/11/2026; actualizadas el 9/11/2026 (8.3b hecha, 8.2d y pulido 1 decididos). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 9/11/2026 (8.3b y 8.2d hechas; 5d, 8.2e y 8.2f decididas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -40,11 +40,23 @@ Capas: componentes -> hooks de `features/` -> `api/`. Solo `api/` llama a `fetch
 - Interfaz en español.
 - Código: inglés para lo técnico/genérico (`Button`, `ApiClient`, `useDebounce`, `formatDate`); español para el dominio y lo que viene de la API (`Tarea`, `useTareasDelDia`, `marcarHecha`, `fechaHoraInicio`). Sin `ñ` en identificadores.
 
-## Subtareas (decidido el 9/11/2026; rebanada 8.2d, próxima)
-Hoy el frontend no puede crear subtareas (el backend sí: `padreId` en `TareaRequest`, con validación de padre existente y sin ciclos). Es un hueco funcional porque la tarea unificada y las vistas de recomendación y cofre ya anidan subtareas.
-- Ítem **"Agregar subtarea"** en el menú de acciones de cada tarea abierta (Hoy y Cofre) y en el diálogo de edición (para las tareas de la planificación por horas, que no tienen menú). Abre el diálogo de nueva tarea titulado "Nueva subtarea de «X»" con `padreId` fijado; el resto del formulario es el de siempre.
-- Una subtarea nueva sin fecha va al cofre y se ve anidada bajo su madre si la madre está en la vista.
-- Fuera de alcance: cambiar la madre de una tarea existente, asignar proyecto u objetivo (8.4).
+## Subtareas (hecha en 8.2d; commit `ceab9d9`)
+Antes de 8.2d el frontend no podía crear subtareas (el backend sí: `padreId` en `TareaRequest`, con validación de padre existente y sin ciclos). Era un hueco funcional porque la tarea unificada y las vistas de recomendación y cofre ya anidan subtareas.
+- Ítem **"Agregar subtarea"** en el menú de acciones de cada tarea abierta (no hecha ni cancelada; Hoy y Cofre) y botón en el diálogo de edición (para las tareas de la planificación por horas, que no tienen menú). Abre el diálogo de nueva tarea titulado "Nueva subtarea de «X»" (descripción "Anota el paso que falta."), con `padreId` fijado y la línea "Subtarea de «X»"; el resto del formulario es el de siempre.
+- Una subtarea nueva sin fecha va al cofre y se ve anidada bajo su madre si la madre está en la vista. El aviso es `mensajeSubtareaAgregada`.
+- Desde el diálogo de edición, "Agregar subtarea" **reemplaza** el diálogo (los cambios sin guardar se pierden); Posponer y Borrar, en cambio, se abren encima. Está comentado en el código.
+- Fuera de alcance: cambiar la madre de una tarea existente (8.2f) y asignar proyecto u objetivo (8.4).
+- **Pendiente (pulido 1):** al crear desde Hoy una subtarea sin fecha, el aviso no dice a dónde fue; añadir el destino a `mensajeSubtareaAgregada`.
+
+## Borrar con subtareas (decidido el 9/11/2026; backend 5d + frontend 8.2e)
+Hoy borrar una tarea con subtareas da 409 con "La tarea 687 tiene subtareas…" (el id en lugar del título y sin salida desde la UI). El 409 se mantiene como valor por defecto y se agrega una elección explícita del usuario:
+- **Backend (5d):** `DELETE /api/tareas/{id}?subtareas=borrar|conservar`. Sin el parámetro responde 409 como hoy, pero el mensaje usa el título. Valor inválido → 400. Todo en una transacción.
+  - `borrar`: elimina la tarea y todos sus descendientes (cualquier nivel). Los recordatorios caen por la cascada de la base.
+  - `conservar`: las subtareas directas pasan al padre de la tarea borrada, o quedan sin madre si no tenía. Sus propias subtareas las acompañan.
+- **Frontend (8.2e):** al confirmar el borrado de una tarea con subtareas, el diálogo dice "«X» tiene N subtareas" y ofrece **"Conservar las subtareas"** (por defecto; suben un nivel) o **"Borrar también las subtareas"** (destructiva, explícita). N sale de la lista `['tareas', 'todas']` (sirve en Hoy y en el Cofre). Los mensajes usan el título. Sin subtareas, el diálogo no cambia.
+
+## Cambiar la madre (decidido el 9/11/2026; rebanada 8.2f, solo frontend)
+Permite sacar una subtarea de su madre o pasarla a otra. El `PUT` ya acepta `padreId` (el backend valida que exista y que no haya ciclos), así que no hay cambios de backend. Se define en el plan: lo natural es un selector de madre en el diálogo de edición con "Sin madre", que excluya la propia tarea y sus descendientes (el backend igual rechaza los ciclos con 400).
 
 ## Posponer (hecha en 8.2c; commit `2a78695`)
 Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fecha **de la tarea** (una atrasada podía seguir atrasada). El backend ya aceptaba `{fecha}` opcional, así que no hubo cambios de backend.
@@ -86,7 +98,10 @@ Inventario de **todas** las tareas, con filtros. Nació como lugar para las tare
 - 8.2c Posponer con opciones (mañana / elegir fecha / dejar sin fecha), solo frontend: hecha (commit `2a78695`).
 - Refactor previo al cofre: hecho (commit `1e3256f`).
 - 8.3b Cofre, hecha (commit `a33fcce`).
-- **8.2d Crear subtareas**, solo frontend: **próxima**.
+- 8.2d Crear subtareas, solo frontend: hecha (commit `ceab9d9`).
+- **5d Borrar tarea con subtareas** (backend): `?subtareas=borrar|conservar` y mensajes con título: **próxima**.
+- 8.2e Diálogo de borrado con opciones (solo frontend).
+- 8.2f Cambiar o quitar la madre de una tarea (solo frontend).
 - **P1 Pulido 1:** aviso flotante animado y chips de filtros activos en el Cofre.
 - 8.4 Proyectos, objetivos e ideas (incluye asignar tareas a proyectos/objetivos; partirla en 8.4a/b/c).
 - 8.5 Recordatorios (polling de vencidos, aviso al cerrar tarea con recordatorio).
