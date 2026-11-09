@@ -109,7 +109,7 @@ function Formulario({
           const cambioMadre = tarea !== undefined && request.padreId !== tarea.padreId
           alGuardar(
             padre
-              ? mensajeSubtareaAgregada(padre.titulo)
+              ? mensajeSubtareaAgregada(padre.titulo, request.fecha)
               : cambioMadre
                 ? mensajeMadreCambiada(request.titulo, madreElegida?.titulo ?? null)
                 : mensajeGuardada(request.fecha),

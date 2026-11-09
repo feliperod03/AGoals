@@ -110,9 +110,10 @@ export function mensajeGuardada(fecha: string | null): string {
   return `Guardada para el ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
 }
 
-/** Confirmación al crear una subtarea. */
-export function mensajeSubtareaAgregada(tituloMadre: string): string {
-  return `Subtarea agregada a «${tituloMadre}»`
+/** Confirmación al crear una subtarea. Sin fecha no aparece en la lista del día: se avisa que está en el Cofre. */
+export function mensajeSubtareaAgregada(tituloMadre: string, fecha: string | null): string {
+  const base = `Subtarea agregada a «${tituloMadre}»`
+  return fecha ? base : `${base}; sin fecha: la verás en el Cofre`
 }
 
 /** Confirmación al cambiar la madre: `tituloMadre` null = la tarea quedó sin madre. */

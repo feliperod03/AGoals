@@ -11,6 +11,7 @@ import { TareaDialog, type EstadoTareaDialog } from './TareaDialog'
 import { useAccionesTarea } from './useAccionesTarea'
 import { useAgendaDelDia } from './useAgendaDelDia'
 import { useAhora } from './useAhora'
+import { Aviso } from '@/components/Aviso'
 import { useMensajeTemporal } from './useMensajeTemporal'
 import { useEventosDelDia, useProximosEventos } from './useEventos'
 import { useProximosRecordatorios } from './useRecordatorios'
@@ -50,10 +51,13 @@ export function HoyPage() {
   return (
     <div>
       <EncabezadoHoy fecha={hoy} tareasAbiertas={tareasAbiertas} eventos={cantidadEventos} alNuevaTarea={() => setDialogo({})} alRecomendacion={() => setRecomendacionAbierta(true)} />
-      {/* Región viva: el lector de pantalla anuncia la confirmación al guardar. */}
-      <p role="status" aria-live="polite" className={confirmacion.mensaje ? '-mt-3 mb-4 text-sm text-tx' : 'sr-only'}>
-        {confirmacion.mensaje}
-      </p>
+      <Aviso
+        mensaje={confirmacion.mensaje}
+        saliendo={confirmacion.saliendo}
+        alCerrar={confirmacion.cerrar}
+        alPausar={confirmacion.pausar}
+        alReanudar={confirmacion.reanudar}
+      />
 
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[1_1_480px] flex-col gap-6">

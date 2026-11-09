@@ -166,8 +166,12 @@ describe('mensajeGuardada', () => {
 })
 
 describe('mensajeSubtareaAgregada', () => {
-  it('nombra a la madre entre comillas angulares', () => {
-    expect(mensajeSubtareaAgregada('Mudanza')).toBe('Subtarea agregada a «Mudanza»')
+  it('con fecha: nombra a la madre entre comillas angulares', () => {
+    expect(mensajeSubtareaAgregada('Mudanza', '2026-11-12')).toBe('Subtarea agregada a «Mudanza»')
+  })
+
+  it('sin fecha: avisa que está en el Cofre', () => {
+    expect(mensajeSubtareaAgregada('Mudanza', null)).toBe('Subtarea agregada a «Mudanza»; sin fecha: la verás en el Cofre')
   })
 })
 

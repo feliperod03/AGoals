@@ -282,10 +282,24 @@ describe('TareaDialog: subtareas', () => {
       horaFin: null,
       padreId: 3,
     })
-    expect(await screen.findByRole('status')).toHaveTextContent('Subtarea agregada a «Mudanza»')
+    expect(await screen.findByRole('status')).toHaveTextContent('Subtarea agregada a «Mudanza»; sin fecha: la verás en el Cofre')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(invalidar).toHaveBeenCalledWith({ queryKey: ['agenda'] })
     expect(invalidar).toHaveBeenCalledWith({ queryKey: ['tareas'] })
+  })
+
+  it('con fecha, el aviso de subtarea agregada no menciona el Cofre', async () => {
+    const user = userEvent.setup()
+    renderizar({ fecha: '2026-11-10', conHora: [], sinHora: [madre] })
+    await abrirSubtarea(user)
+    await user.type(screen.getByLabelText('Título'), 'Embalar libros')
+    await user.type(screen.getByLabelText('Fecha'), '2026-11-12')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(crearTarea).toHaveBeenCalledTimes(1))
+    const aviso = await screen.findByRole('status')
+    await waitFor(() => expect(aviso).toHaveTextContent('Subtarea agregada a «Mudanza»'))
+    expect(aviso).not.toHaveTextContent('Cofre')
   })
 
   it.each([

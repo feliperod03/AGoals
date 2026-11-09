@@ -9,6 +9,7 @@ import { TareaDialog, type EstadoTareaDialog } from '@/features/agenda/TareaDial
 import { useAccionesTarea } from '@/features/agenda/useAccionesTarea'
 import { useAgendarTarea } from '@/features/agenda/useAgendarTarea'
 import { useAhora } from '@/features/agenda/useAhora'
+import { Aviso } from '@/components/Aviso'
 import { useMensajeTemporal } from '@/features/agenda/useMensajeTemporal'
 import type { Tarea } from '@/types/tarea'
 import { AgendarDialog } from './AgendarDialog'
@@ -67,10 +68,13 @@ export function CofrePage() {
           Nueva tarea
         </Button>
       </header>
-      {/* Región viva: el lector de pantalla anuncia la confirmación de cada acción. */}
-      <p role="status" aria-live="polite" className={confirmacion.mensaje ? '-mt-3 mb-4 text-sm text-tx' : 'sr-only'}>
-        {confirmacion.mensaje}
-      </p>
+      <Aviso
+        mensaje={confirmacion.mensaje}
+        saliendo={confirmacion.saliendo}
+        alCerrar={confirmacion.cerrar}
+        alPausar={confirmacion.pausar}
+        alReanudar={confirmacion.reanudar}
+      />
 
       <Tarjeta titulo="Tareas">
         <div className="mb-4">

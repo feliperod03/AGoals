@@ -30,11 +30,14 @@
   --evento-tx: #f3ecdd;
   --ahora: #b5452b;
   --ahora-tx: #ffffff;
+  /* Controles nativos (íconos de fecha y hora, scroll, desplegables, «x» del buscador) en el esquema del tema. */
+  color-scheme: light;
   --radius: 1.125rem; /* ~18 px */
   --sombra-card: 0 1px 2px rgb(43 36 24 / 0.06), 0 4px 14px rgb(43 36 24 / 0.07);
 }
 
 .dark {
+  color-scheme: dark;
   --bg: #101826;
   --side: #0c121d;
   --card: #172236;
