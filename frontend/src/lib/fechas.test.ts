@@ -6,8 +6,14 @@ import {
   ahora,
   formatearDesfase,
   formatearDiaMes,
+  formatearFechaCorta,
   formatearFechaHoraCorta,
   formatearFechaLarga,
+  mensajeIdeaBorrada,
+  mensajeIdeaConcluida,
+  mensajeIdeaCreada,
+  mensajeIdeaGuardada,
+  mensajeIdeaReabierta,
   formatearHora,
   formatearMinutos,
   hoy,
@@ -117,6 +123,33 @@ describe('minutos del día', () => {
 
   it('formatearFechaHoraCorta escribe día y hora locales', () => {
     expect(formatearFechaHoraCorta('2026-11-10T15:00:00-03:00')).toBe('mar 10 nov · 15:00')
+  })
+})
+
+describe('formatearFechaCorta', () => {
+  it('escribe el día local con año', () => {
+    expect(formatearFechaCorta('2026-11-10T15:00:00-03:00')).toBe('10 nov 2026')
+  })
+
+  it('cerca de la medianoche cuenta el día local, no el del texto (zona de los tests: Buenos Aires)', () => {
+    // 23:30 del 10 en Buenos Aires.
+    expect(formatearFechaCorta('2026-11-10T23:30:00-03:00')).toBe('10 nov 2026')
+    // El mismo instante escrito en UTC ya dice 11, pero el día local sigue siendo el 10.
+    expect(formatearFechaCorta('2026-11-11T02:30:00+00:00')).toBe('10 nov 2026')
+    // Con otro desfase: 00:10 del 11 en +02:00 es el 10 a las 19:10 en Buenos Aires.
+    expect(formatearFechaCorta('2026-11-11T00:10:00+02:00')).toBe('10 nov 2026')
+    // Un minuto después de la medianoche local ya es el 11.
+    expect(formatearFechaCorta('2026-11-11T00:01:00-03:00')).toBe('11 nov 2026')
+  })
+})
+
+describe('mensajes de ideas', () => {
+  it('nombran la idea entre comillas angulares', () => {
+    expect(mensajeIdeaCreada('Cantar')).toBe('Idea «Cantar» creada')
+    expect(mensajeIdeaGuardada('Cantar')).toBe('Idea «Cantar» guardada')
+    expect(mensajeIdeaConcluida('Cantar')).toBe('Idea «Cantar» concluida')
+    expect(mensajeIdeaReabierta('Cantar')).toBe('Idea «Cantar» reabierta')
+    expect(mensajeIdeaBorrada('Cantar')).toBe('Idea «Cantar» borrada')
   })
 })
 

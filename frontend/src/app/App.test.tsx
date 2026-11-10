@@ -22,6 +22,14 @@ vi.mock('@/api/objetivos', () => ({
   borrarObjetivo: vi.fn(),
   getImpactoBorradoObjetivo: vi.fn(),
 }))
+vi.mock('@/api/ideas', () => ({
+  getIdeas: vi.fn().mockResolvedValue([]),
+  crearIdea: vi.fn(),
+  actualizarIdea: vi.fn(),
+  concluirIdea: vi.fn(),
+  reabrirIdea: vi.fn(),
+  borrarIdea: vi.fn(),
+}))
 vi.mock('@/api/tareas', () => ({
   getTarea: vi.fn(),
   getTareas: vi.fn().mockResolvedValue([]),
@@ -97,10 +105,24 @@ describe('App', () => {
     expect(await screen.findByText('Aún no tienes objetivos.')).toBeInTheDocument()
   })
 
-  it('marca la sección activa', () => {
+  it('la ruta /ideas muestra la página de Ideas', async () => {
+    renderizar('/ideas')
+    expect(await screen.findByRole('heading', { name: 'Ideas', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByText('Aún no tienes ideas.')).toBeInTheDocument()
+  })
+
+  it('navega a Ideas desde la barra lateral', async () => {
+    renderizar('/')
+    await userEvent.click(screen.getByRole('link', { name: 'Ideas' }))
+    expect(await screen.findByText('Aún no tienes ideas.')).toBeInTheDocument()
+  })
+
+  it('marca la sección activa', async () => {
     renderizar('/ideas')
     expect(screen.getByRole('link', { name: 'Ideas' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Hoy' })).not.toHaveAttribute('aria-current')
+    // Espera a que termine de cargar la página para no dejar actualizaciones fuera de `act`.
+    await screen.findByText('Aún no tienes ideas.')
   })
 })
 

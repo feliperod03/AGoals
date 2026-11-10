@@ -68,6 +68,14 @@ export function formatearFechaHoraCorta(iso: string): string {
 }
 
 /**
+ * ISO con desfase -> `10 nov 2026` (día local). Misma lógica que `formatearFechaHoraCorta`: `parseISO` lleva el
+ * instante a la hora local, así que una hora cercana a la medianoche cae en el día que el usuario ve en su reloj.
+ */
+export function formatearFechaCorta(iso: string): string {
+  return format(parseISO(iso), 'd MMM yyyy', { locale: es })
+}
+
+/**
  * Recorta un evento al día local `fecha`: devuelve su inicio y fin en minutos desde las 00:00
  * (0 a 1440). Un evento que cruza la medianoche se corta en 0 o en 1440. `null` si no toca el día.
  */
@@ -130,6 +138,13 @@ export function mensajeTareaVinculada(titulo: string, tipo: 'proyecto' | 'objeti
 export function mensajeTareaDesvinculada(titulo: string, tipo: 'proyecto' | 'objetivo', nombre: string): string {
   return `«${titulo}» ya no es del ${tipo} «${nombre}»`
 }
+
+// Avisos de confirmación de ideas.
+export const mensajeIdeaCreada = (titulo: string) => `Idea «${titulo}» creada`
+export const mensajeIdeaGuardada = (titulo: string) => `Idea «${titulo}» guardada`
+export const mensajeIdeaConcluida = (titulo: string) => `Idea «${titulo}» concluida`
+export const mensajeIdeaReabierta = (titulo: string) => `Idea «${titulo}» reabierta`
+export const mensajeIdeaBorrada = (titulo: string) => `Idea «${titulo}» borrada`
 
 /** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
 export function mensajePospuesta(fecha: string): string {

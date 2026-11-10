@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 
 import { CofrePage } from '@/features/cofre/CofrePage'
 import { HoyPage } from '@/features/agenda/HoyPage'
+import { IdeasPage } from '@/features/ideas/IdeasPage'
 import { ObjetivoPage } from '@/features/objetivos/ObjetivoPage'
 import { ObjetivosPage } from '@/features/objetivos/ObjetivosPage'
 import { ProyectoPage } from '@/features/proyectos/ProyectoPage'
@@ -23,7 +24,7 @@ export function App() {
         <Route path="proyectos/:id" element={<ProyectoPage />} />
         <Route path="objetivos" element={<ObjetivosPage />} />
         <Route path="objetivos/:id" element={<ObjetivoPage />} />
-        <Route path="ideas" element={<Proximamente titulo="Ideas" />} />
+        <Route path="ideas" element={<IdeasPage />} />
         <Route path="*" element={<Proximamente titulo="No encontrada" />} />
       </Route>
     </Routes>

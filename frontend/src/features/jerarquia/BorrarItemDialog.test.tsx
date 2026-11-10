@@ -262,7 +262,7 @@ describe('BorrarItemDialog: proyecto', () => {
     await waitFor(() => expect(borrarProyecto).toHaveBeenCalled())
     await waitFor(() => {
       const claves = invalidar.mock.calls.map(([f]) => JSON.stringify(f?.queryKey))
-      for (const clave of ['["proyectos"]', '["objetivos"]', '["tareas"]', '["agenda"]', '["recordatorios"]']) expect(claves).toContain(clave)
+      for (const clave of ['["proyectos"]', '["objetivos"]', '["tareas"]', '["agenda"]', '["recordatorios"]', '["ideas"]']) expect(claves).toContain(clave)
     })
   })
 })

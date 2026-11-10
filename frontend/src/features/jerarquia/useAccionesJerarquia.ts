@@ -25,6 +25,8 @@ export function invalidarJerarquia(queryClient: QueryClient) {
 /**
  * Tras borrar un proyecto u objetivo, además de las dos listas: el borrado puede haber borrado tareas (o
  * dejarlas sueltas), así que se refrescan las tareas (incluida `['tareas','todas']`), la agenda y los recordatorios.
+ * Con las ideas pasa lo mismo (se borran o quedan sueltas): se refresca `['ideas']`. La clave va literal, como
+ * `['tareas']`, para que `jerarquia/` no importe de `ideas/`.
  */
 export function invalidarTrasBorrado(queryClient: QueryClient) {
   return Promise.all([
@@ -32,6 +34,7 @@ export function invalidarTrasBorrado(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: ['tareas'] }),
     queryClient.invalidateQueries({ queryKey: ['agenda'] }),
     queryClient.invalidateQueries({ queryKey: ['recordatorios'] }),
+    queryClient.invalidateQueries({ queryKey: ['ideas'] }),
   ])
 }
 
