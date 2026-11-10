@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Recordatorio } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
-import { armarRequest, exigeDescripcion, valorInicialSuelto, valorInicialTarea, yaPaso } from './recordatorioForm'
+import { armarRequest, exigeDescripcion, requestMovido, valorInicialSuelto, valorInicialTarea, yaPaso } from './recordatorioForm'
 
 const AHORA = new Date('2026-11-10T12:00:00-03:00')
 
@@ -83,5 +84,25 @@ describe('armarRequest', () => {
     expect(exigeDescripcion(suelto)).toBe(true)
     expect(exigeDescripcion(deTarea)).toBe(false)
     expect(exigeDescripcion({ tareaId: null, eventoId: 2 })).toBe(false)
+  })
+})
+
+describe('requestMovido', () => {
+  const base: Recordatorio = { id: 5, tareaId: 4, eventoId: null, fechaHora: '2026-11-10T09:00:00-03:00', canal: 'APP', enviado: false, descripcion: 'Llamar' }
+
+  it('lleva los cinco campos: ids, canal y descripción originales con la fecha nueva', () => {
+    expect(requestMovido(base, '2026-11-13T09:00:00-03:00')).toEqual({
+      tareaId: 4,
+      eventoId: null,
+      fechaHora: '2026-11-13T09:00:00-03:00',
+      canal: 'APP',
+      descripcion: 'Llamar',
+    })
+  })
+
+  it('descripción null -> cadena vacía y el canal no se cambia', () => {
+    const r = requestMovido({ ...base, descripcion: null, canal: 'CORREO' }, '2026-11-13T09:00:00-03:00')
+    expect(r.descripcion).toBe('')
+    expect(r.canal).toBe('CORREO')
   })
 })

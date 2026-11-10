@@ -47,6 +47,11 @@ export function exigeDescripcion(base: Pick<BaseRecordatorio, 'tareaId' | 'event
 
 export type ResultadoRequest = { ok: true; request: RecordatorioRequest } | { ok: false; error: string }
 
+/** Cuerpo del PUT que solo cambia la fecha y hora; `tareaId`, `eventoId`, `canal` y descripción se reenvían tal cual. */
+export function requestMovido(r: Recordatorio, fechaHora: string): RecordatorioRequest {
+  return { tareaId: r.tareaId, eventoId: r.eventoId, fechaHora, canal: r.canal, descripcion: r.descripcion ?? '' }
+}
+
 /**
  * Arma el cuerpo completo (el PUT reemplaza todo). Valida antes de llamar al servidor: hora válida y,
  * para un recordatorio suelto, descripción no vacía (se recorta).

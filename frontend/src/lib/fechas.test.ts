@@ -6,6 +6,11 @@ import {
   mensajeRecordatorioCreado,
   mensajeRecordatorioGuardado,
   mensajeRecordatorioQuitado,
+  mensajeRecordatorioMovido,
+  mensajeRecordatorioNoMovido,
+  mensajeSinFechaConRecordatorio,
+  diasEntre,
+  moverInstanteDias,
   aIsoConDesfase,
   esAtrasada,
   ahora,
@@ -41,7 +46,10 @@ import {
   recortarEventoAlDia,
 } from './fechas'
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
+})
 
 describe('formatearDesfase', () => {
   it('formatea un desfase negativo', () => {
@@ -368,5 +376,68 @@ describe('mensajes de recordatorios', () => {
     expect(mensajeRecordatorioCreado('2026-11-09T15:00:00-03:00')).toBe('Recordatorio creado para el lun 9 nov · 15:00')
     expect(mensajeRecordatorioGuardado('2026-11-09T15:00:00-03:00')).toBe('Recordatorio guardado para el lun 9 nov · 15:00')
     expect(mensajeRecordatorioQuitado()).toBe('Recordatorio quitado')
+  })
+})
+
+describe('diasEntre', () => {
+  it('cuenta días de calendario dentro del mes, entre meses y entre años', () => {
+    expect(diasEntre('2026-11-10', '2026-11-14')).toBe(4)
+    expect(diasEntre('2026-10-30', '2026-11-02')).toBe(3)
+    expect(diasEntre('2026-12-30', '2027-01-02')).toBe(3)
+  })
+
+  it('respeta el año bisiesto', () => {
+    expect(diasEntre('2028-02-28', '2028-03-01')).toBe(2)
+    expect(diasEntre('2026-02-28', '2026-03-01')).toBe(1)
+  })
+
+  it('0 para el mismo día y negativo hacia atrás', () => {
+    expect(diasEntre('2026-11-10', '2026-11-10')).toBe(0)
+    expect(diasEntre('2026-11-10', '2026-11-07')).toBe(-3)
+  })
+
+  it('no depende del cambio de horario (fin de DST en Nueva York)', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    expect(diasEntre('2026-10-31', '2026-11-02')).toBe(2)
+  })
+})
+
+describe('moverInstanteDias', () => {
+  it('en Buenos Aires conserva la hora y el desfase', () => {
+    expect(moverInstanteDias('2026-11-09T15:00:00-03:00', 4)).toBe('2026-11-13T15:00:00-03:00')
+  })
+
+  it('cruza fin de mes y año, y acepta días negativos', () => {
+    expect(moverInstanteDias('2026-12-30T09:00:00-03:00', 3)).toBe('2027-01-02T09:00:00-03:00')
+    expect(moverInstanteDias('2026-11-10T09:00:00-03:00', -2)).toBe('2026-11-08T09:00:00-03:00')
+  })
+
+  it('conserva la hora de pared al cruzar el fin del horario de verano (la hora 09:00 sigue siendo 09:00)', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    // El 1/11/2026 termina el horario de verano: el desfase pasa de -04:00 a -05:00.
+    expect(moverInstanteDias('2026-10-31T09:00:00-04:00', 2)).toBe('2026-11-02T09:00:00-05:00')
+  })
+
+  it('en una zona con desfase positivo conserva la hora y el desfase', () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    expect(moverInstanteDias('2026-11-10T09:00:00+05:30', 3)).toBe('2026-11-13T09:00:00+05:30')
+  })
+})
+
+describe('mensajes de mover el recordatorio al posponer', () => {
+  it('movido nombra la fecha de la tarea y el nuevo instante del aviso', () => {
+    expect(mensajeRecordatorioMovido('2026-11-11', '2026-11-10T15:00:00-03:00')).toBe(
+      'Pospuesta al 11 de noviembre; recordatorio movido al mar 10 nov · 15:00',
+    )
+  })
+
+  it('no movido incluye el mensaje del servidor', () => {
+    expect(mensajeRecordatorioNoMovido('2026-11-11', 'Recordatorio no encontrado: 5')).toBe(
+      'Pospuesta al 11 de noviembre, pero no se pudo mover el recordatorio (Recordatorio no encontrado: 5). Revísalo en «Recordatorio…»',
+    )
+  })
+
+  it('sin fecha con recordatorio avisa que no se movió', () => {
+    expect(mensajeSinFechaConRecordatorio()).toBe('Sin fecha: la verás en el Cofre y en Recomendación; el recordatorio no se movió')
   })
 })

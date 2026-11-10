@@ -79,6 +79,12 @@ async function botonBorrarHabilitado(dialogo: HTMLElement) {
   return boton
 }
 
+/** El selector de posponer espera la consulta del recordatorio: sus botones nacen deshabilitados. */
+async function selectorListo(selector: HTMLElement) {
+  await waitFor(() => expect(within(selector).getByRole('button', { name: 'Dejar sin fecha' })).toBeEnabled())
+  return selector
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-10T12:00:00-03:00'))
@@ -345,7 +351,7 @@ describe('Acciones: desde el diálogo de edición', () => {
     renderizar([], [informe])
     await user.click(within(await abrirEdicion(user)).getByRole('button', { name: 'Posponer' }))
     expect(posponerTarea).not.toHaveBeenCalled()
-    const selector = await screen.findByRole('dialog', { name: 'Posponer tarea' })
+    const selector = await selectorListo(await screen.findByRole('dialog', { name: 'Posponer tarea' }))
     await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
     await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7, '2026-11-11'))
     expect(await screen.findByRole('status')).toHaveTextContent('Pospuesta al 11 de noviembre')
@@ -402,7 +408,7 @@ describe('Posponer: selector', () => {
   async function abrirSelector(user: Usuario, titulo: string) {
     await abrirMenu(user, titulo)
     await user.click(screen.getByRole('menuitem', { name: 'Posponer' }))
-    return screen.findByRole('dialog', { name: 'Posponer tarea' })
+    return selectorListo(await screen.findByRole('dialog', { name: 'Posponer tarea' }))
   }
 
   it('Mañana manda hoy + 1 explícito, avisa, invalida y refresca la lista', async () => {

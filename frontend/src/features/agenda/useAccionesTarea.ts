@@ -1,13 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
-import { borrarRecordatorio, getRecordatoriosDeTarea } from '@/api/recordatorios'
+import { actualizarRecordatorio, borrarRecordatorio, getRecordatoriosDeTarea } from '@/api/recordatorios'
 import { actualizarTarea, borrarTarea, marcarHecha, posponerTarea, reabrirTarea } from '@/api/tareas'
-import { mensajeBorrada, mensajeMadreCambiada, mensajePospuesta, mensajeSinFecha } from '@/lib/fechas'
+import {
+  diasEntre,
+  mensajeBorrada,
+  mensajeMadreCambiada,
+  mensajePospuesta,
+  mensajeRecordatorioMovido,
+  mensajeRecordatorioNoMovido,
+  mensajeSinFecha,
+  mensajeSinFechaConRecordatorio,
+  moverInstanteDias,
+} from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { ModoSubtareas, Tarea } from '@/types/tarea'
 import { requestConEstado, requestConPadre, requestSinFecha } from './formularioTarea'
+import { requestMovido } from './recordatorioForm'
 import { CLAVE_TODAS_LAS_TAREAS } from './useTodasLasTareas'
 
 export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'sinFecha' | 'cancelar' | 'reactivar'
@@ -21,8 +32,10 @@ export interface Acciones {
   /**
    * Ejecuta la acción y, si sale bien, avisa y cierra el diálogo de edición de esa tarea.
    * `fecha` (YYYY-MM-DD) solo la usa `'posponer'`, que siempre la manda explícita.
+   * `recordatorio` (opcional) es el recordatorio pendiente de la tarea: en `'posponer'` se mueve los mismos días
+   * que la tarea; en `'sinFecha'` NO se toca, solo cambia el texto del aviso. Si ya fue enviado se ignora.
    */
-  ejecutar: (tipo: TipoAccion, tarea: Tarea, fecha?: string) => void
+  ejecutar: (tipo: TipoAccion, tarea: Tarea, fecha?: string, recordatorio?: Recordatorio) => void
   /** Abre el selector de posponer (Mañana / Elegir fecha / Dejar sin fecha) para esa tarea. */
   pedirPosponer: (tarea: Tarea) => void
   /** Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. */
@@ -94,21 +107,56 @@ const MENSAJES = {
   sinFecha: mensajeSinFecha(),
 } as const
 
-function ejecutarAccion(tipo: TipoAccion, tarea: Tarea, fecha?: string): Promise<Tarea> {
+/**
+ * Resultado de la mutación. Solo 'posponer' y 'sinFecha' lo usan más allá de `tarea`: `recordatorioMovido` es el
+ * recordatorio ya movido y `fallo` el mensaje del servidor si la tarea se pospuso pero el recordatorio no.
+ */
+interface ResultadoAccion {
+  tarea: Tarea
+  recordatorioMovido: Recordatorio | null
+  fallo: string | null
+}
+
+/** El recordatorio solo cuenta si existe y no fue enviado (guarda propia, además de la del diálogo). */
+function pendienteDe(recordatorio?: Recordatorio): Recordatorio | undefined {
+  return recordatorio && !recordatorio.enviado ? recordatorio : undefined
+}
+
+function soloTarea(promesa: Promise<Tarea>): Promise<ResultadoAccion> {
+  return promesa.then((tarea) => ({ tarea, recordatorioMovido: null, fallo: null }))
+}
+
+/** PATCH de posponer y, si hay un recordatorio pendiente, PUT con la fecha corrida los mismos días de calendario. */
+async function posponerConRecordatorio(tarea: Tarea, fecha: string, recordatorio?: Recordatorio): Promise<ResultadoAccion> {
+  const actualizada = await posponerTarea(tarea.id, fecha)
+  const mover = pendienteDe(recordatorio)
+  if (!mover || !tarea.fecha || !actualizada.fecha) return { tarea: actualizada, recordatorioMovido: null, fallo: null }
+  try {
+    const nueva = moverInstanteDias(mover.fechaHora, diasEntre(tarea.fecha, actualizada.fecha))
+    const movido = await actualizarRecordatorio(mover.id, requestMovido(mover, nueva))
+    return { tarea: actualizada, recordatorioMovido: movido, fallo: null }
+  } catch (e) {
+    // La tarea ya cambió: no se relanza. El mensaje del servidor llega al aviso.
+    return { tarea: actualizada, recordatorioMovido: null, fallo: e instanceof Error ? e.message : 'error desconocido' }
+  }
+}
+
+function ejecutarAccion(tipo: TipoAccion, tarea: Tarea, fecha?: string, recordatorio?: Recordatorio): Promise<ResultadoAccion> {
   switch (tipo) {
     case 'hecha':
-      return marcarHecha(tarea.id)
+      return soloTarea(marcarHecha(tarea.id))
     case 'reabrir':
-      return reabrirTarea(tarea.id)
+      return soloTarea(reabrirTarea(tarea.id))
     case 'posponer':
       if (!fecha) return Promise.reject(new Error('Falta la fecha para posponer.'))
-      return posponerTarea(tarea.id, fecha)
+      return posponerConRecordatorio(tarea, fecha, recordatorio)
     case 'sinFecha':
-      return actualizarTarea(tarea.id, requestSinFecha(tarea))
+      // El recordatorio no se toca: solo se usa en onSuccess para el texto del aviso.
+      return soloTarea(actualizarTarea(tarea.id, requestSinFecha(tarea)))
     case 'cancelar':
-      return actualizarTarea(tarea.id, requestConEstado(tarea, 'CANCELADO'))
+      return soloTarea(actualizarTarea(tarea.id, requestConEstado(tarea, 'CANCELADO')))
     case 'reactivar':
-      return actualizarTarea(tarea.id, requestConEstado(tarea, 'PENDIENTE'))
+      return soloTarea(actualizarTarea(tarea.id, requestConEstado(tarea, 'PENDIENTE')))
   }
 }
 
@@ -119,6 +167,7 @@ function ejecutarAccion(tipo: TipoAccion, tarea: Tarea, fecha?: string): Promise
  */
 export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones): Acciones {
   const queryClient = useQueryClient()
+  const enCurso = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
   const [aSubtarea, setASubtarea] = useState<Tarea | null>(null)
@@ -134,13 +183,31 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
     Promise.all([queryClient.invalidateQueries({ queryKey: ['agenda'] }), queryClient.invalidateQueries({ queryKey: ['tareas'] })])
 
   const accion = useMutation({
-    mutationFn: ({ tipo, tarea, fecha }: { tipo: TipoAccion; tarea: Tarea; fecha?: string }) => ejecutarAccion(tipo, tarea, fecha),
-    onSuccess: async (actualizada, { tipo, tarea }) => {
+    mutationFn: ({ tipo, tarea, fecha, recordatorio }: { tipo: TipoAccion; tarea: Tarea; fecha?: string; recordatorio?: Recordatorio }) =>
+      ejecutarAccion(tipo, tarea, fecha, recordatorio),
+    onSettled: () => {
+      enCurso.current = false
+    },
+    onSuccess: async ({ tarea: actualizada, recordatorioMovido, fallo }, { tipo, tarea, recordatorio }) => {
       await invalidarTareas()
       if (tipo === 'posponer' || tipo === 'sinFecha') setAPosponer(null)
       // Posponer: el mensaje usa la fecha que calculó el backend.
-      alMensaje(tipo === 'posponer' ? mensajePospuesta(actualizada.fecha ?? '') : MENSAJES[tipo])
+      const fecha = actualizada.fecha ?? ''
+      const conRecordatorio = pendienteDe(recordatorio) !== undefined
+      if (tipo === 'posponer') {
+        alMensaje(
+          recordatorioMovido
+            ? mensajeRecordatorioMovido(fecha, recordatorioMovido.fechaHora)
+            : fallo !== null
+              ? mensajeRecordatorioNoMovido(fecha, fallo)
+              : mensajePospuesta(fecha),
+        )
+      } else {
+        alMensaje(tipo === 'sinFecha' && conRecordatorio ? mensajeSinFechaConRecordatorio() : MENSAJES[tipo])
+      }
       alTerminar(tarea.id)
+      // Se pasó un recordatorio a mover (haya salido bien o no): se refrescan banner, Próximos y la consulta por tarea.
+      if (tipo === 'posponer' && conRecordatorio) await queryClient.invalidateQueries({ queryKey: ['recordatorios'] })
       if (tipo === 'hecha' || tipo === 'cancelar') {
         try {
           const lista = await queryClient.fetchQuery({
@@ -200,9 +267,12 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   })
 
   return {
-    ejecutar: (tipo, tarea, fecha) => {
+    ejecutar: (tipo, tarea, fecha, recordatorio) => {
+      // Guard síncrono: dos clics antes de que React deshabilite los botones no lanzan dos PATCH/PUT.
+      if (enCurso.current) return
+      enCurso.current = true
       setError(null)
-      accion.mutate({ tipo, tarea, fecha })
+      accion.mutate({ tipo, tarea, fecha, recordatorio })
     },
     pedirPosponer: (tarea) => {
       setError(null)

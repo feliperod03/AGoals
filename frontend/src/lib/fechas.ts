@@ -1,4 +1,4 @@
-import { addDays, differenceInMinutes, format, parseISO, startOfDay } from 'date-fns'
+import { addDays, differenceInCalendarDays, differenceInMinutes, format, parseISO, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 // Todo el manejo de fechas del frontend vive aquí. Regla: nunca `toISOString()`,
@@ -226,3 +226,27 @@ export function deValorDatetimeLocal(valor: string): string | null {
 export const mensajeRecordatorioCreado = (iso: string) => `Recordatorio creado para el ${formatearFechaHoraCorta(iso)}`
 export const mensajeRecordatorioGuardado = (iso: string) => `Recordatorio guardado para el ${formatearFechaHoraCorta(iso)}`
 export const mensajeRecordatorioQuitado = () => 'Recordatorio quitado'
+
+/** Días de calendario de `desde` a `hasta` (ambas `YYYY-MM-DD`); negativo si `hasta` es anterior. */
+export function diasEntre(desde: string, hasta: string): number {
+  return differenceInCalendarDays(parseISO(hasta), parseISO(desde))
+}
+
+/**
+ * Corre un instante (ISO con desfase) `dias` días de calendario. `addDays` opera sobre un `Date` local, así que
+ * conserva la hora de pared aunque haya un cambio de horario en medio (sumar 24 h en ms la desplazaría).
+ */
+export function moverInstanteDias(iso: string, dias: number): string {
+  return aIsoConDesfase(addDays(parseISO(iso), dias))
+}
+
+/** Posponer con el recordatorio acompañando a la tarea. */
+export const mensajeRecordatorioMovido = (fechaTarea: string, iso: string) =>
+  `${mensajePospuesta(fechaTarea)}; recordatorio movido al ${formatearFechaHoraCorta(iso)}`
+
+/** La tarea se pospuso pero el recordatorio no se pudo mover; `motivo` es el mensaje del servidor. */
+export const mensajeRecordatorioNoMovido = (fechaTarea: string, motivo: string) =>
+  `${mensajePospuesta(fechaTarea)}, pero no se pudo mover el recordatorio (${motivo}). Revísalo en «Recordatorio…»`
+
+/** «Dejar sin fecha» con un recordatorio pendiente: el recordatorio se queda donde estaba. */
+export const mensajeSinFechaConRecordatorio = () => `${mensajeSinFecha()}; el recordatorio no se movió`
