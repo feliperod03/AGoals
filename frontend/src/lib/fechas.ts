@@ -121,6 +121,16 @@ export function mensajeMadreCambiada(titulo: string, tituloMadre: string | null)
   return tituloMadre === null ? `«${titulo}» ya no es subtarea` : `«${titulo}» ahora es subtarea de «${tituloMadre}»`
 }
 
+/** Confirmación al ligar una tarea a un proyecto u objetivo (`tipo`: «proyecto» / «objetivo»). */
+export function mensajeTareaVinculada(titulo: string, tipo: 'proyecto' | 'objetivo', nombre: string): string {
+  return `«${titulo}» ahora es del ${tipo} «${nombre}»`
+}
+
+/** Confirmación al quitar el vínculo de una tarea con su proyecto u objetivo. */
+export function mensajeTareaDesvinculada(titulo: string, tipo: 'proyecto' | 'objetivo', nombre: string): string {
+  return `«${titulo}» ya no es del ${tipo} «${nombre}»`
+}
+
 /** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
 export function mensajePospuesta(fecha: string): string {
   return `Pospuesta al ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './client'
-import { actualizarObjetivo, borrarObjetivo, crearObjetivo, getImpactoBorradoObjetivo, getObjetivos } from './objetivos'
+import { actualizarObjetivo, asignarTarea, borrarObjetivo, crearObjetivo, getImpactoBorradoObjetivo, getObjetivos, quitarTarea } from './objetivos'
 
 const fetchMock = vi.fn()
 
@@ -82,4 +82,35 @@ describe('api/objetivos', () => {
     expect((fetchMock.mock.calls[1] as [string])[0]).toBe('/api/objetivos/3')
   })
 
+  it('asignarTarea hace PUT sin cuerpo ni Content-Type y devuelve la tarea', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 12, objetivoId: 7 }), { status: 200 }))
+    await expect(asignarTarea(7, 12)).resolves.toMatchObject({ id: 12, objetivoId: 7 })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/objetivos/7/tareas/12')
+    expect(init.method).toBe('PUT')
+    expect(init.body).toBeUndefined()
+    expect(init.headers).toBeUndefined()
+  })
+
+  it('quitarTarea hace DELETE y tolera el 204 sin cuerpo', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await expect(quitarTarea(7, 12)).resolves.toBeUndefined()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/objetivos/7/tareas/12')
+    expect(init.method).toBe('DELETE')
+  })
+
+  it('quitarTarea: el 400 de "no pertenece" llega con el mensaje del servidor', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ mensaje: 'La tarea 12 no pertenece al objetivo 7', errores: [] }), { status: 400 }))
+    const error = await quitarTarea(7, 12).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(400)
+    expect((error as ApiError).message).toBe('La tarea 12 no pertenece al objetivo 7')
+  })
+
+  it('asignarTarea: un 404 llega como ApiError', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ mensaje: 'No existe el objetivo 7', errores: [] }), { status: 404 }))
+    const error = await asignarTarea(7, 12).catch((e: unknown) => e)
+    expect((error as ApiError).status).toBe(404)
+  })
 })

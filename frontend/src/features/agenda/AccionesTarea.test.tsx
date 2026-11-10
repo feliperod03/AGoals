@@ -121,7 +121,7 @@ describe('Acciones: menú (Radix)', () => {
     boton.focus()
     await user.keyboard('{Enter}')
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Proyecto y objetivo…', 'Cancelar', 'Borrar'])
     await user.keyboard('{ArrowDown}')
     expect(within(menu).getByRole('menuitem', { name: 'Posponer' })).toHaveFocus()
     await user.keyboard('{Escape}')
@@ -133,11 +133,11 @@ describe('Acciones: menú (Radix)', () => {
     const user = userEvent.setup()
     renderizar([tarea({ id: 1, titulo: 'A', estado: 'HECHO' }), tarea({ id: 2, titulo: 'B', estado: 'CANCELADO' })])
     let menu = await abrirMenu(user, 'A')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Proyecto y objetivo…', 'Cancelar', 'Borrar'])
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     menu = await abrirMenu(user, 'B')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Reactivar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Proyecto y objetivo…', 'Reactivar', 'Borrar'])
   })
 
   it('"Agregar subtarea" aparece en tareas abiertas y no en hechas ni canceladas', async () => {

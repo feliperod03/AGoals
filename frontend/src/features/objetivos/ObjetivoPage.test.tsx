@@ -92,7 +92,7 @@ describe('ObjetivoPage', () => {
     expect(await within(tareas).findByText('Comprar zapatillas')).toBeInTheDocument()
     expect(within(tareas).queryByText('Tarea de su proyecto')).not.toBeInTheDocument()
     expect(within(tareas).queryByText('Tarea de otro objetivo')).not.toBeInTheDocument()
-    expect(within(tareas).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(tareas).getAllByRole('button').map((b) => b.textContent)).toEqual(['Vincular una existente', 'Quitar'])
   })
 
   it('un objetivo sin proyectos, hijos ni tareas lo dice en cada sección', async () => {

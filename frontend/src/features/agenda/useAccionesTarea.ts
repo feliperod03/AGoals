@@ -43,6 +43,10 @@ export interface Acciones {
     vincular: (tarea: Tarea) => void
     cancelar: () => void
   } | null
+  /** Abre «Proyecto y objetivo de «X»» (encima del diálogo de edición, si había uno). La mutación vive en el diálogo. */
+  pedirVinculo: (tarea: Tarea) => void
+  /** Diálogo abierto; `alMensaje` es el aviso de la página donde se abrió. */
+  vinculo: { tarea: Tarea; cancelar: () => void; alMensaje: (mensaje: string) => void } | null
   /** Abre la confirmación de borrado (el DELETE solo se manda al confirmar). */
   pedirBorrado: (tarea: Tarea) => void
   /** Hay una acción en curso: los botones se deshabilitan. */
@@ -115,6 +119,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
   const [aSubtarea, setASubtarea] = useState<Tarea | null>(null)
   const [errorSubtarea, setErrorSubtarea] = useState<string | null>(null)
+  const [aVincular, setAVincular] = useState<Tarea | null>(null)
   const [aBorrar, setABorrar] = useState<Tarea | null>(null)
   const [errorBorrado, setErrorBorrado] = useState<string | null>(null)
   const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null)
@@ -220,6 +225,8 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
           cancelar: () => setASubtarea(null),
         }
       : null,
+    pedirVinculo: (tarea) => setAVincular(tarea),
+    vinculo: aVincular ? { tarea: aVincular, cancelar: () => setAVincular(null), alMensaje } : null,
     pedirBorrado: (tarea) => {
       setErrorBorrado(null)
       setABorrar(tarea)

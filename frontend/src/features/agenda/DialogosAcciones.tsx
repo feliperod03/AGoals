@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { VincularTareaDialog } from '@/features/jerarquia/VincularTareaDialog'
 import { ErrorDialogo } from './ErrorDialogo'
 import { ConfirmarBorradoDialog } from './ConfirmarBorradoDialog'
 import { PosponerDialog } from './PosponerDialog'
 import { SubtareaDialog } from './SubtareaDialog'
 import type { Acciones } from './useAccionesTarea'
 
-/** Elección de subtarea (crear o vincular), selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
+/** Elección de subtarea (crear o vincular), proyecto y objetivo de la tarea, selector de posponer, confirmación de borrado y pregunta por el recordatorio pendiente (se montan una sola vez en la página). */
 export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: string }) {
   const { preguntaRecordatorio: pregunta } = acciones
   return (
@@ -14,6 +15,10 @@ export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: s
       <PosponerDialog acciones={acciones} hoy={hoy} />
 
       <SubtareaDialog acciones={acciones} />
+
+      {acciones.vinculo && (
+        <VincularTareaDialog tarea={acciones.vinculo.tarea} alCerrar={acciones.vinculo.cancelar} alMensaje={acciones.vinculo.alMensaje} />
+      )}
 
       <ConfirmarBorradoDialog acciones={acciones} />
 

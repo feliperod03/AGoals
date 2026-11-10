@@ -21,6 +21,8 @@ import {
   sumarDias,
   mensajePospuesta,
   mensajeMadreCambiada,
+  mensajeTareaDesvinculada,
+  mensajeTareaVinculada,
   mensajeSubtareaAgregada,
   minutosDeHora,
   minutosDelDia,
@@ -272,5 +274,17 @@ describe('mensajeBorrada', () => {
     expect(mensajeBorrada('Pan', 1, 'conservar')).toBe('«Pan» borrada; su subtarea se conservó')
     expect(mensajeBorrada('Pan', 3, 'borrar')).toBe('«Pan» borrada con 3 subtareas')
     expect(mensajeBorrada('Pan', 1, 'borrar')).toBe('«Pan» borrada con 1 subtarea')
+  })
+})
+
+describe('mensajes de vínculo con proyecto u objetivo', () => {
+  it('avisa al ligar', () => {
+    expect(mensajeTareaVinculada('Embalar', 'proyecto', 'Mudanza')).toBe('«Embalar» ahora es del proyecto «Mudanza»')
+    expect(mensajeTareaVinculada('Embalar', 'objetivo', 'Vivir solo')).toBe('«Embalar» ahora es del objetivo «Vivir solo»')
+  })
+
+  it('avisa al quitar', () => {
+    expect(mensajeTareaDesvinculada('Embalar', 'proyecto', 'Mudanza')).toBe('«Embalar» ya no es del proyecto «Mudanza»')
+    expect(mensajeTareaDesvinculada('Embalar', 'objetivo', 'Vivir solo')).toBe('«Embalar» ya no es del objetivo «Vivir solo»')
   })
 })

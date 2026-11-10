@@ -108,7 +108,7 @@ describe('ProyectoPage: datos', () => {
     expect(selector).toBeEnabled() // con la lista fallida se puede al menos quitar el vínculo
   })
 
-  it('las tareas ligadas son solo las de este proyecto, anidadas y SIN acciones', async () => {
+  it('las tareas ligadas son solo las de este proyecto y anidadas; sin menús ni enlaces', async () => {
     renderizar('/proyectos/1')
     const tareas = await screen.findByText('Pedir presupuesto').then(() => seccion('Tareas ligadas'))
     expect(within(tareas).getByText('Pedir presupuesto')).toBeInTheDocument()
@@ -117,8 +117,8 @@ describe('ProyectoPage: datos', () => {
     expect(within(tareas).queryByText('De otro proyecto')).not.toBeInTheDocument()
     expect(within(tareas).queryByText('De un objetivo')).not.toBeInTheDocument()
     expect(within(tareas).queryByText('Suelta')).not.toBeInTheDocument()
-    // Solo lectura: ni botones ni enlaces ni menús.
-    expect(within(tareas).queryByRole('button')).not.toBeInTheDocument()
+    // Solo «Quitar» por tarea ligada directamente y «Vincular una existente»: ni menús ni enlaces.
+    expect(within(tareas).getAllByRole('button').map((b) => b.textContent)).toEqual(['Vincular una existente', 'Quitar', 'Quitar', 'Quitar'])
     expect(within(tareas).queryByRole('link')).not.toBeInTheDocument()
     // La subtarea ligada cuelga de su madre.
     const madre = within(tareas).getByText('Pedir presupuesto').closest('li')!

@@ -17,7 +17,7 @@ import type { Objetivo } from '@/types/objetivo'
 import type { Proyecto } from '@/types/proyecto'
 import { AgregarProyectoDialog } from './AgregarProyectoDialog'
 
-/** Detalle de un objetivo (8.4a): datos, subobjetivos, sus proyectos (8.4a2: agregar y quitar) y las tareas ligadas directamente (solo lectura). */
+/** Detalle de un objetivo (8.4a): datos, subobjetivos, sus proyectos (8.4a2: agregar y quitar) y las tareas ligadas directamente (8.4b: quitar y vincular). */
 export function ObjetivoPage() {
   const { id } = useParams()
   return (
@@ -33,6 +33,9 @@ export function ObjetivoPage() {
             titulo="Tareas ligadas directamente"
             aclaracion="Las tareas de sus proyectos se ven en cada proyecto."
             textoVacio="Este objetivo no tiene tareas ligadas directamente."
+            nombre={o.nombre}
+            abierto={esAbierto(o.estado)}
+            alMensaje={contexto.alMensaje}
           />
         </>
       )}
