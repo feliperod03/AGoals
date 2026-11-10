@@ -1,3 +1,4 @@
+import type { Elecciones, ImpactoBorradoProyecto } from '@/types/impactoBorrado'
 import type { Proyecto, ProyectoRequest } from '@/types/proyecto'
 import { del, get, post, put } from './client'
 
@@ -15,7 +16,15 @@ export function actualizarProyecto(id: number, request: ProyectoRequest): Promis
   return put<Proyecto>(`/api/proyectos/${id}`, request)
 }
 
-/** 409 con mensaje legible si tiene subproyectos, tareas o ideas: el backend nunca borra en cascada. */
-export function borrarProyecto(id: number): Promise<void> {
-  return del(`/api/proyectos/${id}`)
+/** Vista previa del borrado (solo lectura): qué se borraría con estas elecciones. Un parámetro ausente cuenta como conservar. */
+export function getImpactoBorradoProyecto(id: number, elecciones: Elecciones = {}): Promise<ImpactoBorradoProyecto> {
+  return get<ImpactoBorradoProyecto>(`/api/proyectos/${id}/impacto-borrado`, elecciones)
+}
+
+/**
+ * `elecciones`: `borrar|conservar` por categoría (`subproyectos`, `tareas`, `ideas`). El backend no decide solo:
+ * 409 con mensaje legible si una categoría con elementos no trae su elección.
+ */
+export function borrarProyecto(id: number, elecciones?: Elecciones): Promise<void> {
+  return del(`/api/proyectos/${id}`, elecciones)
 }

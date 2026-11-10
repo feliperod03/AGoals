@@ -1,4 +1,5 @@
 import type { Estado } from '@/types/tarea'
+import { unir } from './borrado'
 import { cumpleEstado, type FiltroEstado } from './filtros'
 import { ETIQUETA_ESTADO } from './tipos'
 
@@ -9,7 +10,9 @@ export const mensajeCreado = (etiqueta: string, nombre: string) => `${etiqueta} 
 
 export const mensajeGuardado = (nombre: string) => `«${nombre}» guardado`
 
-export const mensajeBorrado = (nombre: string) => `«${nombre}» borrado`
+/** `tambien`: lo demás que se borró con él («2 proyectos», «5 tareas»), si hubo. */
+export const mensajeBorrado = (nombre: string, tambien: string[] = []) =>
+  tambien.length === 0 ? `«${nombre}» borrado` : `«${nombre}» borrado; también ${unir(tambien)}`
 
 export const mensajeProyectoVinculado = (proyecto: string, objetivo: string) => `«${proyecto}» ahora es parte de «${objetivo}»`
 

@@ -20,6 +20,8 @@ describe('mensajes de proyectos y objetivos', () => {
     expect(mensajeCreado('Objetivo', 'Salud')).toBe('Objetivo «Salud» creado')
     expect(mensajeGuardado('Mudanza')).toBe('«Mudanza» guardado')
     expect(mensajeBorrado('Mudanza')).toBe('«Mudanza» borrado')
+    expect(mensajeBorrado('Salud', ['2 proyectos', '5 tareas'])).toBe('«Salud» borrado; también 2 proyectos y 5 tareas')
+    expect(mensajeBorrado('Salud', ['1 idea'])).toBe('«Salud» borrado; también 1 idea')
   })
 
   it('el cambio de estado, si sigue visible con el filtro, no agrega nada', () => {

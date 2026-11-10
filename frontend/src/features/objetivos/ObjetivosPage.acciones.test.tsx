@@ -9,9 +9,10 @@ import { objetivo } from '@/features/jerarquia/fabrica'
 import type { Objetivo } from '@/types/objetivo'
 import { ObjetivosPage } from './ObjetivosPage'
 
-vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn() }))
-vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn() }))
-import { actualizarObjetivo, borrarObjetivo, crearObjetivo, getObjetivos } from '@/api/objetivos'
+vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
+vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
+import { actualizarObjetivo, borrarObjetivo, crearObjetivo, getImpactoBorradoObjetivo, getObjetivos } from '@/api/objetivos'
+import { SIN_DEPENDENCIAS_OBJETIVO } from '@/test/impactoBorrado'
 
 let datos: Objetivo[]
 
@@ -38,6 +39,7 @@ beforeEach(() => {
     datos = datos.map((d) => (d.id === id ? { ...d, ...r } : d))
     return datos.find((d) => d.id === id)!
   })
+  vi.mocked(getImpactoBorradoObjetivo).mockResolvedValue(SIN_DEPENDENCIAS_OBJETIVO)
   vi.mocked(borrarObjetivo).mockImplementation(async (id) => {
     datos = datos.filter((d) => d.id !== id)
   })

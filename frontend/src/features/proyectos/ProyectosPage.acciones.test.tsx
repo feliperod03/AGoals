@@ -10,10 +10,11 @@ import type { Objetivo } from '@/types/objetivo'
 import type { Proyecto } from '@/types/proyecto'
 import { ProyectosPage } from './ProyectosPage'
 
-vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn() }))
-vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn() }))
+vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
+vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
 import { getObjetivos } from '@/api/objetivos'
-import { actualizarProyecto, borrarProyecto, crearProyecto, getProyectos } from '@/api/proyectos'
+import { actualizarProyecto, borrarProyecto, crearProyecto, getImpactoBorradoProyecto, getProyectos } from '@/api/proyectos'
+import { SIN_DEPENDENCIAS_PROYECTO } from '@/test/impactoBorrado'
 
 // Un "servidor" en memoria: las mutaciones lo cambian y la lista que se vuelve a pedir lo refleja.
 let datos: Proyecto[]
@@ -49,6 +50,7 @@ beforeEach(() => {
     datos = datos.map((d) => (d.id === id ? { ...d, ...r } : d))
     return datos.find((d) => d.id === id)!
   })
+  vi.mocked(getImpactoBorradoProyecto).mockResolvedValue(SIN_DEPENDENCIAS_PROYECTO)
   vi.mocked(borrarProyecto).mockImplementation(async (id) => {
     datos = datos.filter((d) => d.id !== id)
   })

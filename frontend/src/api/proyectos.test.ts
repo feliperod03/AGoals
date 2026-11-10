@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './client'
-import { actualizarProyecto, borrarProyecto, crearProyecto, getProyectos } from './proyectos'
+import { actualizarProyecto, borrarProyecto, crearProyecto, getImpactoBorradoProyecto, getProyectos } from './proyectos'
 
 const fetchMock = vi.fn()
 
@@ -64,4 +64,29 @@ describe('api/proyectos', () => {
     expect((error as ApiError).status).toBe(409)
     expect((error as ApiError).message).toBe('El proyecto 7 tiene subproyectos: muévelos o bórralos primero')
   })
+
+  it('getImpactoBorradoProyecto pide la vista previa, sin parámetros o con las elecciones', async () => {
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }))
+    await getImpactoBorradoProyecto(7)
+    await getImpactoBorradoProyecto(7, { subproyectos: 'borrar', tareas: 'conservar', ideas: 'conservar' })
+    const [sin, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(sin).toBe('/api/proyectos/7/impacto-borrado')
+    expect(init.method).toBe('GET')
+    expect((fetchMock.mock.calls[1] as [string])[0]).toBe('/api/proyectos/7/impacto-borrado?subproyectos=borrar&tareas=conservar&ideas=conservar')
+  })
+
+  it('borrarProyecto con elecciones las manda como parámetros del DELETE', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await borrarProyecto(7, { subproyectos: 'conservar', tareas: 'borrar', ideas: 'conservar' })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/proyectos/7?subproyectos=conservar&tareas=borrar&ideas=conservar')
+    expect(init.method).toBe('DELETE')
+  })
+
+  it('borrarProyecto con elecciones vacías no agrega nada a la URL', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await borrarProyecto(7, {})
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('/api/proyectos/7')
+  })
+
 })

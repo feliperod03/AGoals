@@ -10,8 +10,8 @@ import type { Objetivo } from '@/types/objetivo'
 import type { Proyecto } from '@/types/proyecto'
 import { ObjetivoPage } from './ObjetivoPage'
 
-vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn() }))
-vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn() }))
+vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
+vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
 vi.mock('@/api/tareas', () => ({ getTareas: vi.fn() }))
 import { getObjetivos } from '@/api/objetivos'
 import { actualizarProyecto, crearProyecto, getProyectos } from '@/api/proyectos'

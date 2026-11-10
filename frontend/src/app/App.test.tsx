@@ -13,12 +13,14 @@ vi.mock('@/api/proyectos', () => ({
   crearProyecto: vi.fn(),
   actualizarProyecto: vi.fn(),
   borrarProyecto: vi.fn(),
+  getImpactoBorradoProyecto: vi.fn(),
 }))
 vi.mock('@/api/objetivos', () => ({
   getObjetivos: vi.fn().mockResolvedValue([]),
   crearObjetivo: vi.fn(),
   actualizarObjetivo: vi.fn(),
   borrarObjetivo: vi.fn(),
+  getImpactoBorradoObjetivo: vi.fn(),
 }))
 vi.mock('@/api/tareas', () => ({
   getTarea: vi.fn(),

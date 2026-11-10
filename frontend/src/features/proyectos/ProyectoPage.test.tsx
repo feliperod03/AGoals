@@ -12,12 +12,13 @@ import type { Proyecto } from '@/types/proyecto'
 import { ProyectoPage } from './ProyectoPage'
 import { ProyectosPage } from './ProyectosPage'
 
-vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn() }))
-vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn() }))
+vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
+vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
 vi.mock('@/api/tareas', () => ({ getTareas: vi.fn() }))
 import { getObjetivos } from '@/api/objetivos'
-import { actualizarProyecto, borrarProyecto, getProyectos } from '@/api/proyectos'
+import { actualizarProyecto, borrarProyecto, getImpactoBorradoProyecto, getProyectos } from '@/api/proyectos'
 import { getTareas } from '@/api/tareas'
+import { SIN_DEPENDENCIAS_PROYECTO } from '@/test/impactoBorrado'
 
 let datos: Proyecto[]
 let objetivos: Objetivo[]
@@ -59,6 +60,7 @@ beforeEach(() => {
     datos = datos.map((d) => (d.id === id ? { ...d, ...r } : d))
     return datos.find((d) => d.id === id)!
   })
+  vi.mocked(getImpactoBorradoProyecto).mockResolvedValue(SIN_DEPENDENCIAS_PROYECTO)
   vi.mocked(borrarProyecto).mockImplementation(async (id) => {
     datos = datos.filter((d) => d.id !== id)
   })

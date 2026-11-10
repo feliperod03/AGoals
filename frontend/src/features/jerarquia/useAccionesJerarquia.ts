@@ -1,22 +1,37 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
+import type { Elecciones } from '@/types/impactoBorrado'
 import type { Estado } from '@/types/tarea'
 import type { ConfigJerarquia } from './config'
 import type { FiltroEstado } from './filtros'
 import type { ValoresItem } from './formulario'
 import { mensajeBorrado, mensajeEstadoCambiado } from './mensajes'
 import type { ItemJerarquico } from './tipos'
+import { CLAVE_IMPACTO_BORRADO } from './useImpactoBorrado'
 
 /**
  * Tras toda mutación de proyecto u objetivo se refrescan las DOS listas: son chicas y así no hay que razonar
  * caso por caso (el nombre de un objetivo se ve en los proyectos, y los proyectos de un objetivo en su detalle).
- * No se tocan las tareas: no cambian (borrar con tareas da 409).
+ * Ninguna de estas mutaciones toca tareas; el borrado sí puede hacerlo y usa `invalidarTrasBorrado`.
  */
 export function invalidarJerarquia(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ['proyectos'] }),
     queryClient.invalidateQueries({ queryKey: ['objetivos'] }),
+  ])
+}
+
+/**
+ * Tras borrar un proyecto u objetivo, además de las dos listas: el borrado puede haber borrado tareas (o
+ * dejarlas sueltas), así que se refrescan las tareas (incluida `['tareas','todas']`), la agenda y los recordatorios.
+ */
+export function invalidarTrasBorrado(queryClient: QueryClient) {
+  return Promise.all([
+    invalidarJerarquia(queryClient),
+    queryClient.invalidateQueries({ queryKey: ['tareas'] }),
+    queryClient.invalidateQueries({ queryKey: ['agenda'] }),
+    queryClient.invalidateQueries({ queryKey: ['recordatorios'] }),
   ])
 }
 
@@ -36,6 +51,14 @@ export interface EstadoItemDialog<T> {
   iniciales?: Partial<ValoresItem>
 }
 
+/** Lo que manda el diálogo al confirmar un borrado con elecciones; sin esto, DELETE sin parámetros. */
+export interface OpcionesBorrado {
+  /** Un valor explícito por cada fila visible del diálogo. */
+  elecciones: Elecciones
+  /** Lo demás que se borra, para el aviso: «2 proyectos», «5 tareas». */
+  tambien: string[]
+}
+
 export interface AccionesJerarquia<T extends ItemJerarquico> {
   dialogo: EstadoItemDialog<T> | null
   abrirCrear: () => void
@@ -51,10 +74,10 @@ export interface AccionesJerarquia<T extends ItemJerarquico> {
   error: string | null
   borrado: {
     item: T
-    /** Mensaje del servidor tal cual (p. ej. el 409 por subproyectos, tareas o ideas). */
+    /** Mensaje del servidor tal cual (p. ej. un 409 si falta la elección de una categoría con elementos). */
     error: string | null
     pendiente: boolean
-    confirmar: () => void
+    confirmar: (opciones?: OpcionesBorrado) => void
     cancelar: () => void
   } | null
 }
@@ -95,17 +118,23 @@ export function useAccionesJerarquia<T extends ItemJerarquico, R>(
   })
 
   const borrado = useMutation({
-    mutationFn: (item: T) => config.borrar(item.id),
-    onSuccess: (_, item) => {
+    mutationFn: ({ item, opciones }: { item: T; opciones?: OpcionesBorrado }) =>
+      // Sin elecciones se llama con un solo argumento: DELETE sin parámetros.
+      opciones ? config.borrar(item.id, opciones.elecciones) : config.borrar(item.id),
+    onSuccess: (_, { item, opciones }) => {
       // Primero se cierra y se avisa (o se navega), y recién después se refrescan las listas: si se esperara
       // la invalidación, el detalle del elemento borrado parpadearía en "no encontrado".
       setABorrar(null)
-      const mensaje = mensajeBorrado(item.nombre)
+      const mensaje = mensajeBorrado(item.nombre, opciones?.tambien)
       if (alBorrado) alBorrado(item, mensaje)
       else alMensaje(mensaje)
-      void invalidarJerarquia(queryClient)
+      void invalidarTrasBorrado(queryClient)
     },
-    onError: (e) => setErrorBorrado(e.message),
+    onError: (e) => {
+      setErrorBorrado(e.message)
+      // Los datos cambiaron desde que se calculó la vista previa: se vuelve a pedir.
+      void queryClient.invalidateQueries({ queryKey: [CLAVE_IMPACTO_BORRADO] })
+    },
   })
 
   return {
@@ -128,9 +157,9 @@ export function useAccionesJerarquia<T extends ItemJerarquico, R>(
           item: aBorrar,
           error: errorBorrado,
           pendiente: borrado.isPending,
-          confirmar: () => {
+          confirmar: (opciones) => {
             setErrorBorrado(null)
-            borrado.mutate(aBorrar)
+            borrado.mutate({ item: aBorrar, opciones })
           },
           cancelar: () => setABorrar(null),
         }

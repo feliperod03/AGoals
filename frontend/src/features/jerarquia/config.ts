@@ -1,8 +1,10 @@
-import { borrarObjetivo, actualizarObjetivo, crearObjetivo, getObjetivos } from '@/api/objetivos'
-import { actualizarProyecto, borrarProyecto, crearProyecto, getProyectos } from '@/api/proyectos'
+import { actualizarObjetivo, borrarObjetivo, crearObjetivo, getImpactoBorradoObjetivo, getObjetivos } from '@/api/objetivos'
+import { actualizarProyecto, borrarProyecto, crearProyecto, getImpactoBorradoProyecto, getProyectos } from '@/api/proyectos'
+import type { Elecciones, ImpactoBorrado } from '@/types/impactoBorrado'
 import type { Objetivo, ObjetivoRequest } from '@/types/objetivo'
 import type { Proyecto, ProyectoRequest } from '@/types/proyecto'
 import type { Estado } from '@/types/tarea'
+import type { DefCategoria } from './borrado'
 import { aRequestObjetivo, aRequestProyecto, requestObjetivoDe, requestProyectoDe, type ValoresItem } from './formulario'
 import type { ItemJerarquico } from './tipos'
 
@@ -24,7 +26,12 @@ export interface ConfigJerarquia<T extends ItemJerarquico, R> {
   listar: () => Promise<T[]>
   crear: (request: R) => Promise<T>
   actualizar: (id: number, request: R) => Promise<T>
-  borrar: (id: number) => Promise<void>
+  /** Sin `elecciones` = DELETE sin parámetros (elemento sin hijos ni dependencias). */
+  borrar: (id: number, elecciones?: Elecciones) => Promise<void>
+  /** Vista previa del borrado con estas elecciones (solo lectura). */
+  impactoBorrado: (id: number, elecciones: Elecciones) => Promise<ImpactoBorrado>
+  /** Categorías sobre las que se elige al borrar, en el orden en que se muestran. */
+  categoriasBorrado: readonly DefCategoria[]
   /** Cuerpo del formulario. `padreId`: `undefined` = sin tocar, `null` = sin padre, número = nuevo padre. */
   aRequest: (valores: Partial<ValoresItem>, original?: T, padreId?: number | null) => R
   /** Cuerpo del cambio rápido de estado: reenvía todo lo demás tal cual (el PUT reemplaza todo). */
@@ -57,6 +64,12 @@ export const CONFIG_PROYECTO: ConfigJerarquia<Proyecto, ProyectoRequest> = {
   crear: crearProyecto,
   actualizar: actualizarProyecto,
   borrar: borrarProyecto,
+  impactoBorrado: getImpactoBorradoProyecto,
+  categoriasBorrado: [
+    { clave: 'subproyectos', etiqueta: 'Subproyectos', singular: 'subproyecto', plural: 'subproyectos', mover: 'Pasan al nivel superior', incluye: 'subproyectos' },
+    { clave: 'tareas', etiqueta: 'Tareas', singular: 'tarea', plural: 'tareas', mover: 'Quedan sueltas', incluye: 'subtareas' },
+    { clave: 'ideas', etiqueta: 'Ideas', singular: 'idea', plural: 'ideas', mover: 'Quedan sueltas' },
+  ],
   aRequest: aRequestProyecto,
   requestConEstado: (p, estado) => requestProyectoDe(p, { estado }),
   textos: {
@@ -84,6 +97,13 @@ export const CONFIG_OBJETIVO: ConfigJerarquia<Objetivo, ObjetivoRequest> = {
   crear: crearObjetivo,
   actualizar: actualizarObjetivo,
   borrar: borrarObjetivo,
+  impactoBorrado: getImpactoBorradoObjetivo,
+  categoriasBorrado: [
+    { clave: 'subobjetivos', etiqueta: 'Subobjetivos', singular: 'subobjetivo', plural: 'subobjetivos', mover: 'Pasan al nivel superior', incluye: 'subobjetivos' },
+    { clave: 'proyectos', etiqueta: 'Proyectos', singular: 'proyecto', plural: 'proyectos', mover: 'Quedan sin objetivo', incluye: 'subproyectos' },
+    { clave: 'tareas', etiqueta: 'Tareas', singular: 'tarea', plural: 'tareas', mover: 'Quedan sueltas', incluye: 'subtareas' },
+    { clave: 'ideas', etiqueta: 'Ideas', singular: 'idea', plural: 'ideas', mover: 'Quedan sueltas' },
+  ],
   aRequest: aRequestObjetivo,
   requestConEstado: (o, estado) => requestObjetivoDe(o, { estado }),
   textos: {
