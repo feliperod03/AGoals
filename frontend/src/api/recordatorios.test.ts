@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getRecordatoriosVencidos, marcarRecordatorioEnviado } from './recordatorios'
+import { actualizarRecordatorio, crearRecordatorio, getRecordatoriosVencidos, marcarRecordatorioEnviado } from './recordatorios'
 
 const fetchMock = vi.fn()
 
@@ -30,5 +30,25 @@ describe('api/recordatorios', () => {
     expect(url).toBe('/api/recordatorios/7/marcar-enviado')
     expect(init.method).toBe('PATCH')
     expect(init.body).toBeUndefined()
+  })
+})
+
+describe('api/recordatorios: escritura', () => {
+  const req = { tareaId: 4, eventoId: null, fechaHora: '2026-11-10T15:00:00-03:00', canal: 'APP' as const, descripcion: 'Llevar el paraguas' }
+
+  it('crearRecordatorio hace POST a /api/recordatorios con el cuerpo completo y la fechaHora con desfase', async () => {
+    await crearRecordatorio(req)
+    const [url, init] = llamada()
+    expect(url).toBe('/api/recordatorios')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual(req)
+  })
+
+  it('actualizarRecordatorio hace PUT a /api/recordatorios/{id} con los cinco campos', async () => {
+    await actualizarRecordatorio(9, { ...req, tareaId: null, descripcion: '' })
+    const [url, init] = llamada()
+    expect(url).toBe('/api/recordatorios/9')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body as string)).toEqual({ ...req, tareaId: null, descripcion: '' })
   })
 })

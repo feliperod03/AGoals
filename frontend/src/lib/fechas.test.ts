@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   aFechaLocal,
+  aValorDatetimeLocal,
+  deValorDatetimeLocal,
+  mensajeRecordatorioCreado,
+  mensajeRecordatorioGuardado,
+  mensajeRecordatorioQuitado,
   aIsoConDesfase,
   esAtrasada,
   ahora,
@@ -319,5 +324,49 @@ describe('mensajes de vínculo con proyecto u objetivo', () => {
   it('avisa al quitar', () => {
     expect(mensajeTareaDesvinculada('Embalar', 'proyecto', 'Mudanza')).toBe('«Embalar» ya no es del proyecto «Mudanza»')
     expect(mensajeTareaDesvinculada('Embalar', 'objetivo', 'Vivir solo')).toBe('«Embalar» ya no es del objetivo «Vivir solo»')
+  })
+})
+
+describe('valor de datetime-local', () => {
+  it('ISO con desfase -03:00 -> hora local sin segundos ni zona', () => {
+    expect(aValorDatetimeLocal('2026-11-10T15:00:00-03:00')).toBe('2026-11-10T15:00')
+  })
+
+  it('un ISO en otro desfase se muestra en la hora local (-03:00), cruzando el día si hace falta', () => {
+    // 01:30 en +05:30 es 20:00 UTC del día anterior = 17:00 en Buenos Aires.
+    expect(aValorDatetimeLocal('2026-11-10T01:30:00+05:30')).toBe('2026-11-09T17:00')
+  })
+
+  it('valor -> ISO con el desfase de la zona local (-03:00)', () => {
+    expect(deValorDatetimeLocal('2026-11-10T15:00')).toBe('2026-11-10T15:00:00-03:00')
+  })
+
+  it('cerca de la medianoche conserva el día y la hora', () => {
+    expect(deValorDatetimeLocal('2026-11-10T23:59')).toBe('2026-11-10T23:59:00-03:00')
+    expect(deValorDatetimeLocal('2026-11-11T00:00')).toBe('2026-11-11T00:00:00-03:00')
+    expect(aValorDatetimeLocal('2026-11-11T00:00:00-03:00')).toBe('2026-11-11T00:00')
+  })
+
+  it('vacío o inválido -> null (nunca se manda un Invalid Date)', () => {
+    expect(deValorDatetimeLocal('')).toBeNull()
+    expect(deValorDatetimeLocal('2026-13-45T99:99')).toBeNull()
+  })
+
+  it('en una zona con desfase positivo (+05:30) el ISO lleva ese desfase y la ida y vuelta es la misma', () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    try {
+      expect(deValorDatetimeLocal('2026-11-10T15:00')).toBe('2026-11-10T15:00:00+05:30')
+      expect(aValorDatetimeLocal('2026-11-10T15:00:00+05:30')).toBe('2026-11-10T15:00')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+describe('mensajes de recordatorios', () => {
+  it('creado y guardado nombran la fecha y hora; quitado no', () => {
+    expect(mensajeRecordatorioCreado('2026-11-09T15:00:00-03:00')).toBe('Recordatorio creado para el lun 9 nov · 15:00')
+    expect(mensajeRecordatorioGuardado('2026-11-09T15:00:00-03:00')).toBe('Recordatorio guardado para el lun 9 nov · 15:00')
+    expect(mensajeRecordatorioQuitado()).toBe('Recordatorio quitado')
   })
 })

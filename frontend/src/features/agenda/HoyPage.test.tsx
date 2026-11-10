@@ -59,7 +59,7 @@ function evento(parcial: Partial<Evento>): Evento {
 }
 
 function recordatorio(parcial: Partial<Recordatorio>): Recordatorio {
-  return { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-11T09:00:00-03:00', enviado: false, descripcion: 'Aviso', ...parcial }
+  return { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-11T09:00:00-03:00', canal: 'APP', enviado: false, descripcion: 'Aviso', ...parcial }
 }
 
 const AGENDA_VACIA: Agenda = { fecha: '2026-11-10', conHora: [], sinHora: [] }
@@ -302,6 +302,7 @@ describe('HoyPage: estados de la página', () => {
       'Marcar «Comprar pan» como hecha',
       'Comprar pan',
       'Acciones de «Comprar pan»',
+      'Nuevo recordatorio',
     ])
   })
 })

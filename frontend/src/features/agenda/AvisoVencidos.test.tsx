@@ -20,6 +20,7 @@ function recordatorio(id: number, parcial: Partial<Recordatorio> = {}): Recordat
     tareaId: null,
     eventoId: null,
     fechaHora: '2026-11-10T08:00:00-03:00',
+    canal: 'APP',
     enviado: false,
     descripcion: `Recordatorio ${id}`,
     ...parcial,

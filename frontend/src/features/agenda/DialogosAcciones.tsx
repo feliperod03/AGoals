@@ -4,6 +4,7 @@ import { VincularTareaDialog } from '@/features/jerarquia/VincularTareaDialog'
 import { ErrorDialogo } from './ErrorDialogo'
 import { ConfirmarBorradoDialog } from './ConfirmarBorradoDialog'
 import { PosponerDialog } from './PosponerDialog'
+import { RecordatorioDialog } from './RecordatorioDialog'
 import { SubtareaDialog } from './SubtareaDialog'
 import type { Acciones } from './useAccionesTarea'
 
@@ -18,6 +19,14 @@ export function DialogosAcciones({ acciones, hoy }: { acciones: Acciones; hoy: s
 
       {acciones.vinculo && (
         <VincularTareaDialog tarea={acciones.vinculo.tarea} alCerrar={acciones.vinculo.cancelar} alMensaje={acciones.vinculo.alMensaje} />
+      )}
+
+      {acciones.recordatorioTarea && (
+        <RecordatorioDialog
+          destino={{ tipo: 'tarea', tarea: acciones.recordatorioTarea.tarea }}
+          alCerrar={acciones.recordatorioTarea.cancelar}
+          alMensaje={acciones.recordatorioTarea.alMensaje}
+        />
       )}
 
       <ConfirmarBorradoDialog acciones={acciones} />

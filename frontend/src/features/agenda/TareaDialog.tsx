@@ -305,6 +305,12 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
       <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirVinculo(tarea)}>
         Proyecto y objetivo…
       </Button>
+      {puedeAgregarSubtarea(tarea) && (
+        // Como «Proyecto y objetivo…»: se abre encima de la edición y no toca lo escrito en el formulario.
+        <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirRecordatorio(tarea)}>
+          Recordatorio…
+        </Button>
+      )}
       {puedePosponer(tarea) && (
         <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirPosponer(tarea)}>
           Posponer

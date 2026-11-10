@@ -49,7 +49,7 @@ function tarea(parcial: Partial<Tarea>): Tarea {
 }
 
 function recordatorio(parcial: Partial<Recordatorio>): Recordatorio {
-  return { id: 50, tareaId: 1, eventoId: null, fechaHora: '2026-11-11T09:00:00-03:00', enviado: false, descripcion: 'Aviso', ...parcial }
+  return { id: 50, tareaId: 1, eventoId: null, fechaHora: '2026-11-11T09:00:00-03:00', canal: 'APP', enviado: false, descripcion: 'Aviso', ...parcial }
 }
 
 function renderizar(sinHora: Tarea[], conHora: Tarea[] = []) {
@@ -121,7 +121,7 @@ describe('Acciones: menú (Radix)', () => {
     boton.focus()
     await user.keyboard('{Enter}')
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Proyecto y objetivo…', 'Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Proyecto y objetivo…', 'Recordatorio…', 'Cancelar', 'Borrar'])
     await user.keyboard('{ArrowDown}')
     expect(within(menu).getByRole('menuitem', { name: 'Posponer' })).toHaveFocus()
     await user.keyboard('{Escape}')

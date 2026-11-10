@@ -77,6 +77,7 @@ export function HoyPage() {
             datos={proximosRecordatorios.data}
             cargando={proximosRecordatorios.isPending}
             error={proximosRecordatorios.error}
+            alMensaje={confirmacion.mostrar}
           />
           <ProximosEventos datos={proximosEventos.data} cargando={proximosEventos.isPending} error={proximosEventos.error} />
         </aside>

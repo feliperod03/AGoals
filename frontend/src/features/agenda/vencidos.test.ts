@@ -9,6 +9,7 @@ function lista(n: number): Recordatorio[] {
     tareaId: null,
     eventoId: null,
     fechaHora: '2026-11-10T08:00:00-03:00',
+    canal: 'APP',
     enviado: false,
     descripcion: `R${i + 1}`,
   }))

@@ -134,7 +134,7 @@ describe('App', () => {
 describe('aviso de vencidos', () => {
   it('se muestra en cualquier página, no solo en Hoy', async () => {
     vi.mocked(getRecordatoriosVencidos).mockResolvedValueOnce([
-      { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-10T08:00:00-03:00', enviado: false, descripcion: 'Llamar al médico' },
+      { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-10T08:00:00-03:00', canal: 'APP', enviado: false, descripcion: 'Llamar al médico' },
     ])
     renderizar('/ideas')
     expect(await screen.findByText('Llamar al médico')).toBeInTheDocument()

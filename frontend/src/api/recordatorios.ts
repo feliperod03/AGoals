@@ -1,5 +1,15 @@
-import type { Recordatorio } from '@/types/recordatorio'
-import { del, get, patch } from './client'
+import type { Recordatorio, RecordatorioRequest } from '@/types/recordatorio'
+import { del, get, patch, post, put } from './client'
+
+/** Crea un recordatorio (201). 409 si la tarea o el evento ya tiene uno. */
+export function crearRecordatorio(req: RecordatorioRequest): Promise<Recordatorio> {
+  return post<Recordatorio>('/api/recordatorios', req)
+}
+
+/** Reemplaza el recordatorio completo (el cuerpo lleva los cinco campos). Si cambia el instante, `enviado` vuelve a false. */
+export function actualizarRecordatorio(id: number, req: RecordatorioRequest): Promise<Recordatorio> {
+  return put<Recordatorio>(`/api/recordatorios/${id}`, req)
+}
 
 /** Todos los recordatorios, por fecha ascendente. */
 export function getRecordatorios(): Promise<Recordatorio[]> {

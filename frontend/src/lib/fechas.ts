@@ -203,3 +203,26 @@ export function puedePosponerAManana(fechaTarea: string | null, hoy: string): bo
 export function mensajeSinFecha(): string {
   return 'Sin fecha: la verás en el Cofre y en Recomendación'
 }
+
+/** Formato del valor de un `input type="datetime-local"`: hora local, sin segundos ni zona. */
+const FORMATO_DATETIME_LOCAL = "yyyy-MM-dd'T'HH:mm"
+
+/** ISO con desfase -> valor de `datetime-local` en hora local (`2026-11-10T15:00:00-03:00` -> `2026-11-10T15:00`). */
+export function aValorDatetimeLocal(iso: string): string {
+  return format(parseISO(iso), FORMATO_DATETIME_LOCAL)
+}
+
+/**
+ * Valor de `datetime-local` -> ISO con desfase de la zona local. `null` si el valor está vacío o no es una fecha
+ * válida (el campo del navegador queda vacío mientras se escribe), para no mandar nunca un `Invalid Date`.
+ */
+export function deValorDatetimeLocal(valor: string): string | null {
+  if (valor === '') return null
+  const fecha = parseISO(valor)
+  return Number.isNaN(fecha.getTime()) ? null : aIsoConDesfase(fecha)
+}
+
+/** Confirmaciones de recordatorios; `iso` es la fecha y hora del aviso. */
+export const mensajeRecordatorioCreado = (iso: string) => `Recordatorio creado para el ${formatearFechaHoraCorta(iso)}`
+export const mensajeRecordatorioGuardado = (iso: string) => `Recordatorio guardado para el ${formatearFechaHoraCorta(iso)}`
+export const mensajeRecordatorioQuitado = () => 'Recordatorio quitado'

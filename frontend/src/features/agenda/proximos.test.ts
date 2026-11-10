@@ -4,7 +4,7 @@ import type { Recordatorio } from '@/types/recordatorio'
 import { proximosRecordatorios, tituloRecordatorio } from './proximos'
 
 function rec(parcial: Partial<Recordatorio>): Recordatorio {
-  return { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-10T15:00:00-03:00', enviado: false, descripcion: '', ...parcial }
+  return { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-10T15:00:00-03:00', canal: 'APP', enviado: false, descripcion: '', ...parcial }
 }
 
 const AHORA = new Date('2026-11-10T12:00:00-03:00')
@@ -14,7 +14,7 @@ describe('proximosRecordatorios', () => {
     const lista = [
       rec({ id: 1, fechaHora: '2026-11-12T10:00:00-03:00' }),
       rec({ id: 2, fechaHora: '2026-11-10T09:00:00-03:00' }), // pasado
-      rec({ id: 3, fechaHora: '2026-11-10T13:00:00-03:00', enviado: true }),
+      rec({ id: 3, fechaHora: '2026-11-10T13:00:00-03:00', canal: 'APP', enviado: true }),
       rec({ id: 4, fechaHora: '2026-11-10T14:00:00-03:00' }),
       rec({ id: 5, fechaHora: '2026-11-11T08:00:00-03:00' }),
       rec({ id: 6, fechaHora: '2026-11-20T08:00:00-03:00' }),
