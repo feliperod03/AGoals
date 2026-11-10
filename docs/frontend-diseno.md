@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanada 8)
 
-> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 8.4c; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 8.4d; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -145,8 +145,20 @@ Página `/ideas` (reemplaza el placeholder «Próximamente»; el ítem del menú
 - **Avisos y fechas** (`lib/fechas.ts`): `mensajeIdeaCreada/Guardada/Concluida/Reabierta/Borrada` («Idea «X» …») y `formatearFechaCorta(iso)` («10 nov 2026»; `parseISO` lleva el instante a la hora local, como `formatearFechaHoraCorta`; hay tests con horas cerca de la medianoche y distintos desfases). Salen por la región `status` de la página.
 - **API (`api/ideas.ts`):** `getIdeas`, `crearIdea`, `actualizarIdea` (PUT con el cuerpo completo), `concluirIdea(id, conclusion?)` (recorta; sin texto no manda cuerpo ni Content-Type), `reabrirIdea`, `borrarIdea`.
 - **Capas:** `ideas/` importa de `jerarquia/`, `agenda/` y `cofre/estilos`; ningún archivo de `jerarquia/`, `agenda/` ni `cofre/` importa de `ideas/` (comprobado con grep al cerrar la rebanada).
-- **Fuera de alcance:** la sección «Ideas ligadas» en el detalle de proyectos y objetivos (8.4d, aparte), crear una idea desde el detalle con el vínculo prefijado, filtros persistidos.
+- **Fuera de alcance:** la sección «Ideas ligadas» en el detalle de proyectos y objetivos (hecha en 8.4d, sección siguiente), crear una idea desde el detalle con el vínculo prefijado, filtros persistidos.
 - **Pendientes conocidos:** el PUT reemplaza todo y no hay versionado, así que editar desde una lista vieja puede pisar una conclusión escrita en otra pestaña (se mitiga refrescando `['ideas']` tras cada mutación y en los 404/409); el PUT recorta espacios del título, la descripción y la conclusión al reenviar (mismo pendiente que 8.2g); los avisos de los diálogos no llegan a lectores de pantalla (región `status` de la página bajo `aria-hidden`); `todosComoCandidatos` (`ideas/filtros.ts`) quedó como código muerto (solo lo usa su test) al recortar el filtro de vínculo a `<select>` nativos; el error de «Reabrir» persiste en la página hasta el siguiente intento; `test/renderIdeas.tsx` es un helper de una página dentro de `src/test/`.
+
+## Ideas ligadas en el detalle (8.4d; commit `8c447ca`)
+Tarjeta «Ideas ligadas» en el detalle de proyectos y objetivos, **solo lectura**. Solo frontend, sin dependencias nuevas ni cambios de `api/`, `types/` o `PaginaDetalle`.
+- **Qué muestra:** las ideas cuyo vínculo DIRECTO es ese proyecto u objetivo (`ideasLigadas(ideas, campo, id)` filtra con `===` sobre `proyectoId`/`objetivoId`; un proyecto 3 no cuenta para el objetivo 3). No incluye las de los hijos ni las de los proyectos de un objetivo (como «Tareas ligadas directamente»). Planteadas y concluidas mezcladas, orden de `ordenarIdeas` (más recientes primero).
+- **Fila:** título, estado en texto más ícono (Planteada / Concluida), «Creada el…» o «Cerrada el…» (`fechaDeOrden`) y, si la hay, la conclusión en un recuadro. Sin descripción, sin menú, sin botones: crear, editar, concluir, reabrir y borrar siguen siendo solo de `/ideas`.
+- **Límite:** 5 ideas (`LIMITE_IDEAS_LIGADAS`); si hay más, «+N más» (enlace al mismo destino filtrado). «Ver todas en Ideas» solo aparece con al menos una idea; sin ninguna, solo «Aún no hay ideas ligadas». Cargando: «Cargando ideas…». Error de la lista: `ErrorEnLinea` dentro de la tarjeta y el resto del detalle sigue funcionando.
+- **Dónde vive:** `features/ideas/IdeasLigadas.tsx` + `ligadas.ts` (lógica pura y `rutaIdeasDe`). `ProyectoPage` y `ObjetivoPage` (en `proyectos/` y `objetivos/`) lo montan dentro de `secciones`, tras «Tareas ligadas»; así `jerarquia/` sigue sin importar de `ideas/`. Datos de `useIdeas` (`['ideas']`), sin consultas nuevas: lo que se cambie en `/ideas` se ve aquí.
+- **Enlace con filtro:** `/ideas?proyecto=N` o `/ideas?objetivo=N`. `IdeasPage` toma el estado inicial de `filtrosDesdeQuery(useSearchParams())`: ese vínculo y estado «Todas» (porque el detalle muestra planteadas y concluidas). Sin parámetro, con un id no numérico o con proyecto y objetivo a la vez, la vista por defecto. Solo se lee al montar; no se sincroniza la URL con los filtros.
+- **Tests:** `test/renderIdeas.tsx` ahora envuelve en `MemoryRouter` y acepta una ruta inicial; cinco tests existentes de los detalles suman `vi.mock('@/api/ideas')` porque el detalle ahora pide `['ideas']`. 764 tests de frontend.
+- **Capas:** ningún archivo de `jerarquia/`, `agenda/` ni `cofre/` importa de `ideas/` (grep al cerrar la rebanada).
+- **Fuera de alcance:** crear/editar/concluir/borrar desde el detalle, ideas de hijos o de los proyectos de un objetivo, nombres de proyecto/objetivo en las filas, sincronizar la URL de `/ideas` con los filtros, mostrar la descripción.
+- **Pendiente conocido:** si ya estás en `/ideas` y llega otra URL con `?proyecto=` sin desmontar la página, el filtro no se actualiza (solo se lee al montar); hoy no hay forma de llegar así desde la interfaz.
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -170,8 +182,8 @@ Página `/ideas` (reemplaza el placeholder «Próximamente»; el ítem del menú
 - 8.4a3 Diálogo de borrado con un interruptor «Mover / Borrar» por categoría (solo las que tienen `total > 0`, resumen en vivo con los `borrados` de 5f): hecha (commit `9fd2703`).
 - 8.4b Asignar y quitar el proyecto u objetivo de una tarea (diálogo desde el menú y la edición; «Quitar» y «Vincular una existente» en el detalle): hecha (commit `0417230`). 635 tests de frontend.
 - 8.4c Página de Ideas (crear, editar, concluir, reabrir, borrar; filtros de estado, vínculo y búsqueda): hecha (commit `3548350`). 735 tests de frontend.
-- 8.4d Ideas ligadas en el detalle de proyectos y objetivos (solo lectura más enlace a `/ideas`): ← próxima.
-- 8.5 Recordatorios (polling de vencidos, aviso al cerrar tarea con recordatorio).
+- 8.4d Ideas ligadas en el detalle de proyectos y objetivos (solo lectura más enlace a `/ideas` con el filtro puesto): hecha (commit `8c447ca`). 764 tests de frontend.
+- 8.5 Recordatorios (polling de vencidos, aviso al cerrar tarea con recordatorio): ← próxima.
 - 9 Calendario (librería a decidir entonces).
 - 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
 - Pulido 2 al final.
