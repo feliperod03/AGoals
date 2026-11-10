@@ -454,11 +454,24 @@ public class TareaService {
 		if (tareaIds.isEmpty()) {
 			return;
 		}
-		List<Tarea> raices = repository.findAllById(tareaIds);
-		List<Tarea> orden = Jerarquia.hojasPrimero(raices, Tarea::getId,
-				id -> repository.findByPadreIdAndUsuarioId(id, USUARIO_ID), t -> false);
-		repository.deleteAll(orden);
+		repository.deleteAll(conSubtareas(tareaIds));
 		repository.flush();
+	}
+
+	/**
+	 * Cuántas filas desaparecen al borrar esas tareas con {@link #eliminarLigadas}: ellas y todas sus subtareas, sin
+	 * contar dos veces una tarea ligada que cuelga de otra también ligada. Solo lectura (5f, vista previa).
+	 */
+	@Transactional(readOnly = true)
+	public int contarConSubtareas(Collection<Long> tareaIds) {
+		return tareaIds.isEmpty() ? 0 : conSubtareas(tareaIds).size();
+	}
+
+	// Las tareas con todos sus descendientes, hojas primero. Lo comparten el borrado y su conteo para que no diverjan.
+	private List<Tarea> conSubtareas(Collection<Long> tareaIds) {
+		List<Tarea> raices = repository.findAllById(tareaIds);
+		return Jerarquia.hojasPrimero(raices, Tarea::getId,
+				id -> repository.findByPadreIdAndUsuarioId(id, USUARIO_ID), t -> false);
 	}
 
 	private Tarea buscar(Long id) {

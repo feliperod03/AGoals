@@ -1,9 +1,12 @@
 package com.agoals.objetivo;
 
+import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.ModoBorrado;
 import com.agoals.common.Prioridad;
 import com.agoals.idea.IdeaService;
+import com.agoals.objetivo.dto.ConteoProyectosBorrado;
+import com.agoals.objetivo.dto.ImpactoBorradoObjetivoResponse;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.proyecto.PlanBorradoProyectos;
@@ -518,6 +521,156 @@ class ObjetivoServiceTest {
 		verify(proyectoService, never()).desligarDeObjetivo(any());
 		verify(tareaService, never()).eliminarLigadas(any());
 		verify(tareaService, never()).desligar(any(), any(), any());
+	}
+
+	// ---- Vista previa del impacto del borrado (5f) ----
+
+	private void nadaSeEscribio() {
+		verify(repository, never()).delete(any());
+		verify(repository, never()).deleteAll(anyIterable());
+		verify(repository, never()).saveAllAndFlush(anyIterable());
+		verify(repository, never()).flush();
+		verify(proyectoService, never()).ejecutarBorradoPorObjetivos(any());
+		verify(proyectoService, never()).desligarDeObjetivo(any());
+		verify(tareaService, never()).eliminarLigadas(any());
+		verify(tareaService, never()).desligar(any(), any(), any());
+		verify(ideaService, never()).eliminarLigadas(any());
+		verify(ideaService, never()).desligar(any(), any(), any());
+	}
+
+	@Test
+	void conservarLoNoElegidoCompletaSoloLasEleccionesAusentes() {
+		assertThat(elige(ModoBorrado.BORRAR, null, null, ModoBorrado.BORRAR).conservarLoNoElegido())
+				.isEqualTo(elige(ModoBorrado.BORRAR, ModoBorrado.CONSERVAR, ModoBorrado.CONSERVAR, ModoBorrado.BORRAR));
+		assertThat(NINGUNA.conservarLoNoElegido()).isEqualTo(
+				elige(ModoBorrado.CONSERVAR, ModoBorrado.CONSERVAR, ModoBorrado.CONSERVAR, ModoBorrado.CONSERVAR));
+	}
+
+	@Test
+	void impactoBorradoInexistenteFalla() {
+		noExiste(1);
+
+		assertThatThrownBy(() -> service.impactoBorrado(1L, NINGUNA))
+				.isInstanceOf(ObjetivoNoEncontradoException.class)
+				.hasMessage("No existe el objetivo con id 1");
+		verifyNoInteractions(proyectoService, tareaService, ideaService);
+	}
+
+	@Test
+	void impactoBorradoSinEleccionesNoDa409YDaLosTotalesConBorradosEnCero() {
+		existe(objetivo(1, null));
+		hijosDe(1, objetivo(2, 1L));
+		when(proyectoService.idsDeObjetivos(List.of(1L))).thenReturn(List.of(10L, 11L));
+		when(tareaService.idsLigadas(List.of(), List.of(1L))).thenReturn(List.of(5L, 6L, 7L));
+		when(ideaService.idsLigadas(List.of(), List.of(1L))).thenReturn(List.of(8L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L, NINGUNA);
+
+		assertThat(r.subobjetivos()).isEqualTo(new ConteoBorrado(1, 0));
+		assertThat(r.proyectos()).isEqualTo(new ConteoProyectosBorrado(2, 0, 0));
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(3, 0));
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(1, 0));
+		verify(proyectoService, never()).planBorradoPorObjetivos(any());
+		verify(tareaService, never()).contarConSubtareas(any());
+		nadaSeEscribio();
+	}
+
+	@Test
+	void impactoBorradoEleccionesNullEquivalenAConservar() {
+		existe(objetivo(1, null));
+		hijosDe(1, objetivo(2, 1L));
+
+		assertThat(service.impactoBorrado(1L, null).subobjetivos()).isEqualTo(new ConteoBorrado(1, 0));
+	}
+
+	@Test
+	void impactoBorradoSubobjetivosBorrarCuentaElSubarbolSinLaRaizYAmpliaElAlcance() {
+		existe(objetivo(1, null));
+		hijosDe(1, objetivo(2, 1L), objetivo(3, 1L));
+		hijosDe(2, objetivo(4, 2L));
+		hijosDe(3);
+		hijosDe(4);
+		// Con el sub-árbol, los proyectos, tareas e ideas se buscan en los 4 objetivos.
+		when(proyectoService.idsDeObjetivos(List.of(4L, 2L, 3L, 1L))).thenReturn(List.of(10L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L, elige(ModoBorrado.BORRAR, null, null, null));
+
+		assertThat(r.subobjetivos()).isEqualTo(new ConteoBorrado(2, 3));
+		assertThat(r.proyectos().total()).isEqualTo(1);
+		nadaSeEscribio();
+	}
+
+	@Test
+	void impactoBorradoSubobjetivosConservarSoloMiraElPropioObjetivo() {
+		existe(objetivo(1, null));
+		hijosDe(1, objetivo(2, 1L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L, elige(ModoBorrado.CONSERVAR, null, null, null));
+
+		assertThat(r.subobjetivos()).isEqualTo(new ConteoBorrado(1, 0));
+		verify(proyectoService).idsDeObjetivos(List.of(1L));
+	}
+
+	@Test
+	void impactoBorradoProyectosBorrarCuentaLosDelPlanYLosRescatados() {
+		existe(objetivo(1, null));
+		hijosDe(1);
+		when(proyectoService.idsDeObjetivos(List.of(1L))).thenReturn(List.of(10L));
+		// P(10) ligado, SP(12) su subproyecto sin objetivo; R(11) se rescata y sube al abuelo (null).
+		when(proyectoService.planBorradoPorObjetivos(List.of(1L)))
+				.thenReturn(new PlanBorradoProyectos(List.of(12L, 10L), Map.of(11L, 9L)));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L, elige(null, ModoBorrado.BORRAR, null, null));
+
+		// total = ligados directos (1); borrados > total por el subproyecto arrastrado; rescatados aparte.
+		assertThat(r.proyectos()).isEqualTo(new ConteoProyectosBorrado(1, 2, 1));
+		nadaSeEscribio();
+	}
+
+	@Test
+	void impactoBorradoProyectosConservarNoPideElPlanNiCuentaBorrados() {
+		existe(objetivo(1, null));
+		hijosDe(1);
+		when(proyectoService.idsDeObjetivos(List.of(1L))).thenReturn(List.of(10L, 11L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L, elige(null, ModoBorrado.CONSERVAR, null, null));
+
+		assertThat(r.proyectos()).isEqualTo(new ConteoProyectosBorrado(2, 0, 0));
+		verify(proyectoService, never()).planBorradoPorObjetivos(any());
+	}
+
+	@Test
+	void impactoBorradoTareasEIdeasSeBuscanEnLosProyectosQueSeBorranYSeCuentanConSusSubtareas() {
+		existe(objetivo(1, null));
+		hijosDe(1);
+		when(proyectoService.idsDeObjetivos(List.of(1L))).thenReturn(List.of(10L));
+		when(proyectoService.planBorradoPorObjetivos(List.of(1L)))
+				.thenReturn(new PlanBorradoProyectos(List.of(10L), Map.of()));
+		when(tareaService.idsLigadas(List.of(10L), List.of(1L))).thenReturn(List.of(5L, 6L));
+		when(tareaService.contarConSubtareas(List.of(5L, 6L))).thenReturn(4);
+		when(ideaService.idsLigadas(List.of(10L), List.of(1L))).thenReturn(List.of(8L, 9L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L,
+				elige(null, ModoBorrado.BORRAR, ModoBorrado.BORRAR, ModoBorrado.BORRAR));
+
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(2, 4));
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(2, 2));
+		nadaSeEscribio();
+	}
+
+	@Test
+	void impactoBorradoTareasEIdeasConservarNoCuentanBorrados() {
+		existe(objetivo(1, null));
+		hijosDe(1);
+		when(tareaService.idsLigadas(List.of(), List.of(1L))).thenReturn(List.of(5L));
+		when(ideaService.idsLigadas(List.of(), List.of(1L))).thenReturn(List.of(8L));
+
+		ImpactoBorradoObjetivoResponse r = service.impactoBorrado(1L,
+				elige(null, null, ModoBorrado.CONSERVAR, ModoBorrado.CONSERVAR));
+
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(1, 0));
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(1, 0));
+		verify(tareaService, never()).contarConSubtareas(any());
 	}
 
 	// ---- Tareas del objetivo ----

@@ -1,10 +1,12 @@
 package com.agoals.proyecto;
 
+import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
 import com.agoals.common.ModoBorrado;
 import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.ObjetivoConsultaService;
+import com.agoals.proyecto.dto.ImpactoBorradoProyectoResponse;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaService;
@@ -107,6 +109,26 @@ public class ProyectoService {
 			throw conflicto(raiz, "ideas", "borrarlas o conservarlas");
 		}
 		return new AlcanceBorradoProyecto(raiz, hijos, aBorrar, e, tareaIds, ideaIds);
+	}
+
+	/**
+	 * Vista previa (solo lectura) de {@link #eliminar}: cuántos elementos de cada categoría hay en el alcance y cuántos
+	 * se borrarían con las elecciones dadas. Una elección ausente se toma como {@code conservar}, así que nunca responde
+	 * 409. Reutiliza {@link #calcularAlcance}, por lo que cuenta exactamente lo que luego haría DELETE.
+	 */
+	@Transactional(readOnly = true)
+	public ImpactoBorradoProyectoResponse impactoBorrado(Long id, EleccionesBorradoProyecto elecciones) {
+		EleccionesBorradoProyecto e = (elecciones != null ? elecciones : EleccionesBorradoProyecto.NINGUNA)
+				.conservarLoNoElegido();
+		AlcanceBorradoProyecto a = calcularAlcance(id, e);
+
+		boolean tareasBorrar = e.tareas() == ModoBorrado.BORRAR;
+		boolean ideasBorrar = e.ideas() == ModoBorrado.BORRAR;
+		return new ImpactoBorradoProyectoResponse(
+				new ConteoBorrado(a.hijosDirectos().size(),
+						e.subproyectos() == ModoBorrado.BORRAR ? a.aBorrar().size() - 1 : 0),
+				new ConteoBorrado(a.tareaIds().size(), tareasBorrar ? tareaService.contarConSubtareas(a.tareaIds()) : 0),
+				new ConteoBorrado(a.ideaIds().size(), ideasBorrar ? a.ideaIds().size() : 0));
 	}
 
 	// Fase 2. Primero lo que depende del proyecto (tareas, ideas) y al final la jerarquía: si el proyecto se borrara

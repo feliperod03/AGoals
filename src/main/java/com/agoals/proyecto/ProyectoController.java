@@ -1,6 +1,7 @@
 package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
+import com.agoals.proyecto.dto.ImpactoBorradoProyectoResponse;
 import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.dto.TareaResponse;
@@ -60,6 +61,15 @@ public class ProyectoController {
 		// Cada parámetro llega como texto y se valida aquí (borrar|conservar): un valor desconocido responde 400.
 		// Vacío = ausente. Sin ninguno, el comportamiento de siempre: 409 si hay dependencias.
 		service.eliminar(id, EleccionesBorradoProyecto.desde(subproyectos, tareas, ideas));
+	}
+
+	@GetMapping("/{id}/impacto-borrado")
+	public ImpactoBorradoProyectoResponse impactoBorrado(@PathVariable Long id,
+			@RequestParam(required = false) String subproyectos,
+			@RequestParam(required = false) String tareas,
+			@RequestParam(required = false) String ideas) {
+		// Mismos parámetros que DELETE, validados aquí (400 antes del 404). Ausente o vacío = conservar; nunca 409.
+		return service.impactoBorrado(id, EleccionesBorradoProyecto.desde(subproyectos, tareas, ideas));
 	}
 
 	@GetMapping("/{id}/tareas")

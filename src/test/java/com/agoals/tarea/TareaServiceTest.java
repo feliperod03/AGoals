@@ -853,6 +853,43 @@ class TareaServiceTest {
 		verifyNoInteractions(repository);
 	}
 
+	// ---- contarConSubtareas (5f, vista previa del borrado) ----
+
+	@Test
+	void contarConSubtareasCuentaLaLigadaYSusDescendientesNoLigadas() {
+		Tarea ligada = conPadre(1, "ligada", null);
+		Tarea hija = conPadre(2, "hija no ligada", 1L);
+		Tarea nieta = conPadre(3, "nieta no ligada", 2L);
+		when(repository.findAllById(List.of(1L))).thenReturn(List.of(ligada));
+		hijasDe(ligada, hija);
+		hijasDe(hija, nieta);
+		hijasDe(nieta);
+
+		assertThat(service.contarConSubtareas(List.of(1L))).isEqualTo(3);
+		verify(repository, never()).deleteAll(anyIterable());
+		verify(repository, never()).flush();
+	}
+
+	@Test
+	void contarConSubtareasNoCuentaDosVecesUnaLigadaDentroDeOtraLigada() {
+		Tarea madre = conPadre(1, "madre ligada", null);
+		Tarea hija = conPadre(2, "hija ligada", 1L);
+		Tarea nieta = conPadre(3, "nieta", 2L);
+		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(madre, hija));
+		hijasDe(madre, hija);
+		hijasDe(hija, nieta);
+		hijasDe(nieta);
+
+		assertThat(service.contarConSubtareas(List.of(1L, 2L))).isEqualTo(3);
+	}
+
+	@Test
+	void contarConSubtareasSinTareasDaCeroSinConsultarLaBase() {
+		assertThat(service.contarConSubtareas(List.of())).isZero();
+
+		verifyNoInteractions(repository);
+	}
+
 	// ---- Recomendación ----
 
 	private static final LocalDate HOY_REC = LocalDate.of(2026, 11, 6);

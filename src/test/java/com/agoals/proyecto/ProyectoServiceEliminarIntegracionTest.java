@@ -1,11 +1,13 @@
 package com.agoals.proyecto;
 
+import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.ModoBorrado;
 import com.agoals.idea.Idea;
 import com.agoals.idea.IdeaRepository;
 import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.ObjetivoConsultaService;
+import com.agoals.proyecto.dto.ImpactoBorradoProyectoResponse;
 import com.agoals.tarea.Tarea;
 import com.agoals.tarea.TareaRepository;
 import com.agoals.tarea.TareaService;
@@ -448,5 +450,174 @@ class ProyectoServiceEliminarIntegracionTest {
 		assertThat(proyectoDe(tDeLaHija)).isEqualTo(hija.getId());
 		Idea idea = ideaRepository.findById(iDeLaMadre.getId()).orElseThrow();
 		assertThat(idea.getProyectoId()).isNull();
+	}
+
+	// ---- Vista previa del impacto del borrado (5f) ----
+	// Se verifica por ids propios. La coherencia con DELETE compara `borrados` con las filas que de verdad desaparecen.
+
+	// Escenario (se arma en cada test; JUnit crea una instancia por test):
+	//   raiz ── h1 ── nieto            subproyectos
+	//        └─ h2
+	//   tRaiz (raiz) ── tRaizH         tarea ligada con una subtarea NO ligada (arrastrada)
+	//   tH1 (h1), tNieto (nieto) ── tNietoH   tareas de subproyectos, la del nieto con una subtarea arrastrada
+	//   iRaiz (raiz), iH1 (h1)
+	private Proyecto raiz, h1, h2, nieto;
+	private Tarea tRaiz, tRaizH, tH1, tNieto, tNietoH;
+	private Idea iRaiz, iH1;
+
+	private void armarEscenario() {
+		raiz = proyecto("raiz", null);
+		h1 = proyecto("h1", raiz);
+		h2 = proyecto("h2", raiz);
+		nieto = proyecto("nieto", h1);
+		tRaiz = tarea("t de raiz", null, raiz.getId());
+		tRaizH = tarea("subtarea no ligada", tRaiz, null);
+		tH1 = tarea("t de h1", null, h1.getId());
+		tNieto = tarea("t del nieto", null, nieto.getId());
+		tNietoH = tarea("subtarea del nieto no ligada", tNieto, null);
+		iRaiz = idea("i de raiz", raiz.getId());
+		iH1 = idea("i de h1", h1.getId());
+		sincronizar();
+	}
+
+	private long desaparecidos(Proyecto... xs) {
+		return java.util.Arrays.stream(xs).filter(x -> !existe(x)).count();
+	}
+
+	private long desaparecidos(Tarea... xs) {
+		return java.util.Arrays.stream(xs).filter(x -> !existe(x)).count();
+	}
+
+	private long desaparecidos(Idea... xs) {
+		return java.util.Arrays.stream(xs).filter(x -> !existe(x)).count();
+	}
+
+	// Foto de las filas propias (existencia y columnas de enlace) para comprobar que la vista previa no cambia nada.
+	private String foto() {
+		sincronizar();
+		return filas("select id, padre_id, objetivo_id from proyecto where id in (:ids) order by id",
+				raiz.getId(), h1.getId(), h2.getId(), nieto.getId())
+				+ filas("select id, padre_id, proyecto_id from tarea where id in (:ids) order by id",
+						tRaiz.getId(), tRaizH.getId(), tH1.getId(), tNieto.getId(), tNietoH.getId())
+				+ filas("select id, proyecto_id, objetivo_id from idea where id in (:ids) order by id",
+						iRaiz.getId(), iH1.getId());
+	}
+
+	@SuppressWarnings("unchecked")
+	private String filas(String sql, Long... ids) {
+		return ((java.util.List<Object[]>) em.createNativeQuery(sql).setParameter("ids", java.util.List.of(ids))
+				.getResultList()).stream()
+				.map(java.util.Arrays::toString).collect(java.util.stream.Collectors.joining(";")) + "|";
+	}
+
+	@Test
+	void impactoBorradoSinEleccionesNoDa409DaLosTotalesYBorradosEnCero() {
+		armarEscenario();
+
+		ImpactoBorradoProyectoResponse r = service.impactoBorrado(raiz.getId(), EleccionesBorradoProyecto.NINGUNA);
+
+		// Todo ausente = conservar: solo se mira el propio proyecto, sin sub-árbol.
+		assertThat(r.subproyectos()).isEqualTo(new ConteoBorrado(2, 0));
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(1, 0));
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(1, 0));
+	}
+
+	@Test
+	void impactoBorradoDeUnProyectoSinDependenciasDaTodoEnCero() {
+		Proyecto solo = proyecto("solo", null);
+		sincronizar();
+
+		ImpactoBorradoProyectoResponse r = service.impactoBorrado(solo.getId(), null);
+
+		assertThat(r.subproyectos()).isEqualTo(new ConteoBorrado(0, 0));
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(0, 0));
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(0, 0));
+	}
+
+	@Test
+	void impactoBorradoDeUnIdInexistenteFalla() {
+		assertThatThrownBy(() -> service.impactoBorrado(Long.MAX_VALUE, EleccionesBorradoProyecto.NINGUNA))
+				.isInstanceOf(ProyectoNoEncontradoException.class);
+	}
+
+	@Test
+	void impactoBorradoLosTotalesDeTareasEIdeasDependenDeLaEleccionDeSubproyectos() {
+		armarEscenario();
+
+		ImpactoBorradoProyectoResponse conservando = service.impactoBorrado(raiz.getId(), elige(CONSERVAR, BORRAR, BORRAR));
+		ImpactoBorradoProyectoResponse borrando = service.impactoBorrado(raiz.getId(), elige(BORRAR, BORRAR, BORRAR));
+
+		assertThat(conservando.tareas().total()).isEqualTo(1); // tRaiz
+		assertThat(conservando.ideas().total()).isEqualTo(1);
+		assertThat(borrando.tareas().total()).isEqualTo(3); // tRaiz, tH1, tNieto: el sub-árbol entero
+		assertThat(borrando.ideas().total()).isEqualTo(2);
+	}
+
+	@Test
+	void impactoBorradoTareasBorrarNoCuentaDosVecesUnaLigadaDentroDeOtraLigada() {
+		Proyecto pr = proyecto("pr", null);
+		Tarea madre = tarea("madre ligada", null, pr.getId());
+		Tarea hijaLigada = tarea("hija ligada", madre, pr.getId());
+		Tarea nieta = tarea("nieta no ligada", hijaLigada, null);
+		sincronizar();
+
+		ImpactoBorradoProyectoResponse r = service.impactoBorrado(pr.getId(), elige(null, BORRAR, null));
+
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(2, 3));
+		service.eliminar(pr.getId(), elige(null, BORRAR, null));
+		sincronizar();
+		assertThat(desaparecidos(madre, hijaLigada, nieta)).isEqualTo(3);
+	}
+
+	@Test
+	void impactoBorradoCoincideConLasFilasQueDesaparecenIncluidasLasArrastradas() {
+		armarEscenario();
+		EleccionesBorradoProyecto elecciones = elige(BORRAR, BORRAR, BORRAR);
+
+		ImpactoBorradoProyectoResponse r = service.impactoBorrado(raiz.getId(), elecciones);
+
+		assertThat(r.subproyectos()).isEqualTo(new ConteoBorrado(2, 3)); // h1, h2 y el nieto arrastrado
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(3, 5)); // tRaiz, tH1, tNieto + tRaizH y tNietoH arrastradas
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(2, 2));
+
+		service.eliminar(raiz.getId(), elecciones);
+		sincronizar();
+
+		assertThat(desaparecidos(h1, h2, nieto)).isEqualTo(r.subproyectos().borrados());
+		assertThat(desaparecidos(tRaiz, tRaizH, tH1, tNieto, tNietoH)).isEqualTo(r.tareas().borrados());
+		assertThat(desaparecidos(iRaiz, iH1)).isEqualTo(r.ideas().borrados());
+		assertThat(existe(raiz)).isFalse(); // la raíz también se borra, pero no entra en subproyectos.borrados
+	}
+
+	@Test
+	void impactoBorradoConEleccionesMixtasCoincideConLasFilasQueDesaparecen() {
+		armarEscenario();
+		EleccionesBorradoProyecto elecciones = elige(CONSERVAR, BORRAR, CONSERVAR);
+
+		ImpactoBorradoProyectoResponse r = service.impactoBorrado(raiz.getId(), elecciones);
+
+		assertThat(r.subproyectos()).isEqualTo(new ConteoBorrado(2, 0));
+		assertThat(r.tareas()).isEqualTo(new ConteoBorrado(1, 2)); // tRaiz + su subtarea arrastrada
+		assertThat(r.ideas()).isEqualTo(new ConteoBorrado(1, 0));
+
+		service.eliminar(raiz.getId(), elecciones);
+		sincronizar();
+
+		assertThat(desaparecidos(h1, h2, nieto)).isEqualTo(r.subproyectos().borrados());
+		assertThat(desaparecidos(tRaiz, tRaizH, tH1, tNieto, tNietoH)).isEqualTo(r.tareas().borrados());
+		assertThat(desaparecidos(iRaiz, iH1)).isEqualTo(r.ideas().borrados());
+	}
+
+	@Test
+	void impactoBorradoNoModificaNada() {
+		armarEscenario();
+		String antes = foto();
+
+		service.impactoBorrado(raiz.getId(), elige(BORRAR, BORRAR, BORRAR));
+		service.impactoBorrado(raiz.getId(), elige(CONSERVAR, CONSERVAR, CONSERVAR));
+		service.impactoBorrado(raiz.getId(), EleccionesBorradoProyecto.NINGUNA);
+
+		assertThat(foto()).isEqualTo(antes);
+		assertThat(existe(raiz)).isTrue();
 	}
 }

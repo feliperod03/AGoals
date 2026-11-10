@@ -11,6 +11,14 @@ public record EleccionesBorradoProyecto(ModoBorrado subproyectos, ModoBorrado ta
 	/** Sin ninguna elección: el comportamiento de siempre (409 ante cualquier dependencia). */
 	public static final EleccionesBorradoProyecto NINGUNA = new EleccionesBorradoProyecto(null, null, null);
 
+	/** Copia donde cada elección ausente (null) pasa a CONSERVAR: la vista previa nunca responde 409. */
+	public EleccionesBorradoProyecto conservarLoNoElegido() {
+		return new EleccionesBorradoProyecto(
+				subproyectos != null ? subproyectos : ModoBorrado.CONSERVAR,
+				tareas != null ? tareas : ModoBorrado.CONSERVAR,
+				ideas != null ? ideas : ModoBorrado.CONSERVAR);
+	}
+
 	/** Convierte los query params (texto); un valor que no es borrar|conservar lanza ProyectoInvalidoException (400). */
 	public static EleccionesBorradoProyecto desde(String subproyectos, String tareas, String ideas) {
 		return new EleccionesBorradoProyecto(

@@ -5,7 +5,8 @@
 # reabrir y 409 al borrar un proyecto u objetivo con ideas), y eventos (CRUD, PUT completo, listado por
 # solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones), y recordatorios (de tarea,
 # de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada), y borrar una tarea con subtareas eligiendo borrar o conservar,
-# y borrar proyectos y objetivos eligiendo borrar o conservar por categoria (subelementos, proyectos, tareas, ideas), con 409 que nombra el elemento y rescate de subproyectos de otro objetivo.
+# y borrar proyectos y objetivos eligiendo borrar o conservar por categoria (subelementos, proyectos, tareas, ideas), con 409 que nombra el elemento y rescate de subproyectos de otro objetivo,
+# y la vista previa de solo lectura de ese borrado (GET .../impacto-borrado: conteos por categoria, sin 409, sin borrar nada).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
@@ -569,6 +570,16 @@ try {
     $bp7 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar&tareas=borrar")
     Verificar "falta decidir las ideas -> 409 (ideas)" (($bp7.Status -eq 409) -and ($bp7.Raw -match "tiene ideas: indica")) "status $($bp7.Status) $($bp7.Raw)"
     Verificar "los 409 no borraron nada (raiz, hija y tarea siguen)" (((Llamar "GET" ($BaseProyectos + "/" + $bpR)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $bpH)).Status -eq 200) -and ((Llamar "GET" ($Base + "/" + $bpTL)).Status -eq 200))
+    # Vista previa del impacto (5f): solo lectura, nunca 409; ausente = conservar. Antes del DELETE real, con las mismas elecciones.
+    $bpV0 = Llamar "GET" ($BaseProyectos + "/" + $bpR + "/impacto-borrado")
+    Verificar "vista previa de proyecto sin parametros -> 200 (no 409) con borrados en 0" (($bpV0.Status -eq 200) -and ($bpV0.Json.subproyectos.total -eq 1) -and ($bpV0.Json.subproyectos.borrados -eq 0) -and ($bpV0.Json.tareas.borrados -eq 0) -and ($bpV0.Json.ideas.total -eq 1) -and ($bpV0.Json.ideas.borrados -eq 0)) "status $($bpV0.Status) $($bpV0.Raw)"
+    $bpV1 = Llamar "GET" ($BaseProyectos + "/" + $bpR + "/impacto-borrado?subproyectos=borrar&tareas=borrar&ideas=conservar")
+    Verificar "vista previa de proyecto: 1 subproyecto, 1 tarea ligada que arrastra su subtarea (2), idea conservada" (($bpV1.Status -eq 200) -and ($bpV1.Json.subproyectos.total -eq 1) -and ($bpV1.Json.subproyectos.borrados -eq 1) -and ($bpV1.Json.tareas.total -eq 1) -and ($bpV1.Json.tareas.borrados -eq 2) -and ($bpV1.Json.ideas.total -eq 1) -and ($bpV1.Json.ideas.borrados -eq 0)) "status $($bpV1.Status) $($bpV1.Raw)"
+    $bpV2 = Llamar "GET" ($BaseProyectos + "/" + $bpR + "/impacto-borrado?tareas=raro")
+    Verificar "vista previa de proyecto con ?tareas=raro -> 400" (($bpV2.Status -eq 400) -and ($bpV2.Raw -match "tareas inv")) "status $($bpV2.Status) $($bpV2.Raw)"
+    $bpV3 = Llamar "GET" ($BaseProyectos + "/999999/impacto-borrado?subproyectos=borrar")
+    Verificar "vista previa de proyecto inexistente -> 404" ($bpV3.Status -eq 404) "status $($bpV3.Status)"
+    Verificar "la vista previa no borro nada (raiz, hija, tarea y subtarea siguen)" (((Llamar "GET" ($BaseProyectos + "/" + $bpR)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $bpH)).Status -eq 200) -and ((Llamar "GET" ($Base + "/" + $bpTL)).Status -eq 200) -and ((Llamar "GET" ($Base + "/" + $bpTS)).Status -eq 200))
     $bp8 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar&tareas=borrar&ideas=conservar")
     Verificar "borrar raiz con subproyectos=borrar, tareas=borrar e ideas=conservar -> 204" ($bp8.Status -eq 204) "status $($bp8.Status) $($bp8.Raw)"
     $bpGone = @((Llamar "GET" ($BaseProyectos + "/" + $bpR)).Status, (Llamar "GET" ($BaseProyectos + "/" + $bpH)).Status, (Llamar "GET" ($Base + "/" + $bpTL)).Status, (Llamar "GET" ($Base + "/" + $bpTS)).Status)
@@ -626,6 +637,17 @@ try {
     $bo6 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO + "?proyectos=borrar&tareas=conservar")
     Verificar "falta decidir las ideas -> 409 (ideas)" (($bo6.Status -eq 409) -and ($bo6.Raw -match "tiene ideas: indica")) "status $($bo6.Status) $($bo6.Raw)"
     Verificar "los 409 no borraron nada (objetivo, proyecto P y rescatable R siguen)" (((Llamar "GET" ($BaseObjetivos + "/" + $boO)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boP)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boR)).Status -eq 200))
+    # Vista previa del impacto (5f), con las mismas elecciones que el DELETE: P y SP se borran, R se rescata.
+    $boV0 = Llamar "GET" ($BaseObjetivos + "/" + $boO + "/impacto-borrado")
+    Verificar "vista previa de objetivo sin parametros -> 200 (no 409) con borrados en 0" (($boV0.Status -eq 200) -and ($boV0.Json.proyectos.total -eq 1) -and ($boV0.Json.proyectos.borrados -eq 0) -and ($boV0.Json.proyectos.rescatados -eq 0) -and ($boV0.Json.tareas.borrados -eq 0) -and ($boV0.Json.ideas.borrados -eq 0)) "status $($boV0.Status) $($boV0.Raw)"
+    $boV1 = Llamar "GET" ($BaseObjetivos + "/" + $boO + "/impacto-borrado?proyectos=borrar&tareas=conservar&ideas=borrar")
+    Verificar "vista previa de objetivo: 1 proyecto ligado, 2 se borran (P y SP), 1 rescatado (R)" (($boV1.Status -eq 200) -and ($boV1.Json.subobjetivos.total -eq 0) -and ($boV1.Json.proyectos.total -eq 1) -and ($boV1.Json.proyectos.borrados -eq 2) -and ($boV1.Json.proyectos.rescatados -eq 1)) "status $($boV1.Status) $($boV1.Raw)"
+    Verificar "vista previa de objetivo: 2 tareas en el alcance (la de R no), ninguna se borra; 1 idea que se borra" (($boV1.Json.tareas.total -eq 2) -and ($boV1.Json.tareas.borrados -eq 0) -and ($boV1.Json.ideas.total -eq 1) -and ($boV1.Json.ideas.borrados -eq 1)) $boV1.Raw
+    $boV2 = Llamar "GET" ($BaseObjetivos + "/" + $boO + "/impacto-borrado?proyectos=raro")
+    Verificar "vista previa de objetivo con ?proyectos=raro -> 400" (($boV2.Status -eq 400) -and ($boV2.Raw -match "proyectos inv")) "status $($boV2.Status) $($boV2.Raw)"
+    $boV3 = Llamar "GET" ($BaseObjetivos + "/999999/impacto-borrado?proyectos=borrar")
+    Verificar "vista previa de objetivo inexistente -> 404" ($boV3.Status -eq 404) "status $($boV3.Status)"
+    Verificar "la vista previa no borro nada (objetivo, P, SP y R siguen)" (((Llamar "GET" ($BaseObjetivos + "/" + $boO)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boP)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boSP)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boR)).Status -eq 200))
     $bo7 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO + "?proyectos=borrar&tareas=conservar&ideas=borrar")
     Verificar "borrar objetivo con proyectos=borrar, tareas=conservar, ideas=borrar -> 204" ($bo7.Status -eq 204) "status $($bo7.Status) $($bo7.Raw)"
     Verificar "el objetivo, P y SP ya no existen (404)" ((((Llamar "GET" ($BaseObjetivos + "/" + $boO)).Status -eq 404) -and ((Llamar "GET" ($BaseProyectos + "/" + $boP)).Status -eq 404) -and ((Llamar "GET" ($BaseProyectos + "/" + $boSP)).Status -eq 404)))

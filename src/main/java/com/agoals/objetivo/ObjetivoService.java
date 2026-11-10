@@ -1,9 +1,12 @@
 package com.agoals.objetivo;
 
+import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
 import com.agoals.common.ModoBorrado;
 import com.agoals.idea.IdeaService;
+import com.agoals.objetivo.dto.ConteoProyectosBorrado;
+import com.agoals.objetivo.dto.ImpactoBorradoObjetivoResponse;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.proyecto.PlanBorradoProyectos;
@@ -111,7 +114,29 @@ public class ObjetivoService {
 		if (!ideaIds.isEmpty() && e.ideas() == null) {
 			throw conflicto(raiz, "ideas", "borrarlas o conservarlas");
 		}
-		return new AlcanceBorradoObjetivo(raiz, hijos, aBorrar, plan, desligados, tareaIds, ideaIds, e);
+		return new AlcanceBorradoObjetivo(raiz, hijos, aBorrar, proyectosLigados, plan, desligados, tareaIds, ideaIds, e);
+	}
+
+	/**
+	 * Vista previa (solo lectura) de {@link #eliminar}: cuántos elementos de cada categoría hay en el alcance y cuántos
+	 * se borrarían con las elecciones dadas. Una elección ausente se toma como {@code conservar}, así que nunca responde
+	 * 409. Reutiliza {@link #calcularAlcance}, por lo que cuenta exactamente lo que luego haría DELETE.
+	 */
+	@Transactional(readOnly = true)
+	public ImpactoBorradoObjetivoResponse impactoBorrado(Long id, EleccionesBorradoObjetivo elecciones) {
+		EleccionesBorradoObjetivo e = (elecciones != null ? elecciones : EleccionesBorradoObjetivo.NINGUNA)
+				.conservarLoNoElegido();
+		AlcanceBorradoObjetivo a = calcularAlcance(id, e);
+
+		boolean tareasBorrar = e.tareas() == ModoBorrado.BORRAR;
+		boolean ideasBorrar = e.ideas() == ModoBorrado.BORRAR;
+		return new ImpactoBorradoObjetivoResponse(
+				new ConteoBorrado(a.hijosDirectos().size(),
+						e.subobjetivos() == ModoBorrado.BORRAR ? a.objetivosABorrar().size() - 1 : 0),
+				new ConteoProyectosBorrado(a.proyectoIdsLigados().size(), a.proyectoIdsABorrar().size(),
+						a.proyectoIdsRescatados().size()),
+				new ConteoBorrado(a.tareaIds().size(), tareasBorrar ? tareaService.contarConSubtareas(a.tareaIds()) : 0),
+				new ConteoBorrado(a.ideaIds().size(), ideasBorrar ? a.ideaIds().size() : 0));
 	}
 
 	// Fase 2. De lo más dependiente a lo menos: tareas e ideas, luego proyectos, al final la jerarquía de objetivos.

@@ -1,6 +1,7 @@
 package com.agoals.objetivo;
 
 import com.agoals.common.Estado;
+import com.agoals.objetivo.dto.ImpactoBorradoObjetivoResponse;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.tarea.dto.TareaResponse;
@@ -60,6 +61,16 @@ public class ObjetivoController {
 		// Cada parámetro llega como texto y se valida aquí (borrar|conservar): un valor desconocido responde 400.
 		// Vacío = ausente. Sin ninguno, el comportamiento de siempre: 409 si hay dependencias.
 		service.eliminar(id, EleccionesBorradoObjetivo.desde(subobjetivos, proyectos, tareas, ideas));
+	}
+
+	@GetMapping("/{id}/impacto-borrado")
+	public ImpactoBorradoObjetivoResponse impactoBorrado(@PathVariable Long id,
+			@RequestParam(required = false) String subobjetivos,
+			@RequestParam(required = false) String proyectos,
+			@RequestParam(required = false) String tareas,
+			@RequestParam(required = false) String ideas) {
+		// Mismos parámetros que DELETE, validados aquí (400 antes del 404). Ausente o vacío = conservar; nunca 409.
+		return service.impactoBorrado(id, EleccionesBorradoObjetivo.desde(subobjetivos, proyectos, tareas, ideas));
 	}
 
 	@GetMapping("/{id}/tareas")

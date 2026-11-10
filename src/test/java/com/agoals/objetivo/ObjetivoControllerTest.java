@@ -1,9 +1,12 @@
 package com.agoals.objetivo;
 
 import com.agoals.common.ApiExceptionHandler;
+import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.ModoBorrado;
 import com.agoals.common.Prioridad;
+import com.agoals.objetivo.dto.ConteoProyectosBorrado;
+import com.agoals.objetivo.dto.ImpactoBorradoObjetivoResponse;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
 import com.agoals.tarea.TareaNoEncontradaException;
@@ -269,6 +272,93 @@ class ObjetivoControllerTest {
 		mvc.perform(delete("/api/objetivos/1"))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.mensaje").value(containsString("«Salud» tiene ideas")));
+	}
+
+	// ---- Vista previa del impacto del borrado (5f) ----
+
+	private static ImpactoBorradoObjetivoResponse vacio() {
+		return new ImpactoBorradoObjetivoResponse(new ConteoBorrado(0, 0), new ConteoProyectosBorrado(0, 0, 0),
+				new ConteoBorrado(0, 0), new ConteoBorrado(0, 0));
+	}
+
+	@Test
+	void impactoBorradoDevuelve200ConLaFormaDelContrato() throws Exception {
+		when(service.impactoBorrado(1L, new EleccionesBorradoObjetivo(ModoBorrado.BORRAR, ModoBorrado.BORRAR,
+				ModoBorrado.BORRAR, null)))
+				.thenReturn(new ImpactoBorradoObjetivoResponse(new ConteoBorrado(1, 1),
+						new ConteoProyectosBorrado(1, 2, 1), new ConteoBorrado(2, 3), new ConteoBorrado(1, 0)));
+
+		mvc.perform(get("/api/objetivos/1/impacto-borrado?subobjetivos=borrar&proyectos=borrar&tareas=borrar"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.subobjetivos.total").value(1))
+				.andExpect(jsonPath("$.subobjetivos.borrados").value(1))
+				.andExpect(jsonPath("$.proyectos.total").value(1))
+				.andExpect(jsonPath("$.proyectos.borrados").value(2))
+				.andExpect(jsonPath("$.proyectos.rescatados").value(1))
+				.andExpect(jsonPath("$.tareas.total").value(2))
+				.andExpect(jsonPath("$.tareas.borrados").value(3))
+				.andExpect(jsonPath("$.ideas.total").value(1))
+				.andExpect(jsonPath("$.ideas.borrados").value(0));
+	}
+
+	@Test
+	void impactoBorradoSinParametrosLlegaAlServiceSinElecciones() throws Exception {
+		when(service.impactoBorrado(1L, EleccionesBorradoObjetivo.NINGUNA)).thenReturn(vacio());
+
+		mvc.perform(get("/api/objetivos/1/impacto-borrado")).andExpect(status().isOk());
+
+		verify(service).impactoBorrado(1L, EleccionesBorradoObjetivo.NINGUNA);
+	}
+
+	@Test
+	void impactoBorradoConParametrosVaciosEquivaleAAusentes() throws Exception {
+		when(service.impactoBorrado(1L, EleccionesBorradoObjetivo.NINGUNA)).thenReturn(vacio());
+
+		mvc.perform(get("/api/objetivos/1/impacto-borrado?subobjetivos=&proyectos=&tareas=&ideas="))
+				.andExpect(status().isOk());
+
+		verify(service).impactoBorrado(1L, EleccionesBorradoObjetivo.NINGUNA);
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "borrar,BORRAR", "BORRAR,BORRAR", "conservar,CONSERVAR", "Conservar,CONSERVAR" })
+	void impactoBorradoConCadaParametroValidoLlegaAlServiceSoloEnSuCategoria(String texto, ModoBorrado esperado)
+			throws Exception {
+		mvc.perform(get("/api/objetivos/1/impacto-borrado?subobjetivos=" + texto)).andExpect(status().isOk());
+		mvc.perform(get("/api/objetivos/2/impacto-borrado?proyectos=" + texto)).andExpect(status().isOk());
+		mvc.perform(get("/api/objetivos/3/impacto-borrado?tareas=" + texto)).andExpect(status().isOk());
+		mvc.perform(get("/api/objetivos/4/impacto-borrado?ideas=" + texto)).andExpect(status().isOk());
+
+		verify(service).impactoBorrado(1L, new EleccionesBorradoObjetivo(esperado, null, null, null));
+		verify(service).impactoBorrado(2L, new EleccionesBorradoObjetivo(null, esperado, null, null));
+		verify(service).impactoBorrado(3L, new EleccionesBorradoObjetivo(null, null, esperado, null));
+		verify(service).impactoBorrado(4L, new EleccionesBorradoObjetivo(null, null, null, esperado));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "subobjetivos", "proyectos", "tareas", "ideas" })
+	void impactoBorradoConUnValorInvalidoDevuelve400ConElParametroYNoLlamaAlService(String parametro) throws Exception {
+		mvc.perform(get("/api/objetivos/1/impacto-borrado?" + parametro + "=raro"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(containsString(parametro + " inválido")))
+				.andExpect(jsonPath("$.mensaje").value(containsString("borrar o conservar")));
+
+		verifyNoInteractions(service);
+	}
+
+	@Test
+	void impactoBorradoDeUnIdInexistenteDevuelve404() throws Exception {
+		when(service.impactoBorrado(7L, EleccionesBorradoObjetivo.NINGUNA))
+				.thenThrow(new ObjetivoNoEncontradoException(7L));
+
+		mvc.perform(get("/api/objetivos/7/impacto-borrado")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void impactoBorradoConValorInvalidoEnUnIdInexistenteDa400Primero() throws Exception {
+		mvc.perform(get("/api/objetivos/7/impacto-borrado?proyectos=raro")).andExpect(status().isBadRequest());
+
+		verifyNoInteractions(service);
 	}
 
 	// ---- Tareas del objetivo ----
