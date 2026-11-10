@@ -53,8 +53,13 @@ public class ProyectoController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void eliminar(@PathVariable Long id) {
-		service.eliminar(id);
+	public void eliminar(@PathVariable Long id,
+			@RequestParam(required = false) String subproyectos,
+			@RequestParam(required = false) String tareas,
+			@RequestParam(required = false) String ideas) {
+		// Cada parámetro llega como texto y se valida aquí (borrar|conservar): un valor desconocido responde 400.
+		// Vacío = ausente. Sin ninguno, el comportamiento de siempre: 409 si hay dependencias.
+		service.eliminar(id, EleccionesBorradoProyecto.desde(subproyectos, tareas, ideas));
 	}
 
 	@GetMapping("/{id}/tareas")

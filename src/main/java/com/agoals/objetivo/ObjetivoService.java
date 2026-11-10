@@ -2,9 +2,11 @@ package com.agoals.objetivo;
 
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
+import com.agoals.common.ModoBorrado;
 import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.dto.ObjetivoRequest;
 import com.agoals.objetivo.dto.ObjetivoResponse;
+import com.agoals.proyecto.PlanBorradoProyectos;
 import com.agoals.proyecto.ProyectoService;
 import com.agoals.tarea.TareaService;
 import com.agoals.tarea.dto.TareaResponse;
@@ -63,27 +65,98 @@ public class ObjetivoService {
 		return aRespuesta(repository.saveAndFlush(objetivo));
 	}
 
-	// Desde la API nunca se borra en cascada, aunque la base tenga CASCADE / SET NULL:
-	// hay que vaciar el objetivo antes. Cada motivo tiene su propio mensaje.
-	public void eliminar(Long id) {
-		Objetivo objetivo = buscar(id);
-		if (repository.existsByPadreIdAndUsuarioId(id, USUARIO_ID)) {
-			throw new ObjetivoConDependenciasException(
-					"El objetivo " + id + " tiene subobjetivos: muévelos o bórralos primero");
+	/**
+	 * Borra el objetivo. Por cada categoría con elementos (subobjetivos, proyectos, tareas, ideas) hay que elegir
+	 * {@code borrar} o {@code conservar}; sin elección es 409. Una categoría vacía ignora su elección. Todo en una
+	 * transacción. Dos fases: {@link #calcularAlcance} valida y arma qué se toca (solo lectura), {@link #ejecutar} escribe.
+	 *
+	 * <p>Proyectos, tareas e ideas se aplican a los de CUALQUIER objetivo que se borra (el propio y, con
+	 * {@code subobjetivos=borrar}, sus descendientes) y, las tareas e ideas, también a los de los proyectos que se
+	 * borran. Con {@code proyectos=borrar}, un subproyecto ligado a otro objetivo que no se borra se rescata
+	 * (ver {@link ProyectoService#planBorradoPorObjetivos}).
+	 */
+	public void eliminar(Long id, EleccionesBorradoObjetivo elecciones) {
+		ejecutar(calcularAlcance(id, elecciones));
+	}
+
+	/** Fase 1, solo lectura: lanza 404/409 y devuelve todo lo que el borrado tocaría. */
+	AlcanceBorradoObjetivo calcularAlcance(Long id, EleccionesBorradoObjetivo elecciones) {
+		EleccionesBorradoObjetivo e = elecciones != null ? elecciones : EleccionesBorradoObjetivo.NINGUNA;
+		Objetivo raiz = buscar(id);
+		List<Objetivo> hijos = repository.findByPadreIdAndUsuarioId(id, USUARIO_ID);
+		if (!hijos.isEmpty() && e.subobjetivos() == null) {
+			throw conflicto(raiz, "subobjetivos", "borrarlos o conservarlos");
 		}
-		if (proyectoService.existenProyectosDelObjetivo(id)) {
-			throw new ObjetivoConDependenciasException(
-					"El objetivo " + id + " tiene proyectos: cámbiales el objetivo o bórralos primero");
+		List<Objetivo> aBorrar = e.subobjetivos() == ModoBorrado.BORRAR
+				? Jerarquia.hojasPrimero(List.of(raiz), Objetivo::getId,
+						oid -> repository.findByPadreIdAndUsuarioId(oid, USUARIO_ID), o -> false)
+				: List.of(raiz);
+		List<Long> objetivoIds = aBorrar.stream().map(Objetivo::getId).toList();
+
+		List<Long> proyectosLigados = proyectoService.idsDeObjetivos(objetivoIds);
+		if (!proyectosLigados.isEmpty() && e.proyectos() == null) {
+			throw conflicto(raiz, "proyectos", "borrarlos o conservarlos");
 		}
-		if (tareaService.existenTareasDelObjetivo(id)) {
-			throw new ObjetivoConDependenciasException(
-					"El objetivo " + id + " tiene tareas: desasígnalas primero");
+		PlanBorradoProyectos plan = e.proyectos() == ModoBorrado.BORRAR && !proyectosLigados.isEmpty()
+				? proyectoService.planBorradoPorObjetivos(objetivoIds)
+				: PlanBorradoProyectos.VACIO;
+		List<Long> desligados = e.proyectos() == ModoBorrado.CONSERVAR ? proyectosLigados : List.of();
+
+		// Tareas e ideas de los objetivos que se borran y de los proyectos que se borran (no de los conservados ni rescatados).
+		List<Long> tareaIds = tareaService.idsLigadas(plan.aBorrar(), objetivoIds);
+		if (!tareaIds.isEmpty() && e.tareas() == null) {
+			throw conflicto(raiz, "tareas", "borrarlas o conservarlas");
 		}
-		if (ideaService.existenIdeasDelObjetivo(id)) {
-			throw new ObjetivoConDependenciasException(
-					"El objetivo " + id + " tiene ideas: desvincúlalas o bórralas primero");
+		List<Long> ideaIds = ideaService.idsLigadas(plan.aBorrar(), objetivoIds);
+		if (!ideaIds.isEmpty() && e.ideas() == null) {
+			throw conflicto(raiz, "ideas", "borrarlas o conservarlas");
 		}
-		repository.delete(objetivo);
+		return new AlcanceBorradoObjetivo(raiz, hijos, aBorrar, plan, desligados, tareaIds, ideaIds, e);
+	}
+
+	// Fase 2. De lo más dependiente a lo menos: tareas e ideas, luego proyectos, al final la jerarquía de objetivos.
+	// Si se borrara antes el proyecto o el objetivo, el SET NULL de la base soltaría tareas e ideas en silencio y ya
+	// no las encontraríamos para borrarlas.
+	private void ejecutar(AlcanceBorradoObjetivo a) {
+		List<Long> objetivoIds = a.idsObjetivosABorrar();
+		List<Long> proyectoIds = a.proyectoIdsABorrar();
+		if (!a.tareaIds().isEmpty()) {
+			if (a.elecciones().tareas() == ModoBorrado.BORRAR) {
+				tareaService.eliminarLigadas(a.tareaIds());
+			} else {
+				tareaService.desligar(a.tareaIds(), proyectoIds, objetivoIds);
+			}
+		}
+		if (!a.ideaIds().isEmpty()) {
+			if (a.elecciones().ideas() == ModoBorrado.BORRAR) {
+				ideaService.eliminarLigadas(a.ideaIds());
+			} else {
+				ideaService.desligar(a.ideaIds(), proyectoIds, objetivoIds);
+			}
+		}
+		if (!a.proyectoIdsDesligados().isEmpty()) {
+			proyectoService.desligarDeObjetivo(a.proyectoIdsDesligados());
+		}
+		if (!a.proyectoIdsABorrar().isEmpty()) {
+			proyectoService.ejecutarBorradoPorObjetivos(a.proyectos());
+		}
+
+		if (a.elecciones().subobjetivos() == ModoBorrado.BORRAR) {
+			repository.deleteAll(a.objetivosABorrar()); // hojas primero: así la cascada de la base no se adelanta
+		} else {
+			if (!a.hijosDirectos().isEmpty()) {
+				// Primero reasignar y hacer flush: si se borrara el objetivo antes, la cascada se llevaría a los hijos.
+				a.hijosDirectos().forEach(h -> h.setPadreId(a.raiz().getPadreId()));
+				repository.saveAllAndFlush(a.hijosDirectos());
+			}
+			repository.delete(a.raiz());
+		}
+		repository.flush();
+	}
+
+	private static ObjetivoConDependenciasException conflicto(Objetivo o, String categoria, String acciones) {
+		return new ObjetivoConDependenciasException(
+				"El objetivo «" + o.getNombre() + "» tiene " + categoria + ": indica si quieres " + acciones);
 	}
 
 	// --- Tareas ligadas directamente al objetivo (los proyectos del objetivo se ven en GET /api/proyectos?objetivoId=) ---

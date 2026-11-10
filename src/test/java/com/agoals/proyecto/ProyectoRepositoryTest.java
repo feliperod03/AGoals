@@ -75,16 +75,35 @@ class ProyectoRepositoryTest {
 	}
 
 	@Test
-	void existsByObjetivoIdDetectaProyectosDelObjetivo() {
+	void findByPadreIdDevuelveLosSubproyectosDirectos() {
+		Proyecto padre = repository.saveAndFlush(nuevo("padre"));
+		Proyecto hijo = nuevo("hijo");
+		hijo.setPadreId(padre.getId());
+		repository.saveAndFlush(hijo);
+		Proyecto nieto = nuevo("nieto");
+		nieto.setPadreId(hijo.getId());
+		repository.saveAndFlush(nieto);
+
+		assertThat(repository.findByPadreIdAndUsuarioId(padre.getId(), 1L)).extracting(Proyecto::getNombre)
+				.containsExactly("hijo");
+		assertThat(repository.findByPadreIdAndUsuarioId(padre.getId(), 2L)).isEmpty();
+	}
+
+	@Test
+	void findByObjetivoIdInDevuelveLosProyectosLigadosDirectamente() {
 		Long obj = objetivo();
 		Long otroObj = objetivo();
 		Proyecto p = nuevo("del objetivo");
 		p.setObjetivoId(obj);
-		repository.saveAndFlush(p);
+		Proyecto q = nuevo("del otro");
+		q.setObjetivoId(otroObj);
+		repository.saveAllAndFlush(java.util.List.of(p, q, nuevo("sin objetivo")));
 
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(obj, 1L)).isTrue();
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(otroObj, 1L)).isFalse();
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(obj, 2L)).isFalse();
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(1L, java.util.List.of(obj))).extracting(Proyecto::getNombre)
+				.containsExactly("del objetivo");
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(1L, java.util.List.of(obj, otroObj)))
+				.extracting(Proyecto::getNombre).containsExactlyInAnyOrder("del objetivo", "del otro");
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(2L, java.util.List.of(obj))).isEmpty();
 	}
 
 	@Test

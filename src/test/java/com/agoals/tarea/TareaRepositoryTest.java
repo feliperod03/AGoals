@@ -91,10 +91,11 @@ class TareaRepositoryTest {
 		repository.saveAndFlush(dentro);
 		repository.saveAndFlush(nueva("suelta"));
 
-		assertThat(repository.existsByUsuarioIdAndProyectoId(1L, proyectoId)).isTrue();
+		assertThat(repository.findByUsuarioIdAndProyectoIdIn(1L, List.of(proyectoId)))
+				.extracting(Tarea::getTitulo).containsExactly("dentro");
 		assertThat(repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(1L, proyectoId))
 				.extracting(Tarea::getTitulo).containsExactly("dentro");
-		assertThat(repository.existsByUsuarioIdAndProyectoId(2L, proyectoId)).isFalse();
+		assertThat(repository.findByUsuarioIdAndProyectoIdIn(2L, List.of(proyectoId))).isEmpty();
 	}
 
 	@Test
@@ -108,10 +109,11 @@ class TareaRepositoryTest {
 		repository.saveAndFlush(dentro);
 		repository.saveAndFlush(nueva("suelta"));
 
-		assertThat(repository.existsByUsuarioIdAndObjetivoId(1L, objetivoId)).isTrue();
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(1L, List.of(objetivoId)))
+				.extracting(Tarea::getTitulo).containsExactly("dentro");
 		assertThat(repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(1L, objetivoId))
 				.extracting(Tarea::getTitulo).containsExactly("dentro");
-		assertThat(repository.existsByUsuarioIdAndObjetivoId(2L, objetivoId)).isFalse();
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(2L, List.of(objetivoId))).isEmpty();
 	}
 
 	@Test

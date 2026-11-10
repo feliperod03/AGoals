@@ -16,6 +16,8 @@ public interface ObjetivoRepository extends JpaRepository<Objetivo, Long> {
 
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
+	List<Objetivo> findByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
+
 	// Filtro opcional: estado null significa "todos".
 	@Query("""
 			SELECT o FROM Objetivo o

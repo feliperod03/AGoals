@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,7 +17,10 @@ public interface ProyectoRepository extends JpaRepository<Proyecto, Long> {
 
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
-	boolean existsByObjetivoIdAndUsuarioId(Long objetivoId, Long usuarioId);
+	List<Proyecto> findByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
+
+	// Proyectos ligados directamente a alguno de estos objetivos. Nunca llamar con una colección vacía.
+	List<Proyecto> findByUsuarioIdAndObjetivoIdIn(Long usuarioId, Collection<Long> objetivoIds);
 
 	// Filtros opcionales: un parámetro null significa "no filtrar por este campo".
 	@Query("""

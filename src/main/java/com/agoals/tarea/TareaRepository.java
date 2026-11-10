@@ -34,9 +34,10 @@ public interface TareaRepository extends JpaRepository<Tarea, Long> {
 
 	List<Tarea> findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(Long usuarioId, Long proyectoId);
 
-	boolean existsByUsuarioIdAndProyectoId(Long usuarioId, Long proyectoId);
-
 	List<Tarea> findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(Long usuarioId, Long objetivoId);
 
-	boolean existsByUsuarioIdAndObjetivoId(Long usuarioId, Long objetivoId);
+	// Para el borrado de proyectos/objetivos (5e). Nunca llamar con una colección vacía: el service lo evita.
+	List<Tarea> findByUsuarioIdAndProyectoIdIn(Long usuarioId, Collection<Long> proyectoIds);
+
+	List<Tarea> findByUsuarioIdAndObjetivoIdIn(Long usuarioId, Collection<Long> objetivoIds);
 }

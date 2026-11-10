@@ -9,7 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -97,16 +100,45 @@ public class IdeaService {
 		return aRespuesta(repository.saveAndFlush(idea));
 	}
 
-	// --- Soporte para ProyectoService y ObjetivoService (409 al borrar) ---
+	// --- Soporte para ProyectoService y ObjetivoService (borrado, 5e) ---
+	// No validan que el proyecto u objetivo exista. Una colección vacía significa "ninguno" y no llega a la consulta.
 
+	/** Ids de las ideas ligadas a alguno de esos proyectos u objetivos, sin repetir. */
 	@Transactional(readOnly = true)
-	public boolean existenIdeasDelProyecto(Long proyectoId) {
-		return repository.existsByProyectoIdAndUsuarioId(proyectoId, USUARIO_ID);
+	public List<Long> idsLigadas(Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
+		Set<Long> ids = new LinkedHashSet<>();
+		if (!proyectoIds.isEmpty()) {
+			repository.findByUsuarioIdAndProyectoIdIn(USUARIO_ID, proyectoIds).forEach(i -> ids.add(i.getId()));
+		}
+		if (!objetivoIds.isEmpty()) {
+			repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds).forEach(i -> ids.add(i.getId()));
+		}
+		return List.copyOf(ids);
 	}
 
-	@Transactional(readOnly = true)
-	public boolean existenIdeasDelObjetivo(Long objetivoId) {
-		return repository.existsByObjetivoIdAndUsuarioId(objetivoId, USUARIO_ID);
+	/** Deja libres esas ideas: pone a null solo la columna que apunta a algo que se va a borrar. Hace flush. */
+	public void desligar(Collection<Long> ideaIds, Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
+		if (ideaIds.isEmpty()) {
+			return;
+		}
+		List<Idea> ideas = repository.findAllById(ideaIds);
+		for (Idea i : ideas) {
+			if (i.getProyectoId() != null && proyectoIds.contains(i.getProyectoId())) {
+				i.setProyectoId(null);
+			}
+			if (i.getObjetivoId() != null && objetivoIds.contains(i.getObjetivoId())) {
+				i.setObjetivoId(null);
+			}
+		}
+		repository.saveAllAndFlush(ideas);
+	}
+
+	public void eliminarLigadas(Collection<Long> ideaIds) {
+		if (ideaIds.isEmpty()) {
+			return;
+		}
+		repository.deleteAll(repository.findAllById(ideaIds));
+		repository.flush();
 	}
 
 	private Idea buscar(Long id) {

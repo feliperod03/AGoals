@@ -14,9 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -391,11 +393,6 @@ public class TareaService {
 				.toList();
 	}
 
-	@Transactional(readOnly = true)
-	public boolean existenTareasDelProyecto(Long proyectoId) {
-		return repository.existsByUsuarioIdAndProyectoId(USUARIO_ID, proyectoId);
-	}
-
 	/** Liga la tarea directamente a un objetivo, o la deja sin objetivo si objetivoId es null. */
 	public TareaResponse asignarObjetivo(Long tareaId, Long objetivoId) {
 		Tarea tarea = buscar(tareaId);
@@ -411,9 +408,57 @@ public class TareaService {
 				.toList();
 	}
 
+	// --- Borrado de proyectos y objetivos (5e) ---
+	// Tampoco validan que existan. "Ligadas" = tareas con proyecto_id en proyectoIds u objetivo_id en objetivoIds
+	// (solo esas, no sus subtareas). Una colección vacía significa "ninguno" y no llega a la consulta.
+
+	/** Ids de las tareas ligadas directamente a alguno de esos proyectos u objetivos, sin repetir. */
 	@Transactional(readOnly = true)
-	public boolean existenTareasDelObjetivo(Long objetivoId) {
-		return repository.existsByUsuarioIdAndObjetivoId(USUARIO_ID, objetivoId);
+	public List<Long> idsLigadas(Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
+		Set<Long> ids = new LinkedHashSet<>();
+		if (!proyectoIds.isEmpty()) {
+			repository.findByUsuarioIdAndProyectoIdIn(USUARIO_ID, proyectoIds).forEach(t -> ids.add(t.getId()));
+		}
+		if (!objetivoIds.isEmpty()) {
+			repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds).forEach(t -> ids.add(t.getId()));
+		}
+		return List.copyOf(ids);
+	}
+
+	/**
+	 * Desliga las tareas: pone a null solo la columna que apunta a algo que se va a borrar (proyecto_id si está en
+	 * {@code proyectoIds}, objetivo_id si está en {@code objetivoIds}); la tarea y lo demás no se tocan. Hace flush.
+	 */
+	public void desligar(Collection<Long> tareaIds, Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
+		if (tareaIds.isEmpty()) {
+			return;
+		}
+		List<Tarea> tareas = repository.findAllById(tareaIds);
+		for (Tarea t : tareas) {
+			if (t.getProyectoId() != null && proyectoIds.contains(t.getProyectoId())) {
+				t.setProyectoId(null);
+			}
+			if (t.getObjetivoId() != null && objetivoIds.contains(t.getObjetivoId())) {
+				t.setObjetivoId(null);
+			}
+		}
+		repository.saveAllAndFlush(tareas);
+	}
+
+	/**
+	 * Borra esas tareas con TODAS sus subtareas de cualquier nivel (estén ligadas o no). Reutiliza la idea de 5d
+	 * ({@link ModoSubtareas#BORRAR}) pero en post-orden, porque las raíces pueden estar anidadas entre sí (una tarea
+	 * ligada y su hija también ligada). Sus recordatorios caen por la cascada de la base.
+	 */
+	public void eliminarLigadas(Collection<Long> tareaIds) {
+		if (tareaIds.isEmpty()) {
+			return;
+		}
+		List<Tarea> raices = repository.findAllById(tareaIds);
+		List<Tarea> orden = Jerarquia.hojasPrimero(raices, Tarea::getId,
+				id -> repository.findByPadreIdAndUsuarioId(id, USUARIO_ID), t -> false);
+		repository.deleteAll(orden);
+		repository.flush();
 	}
 
 	private Tarea buscar(Long id) {

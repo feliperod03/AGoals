@@ -4,7 +4,8 @@
 # y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
 # reabrir y 409 al borrar un proyecto u objetivo con ideas), y eventos (CRUD, PUT completo, listado por
 # solapamiento con desde/hasta usando fechas con desfase -03:00, y validaciones), y recordatorios (de tarea,
-# de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada), y borrar una tarea con subtareas eligiendo borrar o conservar.
+# de evento o sueltos; vencidos con bordes, PUT, marcar-enviado, 409 por duplicado y borrado en cascada), y borrar una tarea con subtareas eligiendo borrar o conservar,
+# y borrar proyectos y objetivos eligiendo borrar o conservar por categoria (subelementos, proyectos, tareas, ideas), con 409 que nombra el elemento y rescate de subproyectos de otro objetivo.
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
 # Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
@@ -493,6 +494,162 @@ try {
     Verificar "tarea sin subtareas con ?subtareas=borrar -> 204" ($bs8.Status -eq 204) "status $($bs8.Status)"
     $bs9 = Llamar "DELETE" ($Base + "/999999?subtareas=conservar")
     Verificar "tarea inexistente con ?subtareas=conservar -> 404" ($bs9.Status -eq 404) "status $($bs9.Status)"
+
+    # --- Borrar proyectos y objetivos eligiendo que hacer con cada dependencia (subproyectos|subobjetivos, proyectos, tareas, ideas) ---
+    # Cada parametro es borrar|conservar. Sin parametro y con elementos en esa categoria -> 409 con el NOMBRE entre
+    # comillas angulares. El archivo se mantiene en ASCII y la respuesta de error llega mal decodificada en PS 5.1:
+    # por eso el nombre se busca entre 1 a 3 caracteres cualesquiera (las comillas, bien o mal decodificadas).
+    function NuevoProy($nombre, $padre = $null, $objetivo = $null) {
+        $json = '{"nombre":"' + $nombre + '"'
+        if ($padre) { $json += ',"padreId":' + $padre }
+        if ($objetivo) { $json += ',"objetivoId":' + $objetivo }
+        $json += '}'
+        $r = Llamar "POST" $BaseProyectos ([System.Text.Encoding]::UTF8.GetBytes($json))
+        if (-not $r.Json) { throw "No se pudo crear el proyecto '$nombre' ($($r.Status) $($r.Raw))" }
+        $script:proyectoIds += $r.Json.id
+        return $r.Json.id
+    }
+    function NuevoObj($nombre, $padre = $null) {
+        $json = '{"nombre":"' + $nombre + '"'
+        if ($padre) { $json += ',"padreId":' + $padre }
+        $json += '}'
+        $r = Llamar "POST" $BaseObjetivos ([System.Text.Encoding]::UTF8.GetBytes($json))
+        if (-not $r.Json) { throw "No se pudo crear el objetivo '$nombre' ($($r.Status) $($r.Raw))" }
+        $script:objetivoIds += $r.Json.id
+        return $r.Json.id
+    }
+    function NuevaIdea($titulo, $campo, $valor) {
+        $r = Llamar "POST" $BaseIdeas ('{"titulo":"' + $titulo + '","' + $campo + '":' + $valor + '}')
+        if (-not $r.Json) { throw "No se pudo crear la idea '$titulo' ($($r.Status) $($r.Raw))" }
+        $script:ideaIds += $r.Json.id
+        return $r.Json.id
+    }
+    function LigarTarea($baseElemento, $elementoId, $tareaId) {
+        $r = Llamar "PUT" ($baseElemento + "/" + $elementoId + "/tareas/" + $tareaId)
+        if ($r.Status -ne 200) { throw "No se pudo ligar la tarea $tareaId a $elementoId ($($r.Status) $($r.Raw))" }
+    }
+
+    # Proyecto A: conservar subproyectos con abuelo. PA -> PB (Casa) -> (PC -> PE, PD)
+    $bpA = NuevoProy "smoke-bp abuelo"
+    $bpB = NuevoProy "smoke-bp Casa" $bpA
+    $bpC = NuevoProy "smoke-bp hija C" $bpB
+    $bpD = NuevoProy "smoke-bp hija D" $bpB
+    $bpE = NuevoProy "smoke-bp nieta E" $bpC
+    $bp1 = Llamar "DELETE" ($BaseProyectos + "/" + $bpB)
+    Verificar "borrar proyecto con subproyectos sin parametro -> 409 con el nombre (no el id)" (($bp1.Status -eq 409) -and ($bp1.Raw -match "El proyecto \S{1,3}smoke-bp Casa\S{1,3} tiene subproyectos: indica")) "status $($bp1.Status) $($bp1.Raw)"
+    $bp2 = Llamar "DELETE" ($BaseProyectos + "/" + $bpB + "?subproyectos=raro")
+    Verificar "proyecto ?subproyectos=raro -> 400 con el parametro y los valores validos" (($bp2.Status -eq 400) -and ($bp2.Raw -match "subproyectos inv") -and ($bp2.Raw -match "borrar o conservar")) "status $($bp2.Status) $($bp2.Raw)"
+    $bp3 = Llamar "DELETE" ($BaseProyectos + "/" + $bpB + "?tareas=raro")
+    Verificar "proyecto ?tareas=raro -> 400 aunque el proyecto no tenga tareas" (($bp3.Status -eq 400) -and ($bp3.Raw -match "tareas inv")) "status $($bp3.Status) $($bp3.Raw)"
+    Verificar "tras el 409 y los 400 el proyecto y sus hijos siguen existiendo" (((Llamar "GET" ($BaseProyectos + "/" + $bpB)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $bpC)).Status -eq 200))
+    $bp4 = Llamar "DELETE" ($BaseProyectos + "/" + $bpB + "?subproyectos=Conservar")
+    Verificar "borrar Casa con ?subproyectos=Conservar -> 204" ($bp4.Status -eq 204) "status $($bp4.Status) $($bp4.Raw)"
+    Verificar "Casa ya no existe" ((Llamar "GET" ($BaseProyectos + "/" + $bpB)).Status -eq 404)
+    $bpCg = Llamar "GET" ($BaseProyectos + "/" + $bpC)
+    $bpDg = Llamar "GET" ($BaseProyectos + "/" + $bpD)
+    $bpEg = Llamar "GET" ($BaseProyectos + "/" + $bpE)
+    Verificar "conservar subproyectos: C sobrevive y pasa a colgar del abuelo" (($bpCg.Status -eq 200) -and ($bpCg.Json.padreId -eq $bpA)) "status $($bpCg.Status) $($bpCg.Raw)"
+    Verificar "conservar subproyectos: D sobrevive y pasa a colgar del abuelo" (($bpDg.Status -eq 200) -and ($bpDg.Json.padreId -eq $bpA)) "status $($bpDg.Status) $($bpDg.Raw)"
+    Verificar "conservar subproyectos: la nieta E sigue bajo C" (($bpEg.Status -eq 200) -and ($bpEg.Json.padreId -eq $bpC)) "status $($bpEg.Status) $($bpEg.Raw)"
+
+    # Proyecto B: borrar subproyectos, con una tarea (y subtarea con recordatorio) en el SUBproyecto y una idea en la raiz.
+    $bpR = NuevoProy "smoke-bp raiz"
+    $bpH = NuevoProy "smoke-bp hija H" $bpR
+    $bpTL = NuevaBs "smoke-bp tarea ligada"
+    $bpTS = NuevaBs "smoke-bp subtarea no ligada" $bpTL
+    LigarTarea $BaseProyectos $bpH $bpTL
+    $bpRec = Llamar "POST" $BaseRecordatorios ('{"tareaId":' + $bpTS + ',"fechaHora":"2098-06-01T09:00:00-03:00"}')
+    if ($bpRec.Json) { $recordatorioIds += $bpRec.Json.id }
+    Verificar "crear recordatorio en la subtarea" ($bpRec.Status -eq 201) "status $($bpRec.Status) $($bpRec.Raw)"
+    $bpI = NuevaIdea "smoke-bp idea de la raiz" "proyectoId" $bpR
+    $bp5 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar")
+    Verificar "subproyectos=borrar: la tarea del subproyecto cuenta -> 409 (tareas)" (($bp5.Status -eq 409) -and ($bp5.Raw -match "tiene tareas: indica")) "status $($bp5.Status) $($bp5.Raw)"
+    $bp6 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar&tareas=")
+    Verificar "?tareas= vacio se trata como ausente -> 409" ($bp6.Status -eq 409) "status $($bp6.Status)"
+    $bp7 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar&tareas=borrar")
+    Verificar "falta decidir las ideas -> 409 (ideas)" (($bp7.Status -eq 409) -and ($bp7.Raw -match "tiene ideas: indica")) "status $($bp7.Status) $($bp7.Raw)"
+    Verificar "los 409 no borraron nada (raiz, hija y tarea siguen)" (((Llamar "GET" ($BaseProyectos + "/" + $bpR)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $bpH)).Status -eq 200) -and ((Llamar "GET" ($Base + "/" + $bpTL)).Status -eq 200))
+    $bp8 = Llamar "DELETE" ($BaseProyectos + "/" + $bpR + "?subproyectos=borrar&tareas=borrar&ideas=conservar")
+    Verificar "borrar raiz con subproyectos=borrar, tareas=borrar e ideas=conservar -> 204" ($bp8.Status -eq 204) "status $($bp8.Status) $($bp8.Raw)"
+    $bpGone = @((Llamar "GET" ($BaseProyectos + "/" + $bpR)).Status, (Llamar "GET" ($BaseProyectos + "/" + $bpH)).Status, (Llamar "GET" ($Base + "/" + $bpTL)).Status, (Llamar "GET" ($Base + "/" + $bpTS)).Status)
+    Verificar "borrar: raiz, hija, tarea ligada y su subtarea ya no existen (404)" ((($bpGone | Where-Object { $_ -ne 404 }).Count) -eq 0) ($bpGone -join ",")
+    $bpRl = Llamar "GET" ($BaseRecordatorios + "?tareaId=" + $bpTS)
+    Verificar "borrar: el recordatorio de la subtarea desaparece" (($bpRl.Status -eq 200) -and (@($bpRl.Json).Count -eq 0)) "status $($bpRl.Status) $($bpRl.Raw)"
+    $bpIg = Llamar "GET" ($BaseIdeas + "/" + $bpI)
+    Verificar "ideas=conservar: la idea sobrevive y queda libre" (($bpIg.Status -eq 200) -and ($null -eq $bpIg.Json.proyectoId)) "status $($bpIg.Status) $($bpIg.Raw)"
+
+    # Proyecto C: tareas=conservar solo desliga la tarea.
+    $bpT = NuevoProy "smoke-bp con tarea"
+    $bpTT = NuevaBs "smoke-bp tarea conservada"
+    LigarTarea $BaseProyectos $bpT $bpTT
+    $bp9 = Llamar "DELETE" ($BaseProyectos + "/" + $bpT + "?tareas=conservar")
+    Verificar "proyecto con ?tareas=conservar -> 204" ($bp9.Status -eq 204) "status $($bp9.Status) $($bp9.Raw)"
+    $bpTTg = Llamar "GET" ($Base + "/" + $bpTT)
+    Verificar "tareas=conservar: la tarea sobrevive sin proyecto" (($bpTTg.Status -eq 200) -and ($null -eq $bpTTg.Json.proyectoId)) "status $($bpTTg.Status) $($bpTTg.Raw)"
+    $bp10 = Llamar "DELETE" ($BaseProyectos + "/999999?subproyectos=borrar&tareas=conservar")
+    Verificar "proyecto inexistente con parametros -> 404" ($bp10.Status -eq 404) "status $($bp10.Status)"
+
+    # Objetivo A: conservar subobjetivos con abuelo. OA -> OB (Salud) -> OC
+    $boA = NuevoObj "smoke-bo abuelo"
+    $boB = NuevoObj "smoke-bo Salud" $boA
+    $boC = NuevoObj "smoke-bo hija C" $boB
+    $bo1 = Llamar "DELETE" ($BaseObjetivos + "/" + $boB)
+    Verificar "borrar objetivo con subobjetivos sin parametro -> 409 con el nombre (no el id)" (($bo1.Status -eq 409) -and ($bo1.Raw -match "El objetivo \S{1,3}smoke-bo Salud\S{1,3} tiene subobjetivos: indica")) "status $($bo1.Status) $($bo1.Raw)"
+    $bo2 = Llamar "DELETE" ($BaseObjetivos + "/" + $boB + "?proyectos=raro")
+    Verificar "objetivo ?proyectos=raro -> 400 con el parametro y los valores validos" (($bo2.Status -eq 400) -and ($bo2.Raw -match "proyectos inv") -and ($bo2.Raw -match "borrar o conservar")) "status $($bo2.Status) $($bo2.Raw)"
+    Verificar "tras el 409 y el 400 el objetivo y su hija siguen existiendo" (((Llamar "GET" ($BaseObjetivos + "/" + $boB)).Status -eq 200) -and ((Llamar "GET" ($BaseObjetivos + "/" + $boC)).Status -eq 200))
+    $bo3 = Llamar "DELETE" ($BaseObjetivos + "/" + $boB + "?subobjetivos=conservar")
+    Verificar "borrar Salud con ?subobjetivos=conservar -> 204" ($bo3.Status -eq 204) "status $($bo3.Status) $($bo3.Raw)"
+    Verificar "Salud ya no existe" ((Llamar "GET" ($BaseObjetivos + "/" + $boB)).Status -eq 404)
+    $boCg = Llamar "GET" ($BaseObjetivos + "/" + $boC)
+    Verificar "conservar subobjetivos: la hija sobrevive y pasa a colgar del abuelo" (($boCg.Status -eq 200) -and ($boCg.Json.padreId -eq $boA)) "status $($boCg.Status) $($boCg.Raw)"
+
+    # Objetivo B: elecciones mixtas con rescate. O tiene el proyecto P (con SP sin objetivo y R de OTRO objetivo, que tiene
+    # un hijo RH), una tarea en O, una en P, una en R, y una idea en O. Con proyectos=borrar, R se rescata con su sub-arbol.
+    $boO = NuevoObj "smoke-bo mixto"
+    $boX = NuevoObj "smoke-bo otro"
+    $boP = NuevoProy "smoke-bo proyecto P" $null $boO
+    $boSP = NuevoProy "smoke-bo sub SP" $boP
+    $boR = NuevoProy "smoke-bo rescatado R" $boP $boX
+    $boRH = NuevoProy "smoke-bo hijo de R" $boR
+    $boT1 = NuevaBs "smoke-bo tarea del objetivo"
+    $boT2 = NuevaBs "smoke-bo tarea de P"
+    $boT3 = NuevaBs "smoke-bo tarea de R"
+    LigarTarea $BaseObjetivos $boO $boT1
+    LigarTarea $BaseProyectos $boP $boT2
+    LigarTarea $BaseProyectos $boR $boT3
+    $boI = NuevaIdea "smoke-bo idea del objetivo" "objetivoId" $boO
+    $bo4 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO)
+    Verificar "objetivo con proyectos sin parametro -> 409 (proyectos)" (($bo4.Status -eq 409) -and ($bo4.Raw -match "tiene proyectos: indica")) "status $($bo4.Status) $($bo4.Raw)"
+    $bo5 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO + "?proyectos=borrar")
+    Verificar "proyectos=borrar sin decidir las tareas -> 409 (tareas)" (($bo5.Status -eq 409) -and ($bo5.Raw -match "tiene tareas: indica")) "status $($bo5.Status) $($bo5.Raw)"
+    $bo6 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO + "?proyectos=borrar&tareas=conservar")
+    Verificar "falta decidir las ideas -> 409 (ideas)" (($bo6.Status -eq 409) -and ($bo6.Raw -match "tiene ideas: indica")) "status $($bo6.Status) $($bo6.Raw)"
+    Verificar "los 409 no borraron nada (objetivo, proyecto P y rescatable R siguen)" (((Llamar "GET" ($BaseObjetivos + "/" + $boO)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boP)).Status -eq 200) -and ((Llamar "GET" ($BaseProyectos + "/" + $boR)).Status -eq 200))
+    $bo7 = Llamar "DELETE" ($BaseObjetivos + "/" + $boO + "?proyectos=borrar&tareas=conservar&ideas=borrar")
+    Verificar "borrar objetivo con proyectos=borrar, tareas=conservar, ideas=borrar -> 204" ($bo7.Status -eq 204) "status $($bo7.Status) $($bo7.Raw)"
+    Verificar "el objetivo, P y SP ya no existen (404)" ((((Llamar "GET" ($BaseObjetivos + "/" + $boO)).Status -eq 404) -and ((Llamar "GET" ($BaseProyectos + "/" + $boP)).Status -eq 404) -and ((Llamar "GET" ($BaseProyectos + "/" + $boSP)).Status -eq 404)))
+    $boRg = Llamar "GET" ($BaseProyectos + "/" + $boR)
+    $boRHg = Llamar "GET" ($BaseProyectos + "/" + $boRH)
+    Verificar "rescate: R sobrevive, queda raiz y sigue en su objetivo" (($boRg.Status -eq 200) -and ($null -eq $boRg.Json.padreId) -and ($boRg.Json.objetivoId -eq $boX)) "status $($boRg.Status) $($boRg.Raw)"
+    Verificar "rescate: el hijo de R sigue bajo R" (($boRHg.Status -eq 200) -and ($boRHg.Json.padreId -eq $boR)) "status $($boRHg.Status) $($boRHg.Raw)"
+    $boT1g = Llamar "GET" ($Base + "/" + $boT1)
+    $boT2g = Llamar "GET" ($Base + "/" + $boT2)
+    $boT3g = Llamar "GET" ($Base + "/" + $boT3)
+    Verificar "tareas=conservar: la tarea del objetivo sobrevive sin objetivo" (($boT1g.Status -eq 200) -and ($null -eq $boT1g.Json.objetivoId)) "status $($boT1g.Status) $($boT1g.Raw)"
+    Verificar "tareas=conservar: la tarea de P sobrevive sin proyecto" (($boT2g.Status -eq 200) -and ($null -eq $boT2g.Json.proyectoId)) "status $($boT2g.Status) $($boT2g.Raw)"
+    Verificar "la tarea del proyecto rescatado no se toca" (($boT3g.Status -eq 200) -and ($boT3g.Json.proyectoId -eq $boR)) "status $($boT3g.Status) $($boT3g.Raw)"
+    Verificar "ideas=borrar: la idea del objetivo ya no existe (404)" ((Llamar "GET" ($BaseIdeas + "/" + $boI)).Status -eq 404)
+
+    # Objetivo C: proyectos=conservar los deja sin objetivo, con todo lo suyo.
+    $boK = NuevoObj "smoke-bo conserva"
+    $boKP = NuevoProy "smoke-bo proyecto conservado" $null $boK
+    $bo8 = Llamar "DELETE" ($BaseObjetivos + "/" + $boK + "?proyectos=conservar")
+    Verificar "objetivo con ?proyectos=conservar -> 204" ($bo8.Status -eq 204) "status $($bo8.Status) $($bo8.Raw)"
+    $boKPg = Llamar "GET" ($BaseProyectos + "/" + $boKP)
+    Verificar "proyectos=conservar: el proyecto sobrevive sin objetivo" (($boKPg.Status -eq 200) -and ($null -eq $boKPg.Json.objetivoId)) "status $($boKPg.Status) $($boKPg.Raw)"
+    $bo9 = Llamar "DELETE" ($BaseObjetivos + "/999999?proyectos=borrar&tareas=conservar")
+    Verificar "objetivo inexistente con parametros -> 404" ($bo9.Status -eq 404) "status $($bo9.Status)"
 
     # --- Ideas: libres o ligadas a un proyecto/objetivo, concluir/reabrir y 409 al borrar ---
     $ip = Llamar "POST" $BaseProyectos '{"nombre":"smoke-id-P"}'

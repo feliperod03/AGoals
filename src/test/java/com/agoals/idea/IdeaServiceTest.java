@@ -424,16 +424,58 @@ class IdeaServiceTest {
 	// ---- Soporte para proyecto y objetivo ----
 
 	@Test
-	void existenIdeasDelProyectoYDelObjetivoDelegaEnElRepository() {
-		when(repository.existsByProyectoIdAndUsuarioId(3L, U)).thenReturn(true);
-		when(repository.existsByProyectoIdAndUsuarioId(4L, U)).thenReturn(false);
-		when(repository.existsByObjetivoIdAndUsuarioId(5L, U)).thenReturn(true);
-		when(repository.existsByObjetivoIdAndUsuarioId(6L, U)).thenReturn(false);
+	void idsLigadasUneProyectosYObjetivosSinRepetir() {
+		Idea a = idea(1);
+		Idea b = idea(2);
+		when(repository.findByUsuarioIdAndProyectoIdIn(U, List.of(3L))).thenReturn(List.of(a, b));
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(5L))).thenReturn(List.of(b));
 
-		assertThat(service.existenIdeasDelProyecto(3L)).isTrue();
-		assertThat(service.existenIdeasDelProyecto(4L)).isFalse();
-		assertThat(service.existenIdeasDelObjetivo(5L)).isTrue();
-		assertThat(service.existenIdeasDelObjetivo(6L)).isFalse();
+		assertThat(service.idsLigadas(List.of(3L), List.of(5L))).containsExactly(1L, 2L);
+	}
+
+	@Test
+	void idsLigadasConColeccionesVaciasNoConsultaNada() {
+		assertThat(service.idsLigadas(List.of(), List.of())).isEmpty();
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void desligarPoneANullSoloLaColumnaQueApuntaAAlgoBorradoYGuardaConFlush() {
+		Idea delProyecto = idea(1);
+		delProyecto.setProyectoId(3L);
+		Idea delObjetivo = idea(2);
+		delObjetivo.setObjetivoId(5L);
+		Idea deOtroProyecto = idea(3);
+		deOtroProyecto.setProyectoId(99L);
+		when(repository.findAllById(List.of(1L, 2L, 3L))).thenReturn(List.of(delProyecto, delObjetivo, deOtroProyecto));
+
+		service.desligar(List.of(1L, 2L, 3L), List.of(3L), List.of(5L));
+
+		assertThat(delProyecto.getProyectoId()).isNull();
+		assertThat(delObjetivo.getObjetivoId()).isNull();
+		assertThat(deOtroProyecto.getProyectoId()).isEqualTo(99L);
+		verify(repository).saveAllAndFlush(List.of(delProyecto, delObjetivo, deOtroProyecto));
+	}
+
+	@Test
+	void desligarYEliminarLigadasSinIdeasNoHacenNada() {
+		service.desligar(List.of(), List.of(3L), List.of(5L));
+		service.eliminarLigadas(List.of());
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void eliminarLigadasBorraLasIdeasYHaceFlush() {
+		Idea a = idea(1);
+		Idea b = idea(2);
+		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(a, b));
+
+		service.eliminarLigadas(List.of(1L, 2L));
+
+		verify(repository).deleteAll(List.of(a, b));
+		verify(repository).flush();
 	}
 }
 

@@ -2,6 +2,7 @@ package com.agoals.proyecto;
 
 import com.agoals.common.ApiExceptionHandler;
 import com.agoals.common.Estado;
+import com.agoals.common.ModoBorrado;
 import com.agoals.common.Prioridad;
 import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.proyecto.dto.ProyectoRequest;
@@ -9,6 +10,8 @@ import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaNoEncontradaException;
 import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -24,6 +27,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -220,37 +224,77 @@ class ProyectoControllerTest {
 	}
 
 	@Test
-	void deleteDevuelve204() throws Exception {
+	void deleteSinParametrosLlamaConNingunaEleccionYDevuelve204() throws Exception {
 		mvc.perform(delete("/api/proyectos/1")).andExpect(status().isNoContent());
 
-		verify(service).eliminar(1L);
+		verify(service).eliminar(1L, EleccionesBorradoProyecto.NINGUNA);
+	}
+
+	@Test
+	void deleteConParametrosVaciosSeTrataComoAusentes() throws Exception {
+		mvc.perform(delete("/api/proyectos/1?subproyectos=&tareas=&ideas=")).andExpect(status().isNoContent());
+
+		verify(service).eliminar(1L, EleccionesBorradoProyecto.NINGUNA);
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "borrar,BORRAR", "BORRAR,BORRAR", "conservar,CONSERVAR", "Conservar,CONSERVAR" })
+	void deleteConCadaParametroValidoLlegaAlServiceConElEnumSoloEnSuCategoria(String texto, ModoBorrado esperado)
+			throws Exception {
+		mvc.perform(delete("/api/proyectos/1?subproyectos=" + texto)).andExpect(status().isNoContent());
+		mvc.perform(delete("/api/proyectos/2?tareas=" + texto)).andExpect(status().isNoContent());
+		mvc.perform(delete("/api/proyectos/3?ideas=" + texto)).andExpect(status().isNoContent());
+
+		verify(service).eliminar(1L, new EleccionesBorradoProyecto(esperado, null, null));
+		verify(service).eliminar(2L, new EleccionesBorradoProyecto(null, esperado, null));
+		verify(service).eliminar(3L, new EleccionesBorradoProyecto(null, null, esperado));
+	}
+
+	@Test
+	void deleteConVariosParametrosLosPasaTodosJuntos() throws Exception {
+		mvc.perform(delete("/api/proyectos/1?subproyectos=conservar&tareas=borrar&ideas=conservar"))
+				.andExpect(status().isNoContent());
+
+		verify(service).eliminar(1L, new EleccionesBorradoProyecto(ModoBorrado.CONSERVAR, ModoBorrado.BORRAR,
+				ModoBorrado.CONSERVAR));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "subproyectos", "tareas", "ideas" })
+	void deleteConUnValorInvalidoDevuelve400ConElParametroYNoLlamaAlService(String parametro) throws Exception {
+		mvc.perform(delete("/api/proyectos/1?" + parametro + "=raro"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value(containsString(parametro + " inválido")))
+				.andExpect(jsonPath("$.mensaje").value(containsString("borrar o conservar")));
+
+		verifyNoInteractions(service);
 	}
 
 	@Test
 	void deleteInexistenteDevuelve404() throws Exception {
-		doThrow(new ProyectoNoEncontradoException(7L)).when(service).eliminar(7L);
+		doThrow(new ProyectoNoEncontradoException(7L)).when(service).eliminar(7L, EleccionesBorradoProyecto.NINGUNA);
 
 		mvc.perform(delete("/api/proyectos/7")).andExpect(status().isNotFound());
 	}
 
 	@Test
-	void deleteConHijosOTareasDevuelve409() throws Exception {
-		doThrow(new ProyectoConDependenciasException("El proyecto 1 tiene tareas: desasígnalas primero"))
-				.when(service).eliminar(1L);
+	void deleteConTareasSinEleccionDevuelve409ConElNombre() throws Exception {
+		doThrow(new ProyectoConDependenciasException("El proyecto «Casa» tiene tareas: indica si quieres borrarlas o conservarlas"))
+				.when(service).eliminar(1L, EleccionesBorradoProyecto.NINGUNA);
 
 		mvc.perform(delete("/api/proyectos/1"))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.mensaje").value(containsString("tareas")));
+				.andExpect(jsonPath("$.mensaje").value(containsString("«Casa» tiene tareas")));
 	}
 
 	@Test
-	void deleteConIdeasDevuelve409() throws Exception {
-		doThrow(new ProyectoConDependenciasException("El proyecto 1 tiene ideas: desvincúlalas o bórralas primero"))
-				.when(service).eliminar(1L);
+	void deleteConSubproyectosOIdeasSinEleccionDevuelve409ConElMotivo() throws Exception {
+		doThrow(new ProyectoConDependenciasException("El proyecto «Casa» tiene ideas: indica si quieres borrarlas o conservarlas"))
+				.when(service).eliminar(1L, EleccionesBorradoProyecto.NINGUNA);
 
 		mvc.perform(delete("/api/proyectos/1"))
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.mensaje").value(containsString("ideas")));
+				.andExpect(jsonPath("$.mensaje").value(containsString("«Casa» tiene ideas")));
 	}
 
 	// ---- Tareas del proyecto ----

@@ -90,18 +90,21 @@ class IdeaRepositoryTest {
 	}
 
 	@Test
-	void existsPorProyectoYObjetivoRespetaAlUsuario() {
-		Long proyecto = fila("proyecto");
+	void buscaPorColeccionesDeProyectosYObjetivosRespetandoAlUsuario() {
+		Long proyecto1 = fila("proyecto");
+		Long proyecto2 = fila("proyecto");
 		Long objetivo = fila("objetivo");
-		guardar("a", proyecto, null);
-		guardar("b", null, objetivo);
+		guardar("a", proyecto1, null);
+		guardar("b", proyecto2, null);
+		guardar("c", null, objetivo);
+		guardar("libre", null, null);
 
-		assertThat(repository.existsByProyectoIdAndUsuarioId(proyecto, 1L)).isTrue();
-		assertThat(repository.existsByProyectoIdAndUsuarioId(proyecto, 2L)).isFalse();
-		assertThat(repository.existsByProyectoIdAndUsuarioId(objetivo, 1L)).isFalse();
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(objetivo, 1L)).isTrue();
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(objetivo, 2L)).isFalse();
-		assertThat(repository.existsByObjetivoIdAndUsuarioId(999_999L, 1L)).isFalse();
+		assertThat(titulos(repository.findByUsuarioIdAndProyectoIdIn(1L, List.of(proyecto1, proyecto2))))
+				.containsExactlyInAnyOrder("a", "b");
+		assertThat(titulos(repository.findByUsuarioIdAndProyectoIdIn(1L, List.of(proyecto1)))).containsExactly("a");
+		assertThat(titulos(repository.findByUsuarioIdAndObjetivoIdIn(1L, List.of(objetivo)))).containsExactly("c");
+		assertThat(repository.findByUsuarioIdAndProyectoIdIn(2L, List.of(proyecto1))).isEmpty();
+		assertThat(repository.findByUsuarioIdAndObjetivoIdIn(1L, List.of(999_999L))).isEmpty();
 	}
 
 	@Test

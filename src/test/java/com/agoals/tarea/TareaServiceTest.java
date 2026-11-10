@@ -33,6 +33,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -732,22 +733,124 @@ class TareaServiceTest {
 		assertThat(service.listarPorObjetivo(3L)).extracting(TareaResponse::objetivoId).containsExactly(3L);
 	}
 
-	@Test
-	void existenTareasDelObjetivoDelegaEnElRepository() {
-		when(repository.existsByUsuarioIdAndObjetivoId(TareaService.USUARIO_ID, 3L)).thenReturn(true);
-		when(repository.existsByUsuarioIdAndObjetivoId(TareaService.USUARIO_ID, 4L)).thenReturn(false);
+	// ---- Borrado de proyectos y objetivos (5e) ----
 
-		assertThat(service.existenTareasDelObjetivo(3L)).isTrue();
-		assertThat(service.existenTareasDelObjetivo(4L)).isFalse();
+	@Test
+	void idsLigadasUneProyectosYObjetivosSinRepetir() {
+		Tarea a = conPadre(1, "a", null);
+		Tarea b = conPadre(2, "b", null);
+		when(repository.findByUsuarioIdAndProyectoIdIn(TareaService.USUARIO_ID, List.of(7L))).thenReturn(List.of(a, b));
+		when(repository.findByUsuarioIdAndObjetivoIdIn(TareaService.USUARIO_ID, List.of(3L))).thenReturn(List.of(b));
+
+		assertThat(service.idsLigadas(List.of(7L), List.of(3L))).containsExactly(1L, 2L);
 	}
 
 	@Test
-	void existenTareasDelProyectoDelegaEnElRepository() {
-		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 7L)).thenReturn(true);
-		when(repository.existsByUsuarioIdAndProyectoId(TareaService.USUARIO_ID, 8L)).thenReturn(false);
+	void idsLigadasConColeccionesVaciasNoConsultaNada() {
+		assertThat(service.idsLigadas(List.of(), List.of())).isEmpty();
 
-		assertThat(service.existenTareasDelProyecto(7L)).isTrue();
-		assertThat(service.existenTareasDelProyecto(8L)).isFalse();
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void idsLigadasConSoloUnLadoConsultaSoloEseLado() {
+		Tarea a = conPadre(1, "a", null);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(TareaService.USUARIO_ID, List.of(3L))).thenReturn(List.of(a));
+
+		assertThat(service.idsLigadas(List.of(), List.of(3L))).containsExactly(1L);
+		verify(repository, never()).findByUsuarioIdAndProyectoIdIn(any(), any());
+	}
+
+	@Test
+	void desligarPoneANullSoloLaColumnaQueApuntaAAlgoBorradoYNoTocaNadaMas() {
+		Tarea t = conPadre(1, "t", 9L);
+		t.setProyectoId(7L);
+		t.setObjetivoId(3L);
+		t.setFecha(DIA);
+		t.setEstado(Estado.EN_PROGRESO);
+		when(repository.findAllById(List.of(1L))).thenReturn(List.of(t));
+
+		service.desligar(List.of(1L), List.of(7L), List.of());
+
+		assertThat(t.getProyectoId()).isNull();
+		assertThat(t.getObjetivoId()).isEqualTo(3L);
+		assertThat(t.getPadreId()).isEqualTo(9L);
+		assertThat(t.getFecha()).isEqualTo(DIA);
+		assertThat(t.getEstado()).isEqualTo(Estado.EN_PROGRESO);
+		verify(repository).saveAllAndFlush(List.of(t));
+	}
+
+	@Test
+	void desligarConLosDosLadosPoneANullAmbasColumnas() {
+		Tarea t = conPadre(1, "t", null);
+		t.setProyectoId(7L);
+		t.setObjetivoId(3L);
+		when(repository.findAllById(List.of(1L))).thenReturn(List.of(t));
+
+		service.desligar(List.of(1L), List.of(7L), List.of(3L));
+
+		assertThat(t.getProyectoId()).isNull();
+		assertThat(t.getObjetivoId()).isNull();
+	}
+
+	@Test
+	void desligarSinTareasNoHaceNada() {
+		service.desligar(List.of(), List.of(7L), List.of(3L));
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void eliminarLigadasBorraLaTareaConSusSubtareasNoLigadasDeLasHojasALaRaiz() {
+		Tarea ligada = conPadre(1, "ligada", null);
+		Tarea hija = conPadre(2, "hija no ligada", 1L);
+		Tarea nieta = conPadre(3, "nieta no ligada", 2L);
+		when(repository.findAllById(List.of(1L))).thenReturn(List.of(ligada));
+		hijasDe(ligada, hija);
+		hijasDe(hija, nieta);
+		hijasDe(nieta);
+
+		service.eliminarLigadas(List.of(1L));
+
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).deleteAll(List.of(nieta, hija, ligada));
+		orden.verify(repository).flush();
+	}
+
+	@Test
+	void eliminarLigadasConUnaLigadaDentroDeOtraBorraLaHijaAntesQueLaMadre() {
+		// Si la madre se borrara primero, la cascada de la base se llevaría a la hija y su DELETE fallaría.
+		Tarea madre = conPadre(1, "madre ligada", null);
+		Tarea hija = conPadre(2, "hija ligada", 1L);
+		Tarea nieta = conPadre(3, "nieta", 2L);
+		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(madre, hija));
+		hijasDe(madre, hija);
+		hijasDe(hija, nieta);
+		hijasDe(nieta);
+
+		service.eliminarLigadas(List.of(1L, 2L));
+
+		verify(repository).deleteAll(List.of(nieta, hija, madre));
+	}
+
+	@Test
+	void eliminarLigadasConLaHijaListadaPrimeroTambienLaBorraAntesQueLaMadre() {
+		Tarea madre = conPadre(1, "madre ligada", null);
+		Tarea hija = conPadre(2, "hija ligada", 1L);
+		when(repository.findAllById(List.of(2L, 1L))).thenReturn(List.of(hija, madre));
+		hijasDe(hija);
+		hijasDe(madre, hija);
+
+		service.eliminarLigadas(List.of(2L, 1L));
+
+		verify(repository).deleteAll(List.of(hija, madre));
+	}
+
+	@Test
+	void eliminarLigadasSinTareasNoHaceNada() {
+		service.eliminarLigadas(List.of());
+
+		verifyNoInteractions(repository);
 	}
 
 	// ---- Recomendación ----

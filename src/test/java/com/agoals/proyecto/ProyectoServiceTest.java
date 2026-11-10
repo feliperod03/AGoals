@@ -1,6 +1,7 @@
 package com.agoals.proyecto;
 
 import com.agoals.common.Estado;
+import com.agoals.common.ModoBorrado;
 import com.agoals.common.Prioridad;
 import com.agoals.idea.IdeaService;
 import com.agoals.objetivo.ObjetivoConsultaService;
@@ -12,18 +13,25 @@ import com.agoals.tarea.dto.TareaResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -283,71 +291,439 @@ class ProyectoServiceTest {
 
 	// ---- Eliminar ----
 
+	private static final EleccionesBorradoProyecto NINGUNA = EleccionesBorradoProyecto.NINGUNA;
+
+	private static EleccionesBorradoProyecto elige(ModoBorrado subproyectos, ModoBorrado tareas, ModoBorrado ideas) {
+		return new EleccionesBorradoProyecto(subproyectos, tareas, ideas);
+	}
+
+	private void hijosDe(long padreId, Proyecto... hijos) {
+		when(repository.findByPadreIdAndUsuarioId(padreId, U)).thenReturn(List.of(hijos));
+	}
+
+	private static Proyecto llamado(Proyecto p, String nombre) {
+		p.setNombre(nombre);
+		return p;
+	}
+
 	@Test
 	void eliminarInexistenteFalla() {
 		noExiste(1);
 
-		assertThatThrownBy(() -> service.eliminar(1L)).isInstanceOf(ProyectoNoEncontradoException.class);
+		assertThatThrownBy(() -> service.eliminar(1L, NINGUNA)).isInstanceOf(ProyectoNoEncontradoException.class);
 		verify(repository, never()).delete(any());
+		verifyNoInteractions(tareaService, ideaService);
 	}
 
 	@Test
-	void eliminarConSubproyectosDa409() {
-		existe(proyecto(1, null));
-		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(true);
+	void eliminarInexistenteDa404ConCualquierEleccion() {
+		noExiste(1);
 
-		assertThatThrownBy(() -> service.eliminar(1L))
+		assertThatThrownBy(() -> service.eliminar(1L, elige(ModoBorrado.BORRAR, ModoBorrado.BORRAR, ModoBorrado.BORRAR)))
+				.isInstanceOf(ProyectoNoEncontradoException.class);
+		verify(repository, never()).findByPadreIdAndUsuarioId(any(), any());
+	}
+
+	@Test
+	void eliminarConSubproyectosSinEleccionDa409ConElNombreYNoTocaNada() {
+		existe(llamado(proyecto(1, null), "Casa"));
+		hijosDe(1, proyecto(2, 1L));
+
+		assertThatThrownBy(() -> service.eliminar(1L, NINGUNA))
 				.isInstanceOf(ProyectoConDependenciasException.class)
-				.hasMessageContaining("subproyectos");
+				.hasMessage("El proyecto «Casa» tiene subproyectos: indica si quieres borrarlos o conservarlos");
 		verify(repository, never()).delete(any());
+		verify(repository, never()).deleteAll(anyIterable());
+		verify(repository, never()).saveAllAndFlush(anyIterable());
+		verifyNoInteractions(tareaService, ideaService);
 	}
 
 	@Test
-	void eliminarConTareasDa409() {
-		existe(proyecto(1, null));
-		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
-		when(tareaService.existenTareasDelProyecto(1L)).thenReturn(true);
+	void eliminarConTareasSinEleccionDa409ConElNombreYNoEscribeNada() {
+		existe(llamado(proyecto(1, null), "Casa"));
+		hijosDe(1);
+		when(tareaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(5L));
 
-		assertThatThrownBy(() -> service.eliminar(1L))
+		assertThatThrownBy(() -> service.eliminar(1L, NINGUNA))
 				.isInstanceOf(ProyectoConDependenciasException.class)
-				.hasMessageContaining("tareas");
+				.hasMessage("El proyecto «Casa» tiene tareas: indica si quieres borrarlas o conservarlas");
 		verify(repository, never()).delete(any());
+		verify(tareaService, never()).desligar(any(), any(), any());
+		verify(tareaService, never()).eliminarLigadas(any());
+		verifyNoInteractions(ideaService);
 	}
 
 	@Test
-	void eliminarConIdeasDa409() {
-		existe(proyecto(1, null));
-		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
-		when(tareaService.existenTareasDelProyecto(1L)).thenReturn(false);
-		when(ideaService.existenIdeasDelProyecto(1L)).thenReturn(true);
+	void eliminarConIdeasSinEleccionDa409ConElNombreYNoEscribeNada() {
+		existe(llamado(proyecto(1, null), "Casa"));
+		hijosDe(1);
+		when(ideaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(8L));
 
-		assertThatThrownBy(() -> service.eliminar(1L))
+		assertThatThrownBy(() -> service.eliminar(1L, NINGUNA))
 				.isInstanceOf(ProyectoConDependenciasException.class)
-				.hasMessageContaining("ideas");
+				.hasMessage("El proyecto «Casa» tiene ideas: indica si quieres borrarlas o conservarlas");
 		verify(repository, never()).delete(any());
+		verify(ideaService, never()).desligar(any(), any(), any());
+		verify(ideaService, never()).eliminarLigadas(any());
 	}
 
 	@Test
-	void eliminarUnProyectoVacioLoBorra() {
+	void eliminarConUnaCategoriaSinEleccionDa409AunqueLasDemasEstenElegidas() {
+		existe(llamado(proyecto(1, null), "Casa"));
+		hijosDe(1);
+		when(tareaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(5L));
+
+		// Elige subproyectos e ideas, pero falta tareas.
+		assertThatThrownBy(() -> service.eliminar(1L, elige(ModoBorrado.BORRAR, null, ModoBorrado.BORRAR)))
+				.isInstanceOf(ProyectoConDependenciasException.class)
+				.hasMessageContaining("tiene tareas");
+		verify(ideaService, never()).eliminarLigadas(any());
+		verify(repository, never()).deleteAll(anyIterable());
+	}
+
+	@Test
+	void eliminarUnProyectoVacioLoBorraSinEleccionesNiConsultasInnecesarias() {
 		Proyecto p = existe(proyecto(1, null));
-		when(repository.existsByPadreIdAndUsuarioId(1L, U)).thenReturn(false);
-		when(tareaService.existenTareasDelProyecto(1L)).thenReturn(false);
-		when(ideaService.existenIdeasDelProyecto(1L)).thenReturn(false);
+		hijosDe(1);
 
-		service.eliminar(1L);
+		service.eliminar(1L, NINGUNA);
+
+		verify(repository).delete(p);
+		verify(repository, never()).saveAllAndFlush(anyIterable());
+		verify(tareaService, never()).desligar(any(), any(), any());
+		verify(tareaService, never()).eliminarLigadas(any());
+		verify(ideaService, never()).desligar(any(), any(), any());
+		verify(ideaService, never()).eliminarLigadas(any());
+	}
+
+	@Test
+	void eliminarConEleccionesNulasEquivaleANinguna() {
+		Proyecto p = existe(proyecto(1, null));
+		hijosDe(1);
+
+		service.eliminar(1L, null);
 
 		verify(repository).delete(p);
 	}
 
-	// ---- Soporte para objetivo ----
+	@Test
+	void eliminarIgnoraLaEleccionDeUnaCategoriaSinElementos() {
+		Proyecto p = existe(proyecto(1, null));
+		hijosDe(1);
+
+		service.eliminar(1L, elige(ModoBorrado.BORRAR, ModoBorrado.BORRAR, ModoBorrado.CONSERVAR));
+
+		verify(repository).deleteAll(List.of(p));
+		verify(tareaService, never()).eliminarLigadas(any());
+		verify(tareaService, never()).desligar(any(), any(), any());
+		verify(ideaService, never()).desligar(any(), any(), any());
+	}
 
 	@Test
-	void existenProyectosDelObjetivoDelegaEnElRepository() {
-		when(repository.existsByObjetivoIdAndUsuarioId(3L, U)).thenReturn(true);
-		when(repository.existsByObjetivoIdAndUsuarioId(4L, U)).thenReturn(false);
+	void eliminarConservarSubproyectosConPadreSubeLosHijosAlAbueloYLuegoBorra() {
+		Proyecto madre = existe(proyecto(2, 1L));
+		Proyecto h1 = proyecto(3, 2L);
+		Proyecto h2 = proyecto(4, 2L);
+		hijosDe(2, h1, h2);
 
-		assertThat(service.existenProyectosDelObjetivo(3L)).isTrue();
-		assertThat(service.existenProyectosDelObjetivo(4L)).isFalse();
+		service.eliminar(2L, elige(ModoBorrado.CONSERVAR, null, null));
+
+		assertThat(h1.getPadreId()).isEqualTo(1L);
+		assertThat(h2.getPadreId()).isEqualTo(1L);
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).saveAllAndFlush(List.of(h1, h2));
+		orden.verify(repository).delete(madre);
+		orden.verify(repository).flush();
+	}
+
+	@Test
+	void eliminarConservarSubproyectosSinPadreLosDejaRaiz() {
+		Proyecto madre = existe(proyecto(1, null));
+		Proyecto hija = proyecto(2, 1L);
+		hijosDe(1, hija);
+
+		service.eliminar(1L, elige(ModoBorrado.CONSERVAR, null, null));
+
+		assertThat(hija.getPadreId()).isNull();
+		verify(repository).delete(madre);
+	}
+
+	@Test
+	void eliminarBorrarSubproyectosBorraTodoElSubarbolDeLasHojasALaRaiz() {
+		Proyecto raiz = existe(proyecto(1, null));
+		Proyecto h2 = proyecto(2, 1L);
+		Proyecto h3 = proyecto(3, 1L);
+		Proyecto n4 = proyecto(4, 2L);
+		hijosDe(1, h2, h3);
+		hijosDe(2, n4);
+		hijosDe(3);
+		hijosDe(4);
+
+		service.eliminar(1L, elige(ModoBorrado.BORRAR, null, null));
+
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).deleteAll(List.of(n4, h2, h3, raiz));
+		orden.verify(repository).flush();
+		verify(repository, never()).delete(any());
+	}
+
+	@Test
+	void eliminarBorrarSubproyectosNoSeCuelgaConUnCiclo() {
+		Proyecto raiz = existe(proyecto(1, null));
+		Proyecto hija = proyecto(2, 1L);
+		hijosDe(1, hija);
+		hijosDe(2, raiz); // ciclo imposible por la API: solo red de seguridad
+
+		service.eliminar(1L, elige(ModoBorrado.BORRAR, null, null));
+
+		verify(repository).deleteAll(List.of(hija, raiz));
+	}
+
+	@Test
+	void eliminarBorrarSubproyectosIncluyeElSubarbolEnElAlcanceDeTareasEIdeas() {
+		Proyecto raiz = existe(proyecto(1, null));
+		Proyecto hija = proyecto(2, 1L);
+		hijosDe(1, hija);
+		hijosDe(2);
+		// Las tareas e ideas se buscan en TODOS los proyectos que se borran, hojas primero.
+		when(tareaService.idsLigadas(List.of(2L, 1L), List.of())).thenReturn(List.of(5L));
+		when(ideaService.idsLigadas(List.of(2L, 1L), List.of())).thenReturn(List.of(8L));
+
+		service.eliminar(1L, elige(ModoBorrado.BORRAR, ModoBorrado.BORRAR, ModoBorrado.BORRAR));
+
+		verify(tareaService).eliminarLigadas(List.of(5L));
+		verify(ideaService).eliminarLigadas(List.of(8L));
+		verify(repository).deleteAll(List.of(hija, raiz));
+	}
+
+	@Test
+	void eliminarConservarSubproyectosSoloMiraLasTareasDelPropioProyecto() {
+		existe(proyecto(1, null));
+		hijosDe(1, proyecto(2, 1L));
+
+		service.eliminar(1L, elige(ModoBorrado.CONSERVAR, null, null));
+
+		verify(tareaService).idsLigadas(List.of(1L), List.of());
+		verify(ideaService).idsLigadas(List.of(1L), List.of());
+	}
+
+	@Test
+	void eliminarTareasConservarLasDesligaDelProyectoBorrado() {
+		existe(proyecto(1, null));
+		hijosDe(1);
+		when(tareaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(5L, 6L));
+
+		service.eliminar(1L, elige(null, ModoBorrado.CONSERVAR, null));
+
+		verify(tareaService).desligar(List.of(5L, 6L), List.of(1L), List.of());
+		verify(tareaService, never()).eliminarLigadas(any());
+	}
+
+	@Test
+	void eliminarIdeasConservarLasDejaLibres() {
+		existe(proyecto(1, null));
+		hijosDe(1);
+		when(ideaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(8L));
+
+		service.eliminar(1L, elige(null, null, ModoBorrado.CONSERVAR));
+
+		verify(ideaService).desligar(List.of(8L), List.of(1L), List.of());
+		verify(ideaService, never()).eliminarLigadas(any());
+	}
+
+	@Test
+	void eliminarEscribeEnOrdenTareasIdeasYAlFinalElProyecto() {
+		Proyecto p = existe(proyecto(1, null));
+		hijosDe(1);
+		when(tareaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(5L));
+		when(ideaService.idsLigadas(List.of(1L), List.of())).thenReturn(List.of(8L));
+
+		service.eliminar(1L, elige(null, ModoBorrado.BORRAR, ModoBorrado.CONSERVAR));
+
+		// Si el proyecto se borrara antes, el SET NULL de la base soltaría tareas e ideas sin que las encontráramos.
+		InOrder orden = inOrder(tareaService, ideaService, repository);
+		orden.verify(tareaService).eliminarLigadas(List.of(5L));
+		orden.verify(ideaService).desligar(List.of(8L), List.of(1L), List.of());
+		orden.verify(repository).delete(p);
+	}
+
+	@Test
+	void calcularAlcanceNoEscribeNadaYDescribeLoQueSeTocaria() {
+		Proyecto raiz = existe(proyecto(1, null));
+		Proyecto hija = proyecto(2, 1L);
+		hijosDe(1, hija);
+		hijosDe(2);
+		when(tareaService.idsLigadas(List.of(2L, 1L), List.of())).thenReturn(List.of(5L));
+
+		AlcanceBorradoProyecto alcance = service.calcularAlcance(1L, elige(ModoBorrado.BORRAR, ModoBorrado.BORRAR, null));
+
+		assertThat(alcance.raiz()).isSameAs(raiz);
+		assertThat(alcance.aBorrar()).containsExactly(hija, raiz);
+		assertThat(alcance.tareaIds()).containsExactly(5L);
+		assertThat(alcance.ideaIds()).isEmpty();
+		verify(repository, never()).delete(any());
+		verify(repository, never()).deleteAll(anyIterable());
+		verify(repository, never()).saveAllAndFlush(anyIterable());
+		verify(tareaService, never()).eliminarLigadas(any());
+		verify(tareaService, never()).desligar(any(), any(), any());
+	}
+
+	// ---- Soporte para objetivo: borrar objetivos (5e) ----
+
+	@Test
+	void idsDeObjetivosDevuelveLosProyectosLigadosDirectamente() {
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(proyecto(7, null), proyecto(8, null)));
+
+		assertThat(service.idsDeObjetivos(List.of(3L))).containsExactly(7L, 8L);
+	}
+
+	@Test
+	void idsDeObjetivosSinObjetivosNoConsultaNada() {
+		assertThat(service.idsDeObjetivos(List.of())).isEmpty();
+
+		verifyNoInteractions(repository);
+	}
+
+	private static Proyecto delObjetivo(long id, Long padreId, Long objetivoId) {
+		Proyecto p = proyecto(id, padreId);
+		p.setObjetivoId(objetivoId);
+		return p;
+	}
+
+	@Test
+	void planBorradoSinObjetivosEsVacio() {
+		assertThat(service.planBorradoPorObjetivos(List.of())).isSameAs(PlanBorradoProyectos.VACIO);
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void planBorradoIncluyeLosSubproyectosSinObjetivoOConUnObjetivoQueTambienSeBorra() {
+		Proyecto raiz = delObjetivo(10, null, 3L);
+		Proyecto sinObjetivo = delObjetivo(11, 10L, null);
+		Proyecto delMismo = delObjetivo(12, 10L, 3L);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(raiz));
+		hijosDe(10, sinObjetivo, delMismo);
+		hijosDe(11);
+		hijosDe(12);
+
+		PlanBorradoProyectos plan = service.planBorradoPorObjetivos(List.of(3L));
+
+		assertThat(plan.aBorrar()).containsExactly(11L, 12L, 10L);
+		assertThat(plan.rescatados()).isEmpty();
+	}
+
+	@Test
+	void planBorradoRescataUnSubproyectoLigadoAOtroObjetivoYNoBajaPorEl() {
+		Proyecto raiz = delObjetivo(10, null, 3L);
+		Proyecto rescatado = delObjetivo(11, 10L, 4L);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(raiz));
+		hijosDe(10, rescatado);
+		// Los hijos del rescatado no se consultan: su sub-árbol se salva entero.
+
+		PlanBorradoProyectos plan = service.planBorradoPorObjetivos(List.of(3L));
+
+		assertThat(plan.aBorrar()).containsExactly(10L);
+		assertThat(plan.rescatados()).containsExactly(entry(11L, (Long) null));
+		verify(repository, never()).findByPadreIdAndUsuarioId(eq(11L), any());
+	}
+
+	@Test
+	void planBorradoRescataDosHermanosYCadaUnoQuedaConElMismoNuevoPadre() {
+		Proyecto raiz = delObjetivo(10, null, 3L);
+		Proyecto r1 = delObjetivo(11, 10L, 4L);
+		Proyecto r2 = delObjetivo(12, 10L, 5L);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(raiz));
+		hijosDe(10, r1, r2);
+
+		PlanBorradoProyectos plan = service.planBorradoPorObjetivos(List.of(3L));
+
+		assertThat(plan.aBorrar()).containsExactly(10L);
+		assertThat(plan.rescatados()).containsOnlyKeys(11L, 12L);
+		assertThat(plan.rescatados().get(11L)).isNull();
+		assertThat(plan.rescatados().get(12L)).isNull();
+	}
+
+	@Test
+	void planBorradoUnRescatadoVariosNivelesAbajoSubeAlAncestroQueSobrevive() {
+		// 9 (no se borra) -> 10 (objetivo 3) -> 11 -> 12 -> 13 (objetivo 4, rescatado). Sube a 9, no a 12 ni a null.
+		Proyecto raiz = delObjetivo(10, 9L, 3L);
+		Proyecto s11 = delObjetivo(11, 10L, null);
+		Proyecto s12 = delObjetivo(12, 11L, null);
+		Proyecto rescatado = delObjetivo(13, 12L, 4L);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(raiz));
+		hijosDe(10, s11);
+		hijosDe(11, s12);
+		hijosDe(12, rescatado);
+
+		PlanBorradoProyectos plan = service.planBorradoPorObjetivos(List.of(3L));
+
+		assertThat(plan.aBorrar()).containsExactly(12L, 11L, 10L);
+		assertThat(plan.rescatados()).containsExactly(entry(13L, 9L));
+	}
+
+	@Test
+	void planBorradoUnProyectoLigadoDirectoQueCuelgaDeUnRescatadoSeBorraYElRescatadoQueda() {
+		// 10 (objetivo 3) -> 11 (objetivo 4, rescatado) -> 12 (objetivo 3, ligado directo) -> 13 (sin objetivo).
+		Proyecto raiz = delObjetivo(10, null, 3L);
+		Proyecto rescatado = delObjetivo(11, 10L, 4L);
+		Proyecto ligado = delObjetivo(12, 11L, 3L);
+		Proyecto hijoDelLigado = delObjetivo(13, 12L, null);
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(raiz, ligado));
+		hijosDe(10, rescatado);
+		hijosDe(12, hijoDelLigado);
+		hijosDe(13);
+
+		PlanBorradoProyectos plan = service.planBorradoPorObjetivos(List.of(3L));
+
+		assertThat(plan.aBorrar()).containsExactly(10L, 13L, 12L);
+		assertThat(plan.rescatados()).containsExactly(entry(11L, (Long) null));
+	}
+
+	@Test
+	void ejecutarBorradoPorObjetivosSinProyectosNoHaceNada() {
+		service.ejecutarBorradoPorObjetivos(PlanBorradoProyectos.VACIO);
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	void ejecutarBorradoPorObjetivosReasignaLosRescatadosConFlushAntesDeBorrar() {
+		Proyecto p10 = delObjetivo(10, null, 3L);
+		Proyecto p12 = delObjetivo(12, 10L, null);
+		Proyecto rescatado = delObjetivo(11, 10L, 4L);
+		when(repository.findAllById(any())).thenReturn(List.of(p12, rescatado, p10)); // orden de la base: arbitrario
+		Map<Long, Long> rescatados = new LinkedHashMap<>();
+		rescatados.put(11L, 9L);
+
+		service.ejecutarBorradoPorObjetivos(new PlanBorradoProyectos(List.of(12L, 10L), rescatados));
+
+		assertThat(rescatado.getPadreId()).isEqualTo(9L);
+		InOrder orden = inOrder(repository);
+		orden.verify(repository).saveAllAndFlush(List.of(rescatado));
+		orden.verify(repository).deleteAll(List.of(p12, p10)); // el orden del plan, no el de la base
+		orden.verify(repository).flush();
+	}
+
+	@Test
+	void desligarDeObjetivoPoneObjetivoNullYGuardaConFlush() {
+		Proyecto a = delObjetivo(7, null, 3L);
+		Proyecto b = delObjetivo(8, 7L, 3L);
+		when(repository.findAllById(List.of(7L, 8L))).thenReturn(List.of(a, b));
+
+		service.desligarDeObjetivo(List.of(7L, 8L));
+
+		assertThat(a.getObjetivoId()).isNull();
+		assertThat(b.getObjetivoId()).isNull();
+		assertThat(b.getPadreId()).isEqualTo(7L);
+		verify(repository).saveAllAndFlush(List.of(a, b));
+	}
+
+	@Test
+	void desligarDeObjetivoSinProyectosNoHaceNada() {
+		service.desligarDeObjetivo(List.of());
+
+		verifyNoInteractions(repository);
 	}
 
 	// ---- Tareas del proyecto ----

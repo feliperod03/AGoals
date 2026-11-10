@@ -3,9 +3,12 @@ package com.agoals.common;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -107,5 +110,58 @@ class JerarquiaTest {
 	void unCicloYaExistenteEnLosDatosNoCuelgaElRecorrido() {
 		// 6 <-> 7 ya es un ciclo en la base; el Set de visitados corta el bucle.
 		assertThatCode(() -> validar(6L, 1L)).doesNotThrowAnyException();
+	}
+
+	// ---- hojasPrimero ----
+
+	private List<Long> hijasDe(Long id) {
+		return padres.entrySet().stream()
+				.filter(e -> id.equals(e.getValue()))
+				.map(Map.Entry::getKey)
+				.sorted()
+				.toList();
+	}
+
+	private List<Long> hojasPrimero(List<Long> raices, Predicate<Long> corta) {
+		return Jerarquia.hojasPrimero(raices, id -> id, this::hijasDe, corta);
+	}
+
+	@Test
+	void hojasPrimeroPoneCadaHijoAntesQueSuPadre() {
+		assertThat(hojasPrimero(List.of(1L), id -> false)).containsExactly(3L, 2L, 1L);
+	}
+
+	@Test
+	void hojasPrimeroConUnaHojaDevuelveSoloEsaHoja() {
+		assertThat(hojasPrimero(List.of(3L), id -> false)).containsExactly(3L);
+	}
+
+	@Test
+	void hojasPrimeroConVariasRaicesDevuelveCadaArbolSinMezclarElOrdenInterno() {
+		assertThat(hojasPrimero(List.of(1L, 4L), id -> false)).containsExactly(3L, 2L, 1L, 5L, 4L);
+	}
+
+	@Test
+	void hojasPrimeroConRaicesAnidadasNoDuplicaYBorraLaHijaAntesQueLaMadre() {
+		// 2 es hija de 1 y también viene como raíz, en cualquiera de los dos órdenes.
+		assertThat(hojasPrimero(List.of(1L, 2L), id -> false)).containsExactly(3L, 2L, 1L);
+		assertThat(hojasPrimero(List.of(2L, 1L), id -> false)).containsExactly(3L, 2L, 1L);
+	}
+
+	@Test
+	void hojasPrimeroConCortaNoIncluyeNiBajaPorEseHijo() {
+		// Se corta en 2: ni 2 ni su hija 3 entran. La raíz 1 siempre entra.
+		assertThat(hojasPrimero(List.of(1L), id -> id == 2L)).containsExactly(1L);
+	}
+
+	@Test
+	void hojasPrimeroNoAplicaCortaALasRaices() {
+		assertThat(hojasPrimero(List.of(2L), id -> id == 2L)).containsExactly(3L, 2L);
+	}
+
+	@Test
+	void hojasPrimeroConUnCicloNoCuelgaYNoRepite() {
+		// 6 <-> 7 es un ciclo corrupto: cada uno sale una sola vez.
+		assertThat(hojasPrimero(List.of(6L), id -> false)).containsExactly(7L, 6L);
 	}
 }
