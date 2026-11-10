@@ -4,10 +4,15 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getRecordatoriosVencidos } from '@/api/recordatorios'
 import { App } from './App'
 
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn().mockResolvedValue([]), getEvento: vi.fn() }))
-vi.mock('@/api/recordatorios', () => ({ getRecordatorios: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/recordatorios', () => ({
+  getRecordatorios: vi.fn().mockResolvedValue([]),
+  getRecordatoriosVencidos: vi.fn().mockResolvedValue([]),
+  marcarRecordatorioEnviado: vi.fn(),
+}))
 vi.mock('@/api/proyectos', () => ({
   getProyectos: vi.fn().mockResolvedValue([]),
   crearProyecto: vi.fn(),
@@ -122,6 +127,18 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'Ideas' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Hoy' })).not.toHaveAttribute('aria-current')
     // Espera a que termine de cargar la página para no dejar actualizaciones fuera de `act`.
+    await screen.findByText('Aún no tienes ideas.')
+  })
+})
+
+describe('aviso de vencidos', () => {
+  it('se muestra en cualquier página, no solo en Hoy', async () => {
+    vi.mocked(getRecordatoriosVencidos).mockResolvedValueOnce([
+      { id: 1, tareaId: null, eventoId: null, fechaHora: '2026-11-10T08:00:00-03:00', enviado: false, descripcion: 'Llamar al médico' },
+    ])
+    renderizar('/ideas')
+    expect(await screen.findByText('Llamar al médico')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entendido: Llamar al médico' })).toBeInTheDocument()
     await screen.findByText('Aún no tienes ideas.')
   })
 })

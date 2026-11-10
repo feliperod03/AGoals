@@ -1,6 +1,7 @@
 import { Archive, CalendarDays, FolderKanban, Lightbulb, Sun, Target, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
+import { AvisoVencidos } from '@/features/agenda/AvisoVencidos'
 import { cn } from '@/lib/utils'
 
 const SECCIONES: { ruta: string; texto: string; icono: LucideIcon }[] = [
@@ -49,6 +50,7 @@ export function Layout() {
       </aside>
 
       <main className="min-w-0 flex-1 px-4 py-6 md:px-10 md:py-8">
+        <AvisoVencidos />
         <Outlet />
       </main>
     </div>
