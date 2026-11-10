@@ -91,10 +91,17 @@ describe('App', () => {
     expect(await screen.findByText('No tienes tareas sin hora para hoy.')).toBeInTheDocument()
   })
 
-  it('navega a una sección todavía no construida', async () => {
+  it('navega a Calendario desde la barra lateral y muestra el mes actual', async () => {
     renderizar('/')
     await userEvent.click(screen.getByRole('link', { name: 'Calendario' }))
-    expect(screen.getByRole('heading', { name: 'Calendario' })).toBeInTheDocument()
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^[A-Z][a-zé]+ de \d{4}$/)
+    expect(screen.queryByText('Próximamente.')).not.toBeInTheDocument()
+  })
+
+  it('una ruta inexistente muestra «No encontrada»', () => {
+    renderizar('/no-existe')
+    expect(screen.getByRole('heading', { name: 'No encontrada' })).toBeInTheDocument()
     expect(screen.getByText('Próximamente.')).toBeInTheDocument()
   })
 

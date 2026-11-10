@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 
+import { CalendarioPage } from '@/features/calendario/CalendarioPage'
 import { CofrePage } from '@/features/cofre/CofrePage'
 import { HoyPage } from '@/features/agenda/HoyPage'
 import { IdeasPage } from '@/features/ideas/IdeasPage'
@@ -19,7 +20,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<HoyPage />} />
         <Route path="cofre" element={<CofrePage />} />
-        <Route path="calendario" element={<Proximamente titulo="Calendario" />} />
+        <Route path="calendario" element={<CalendarioPage />} />
         <Route path="proyectos" element={<ProyectosPage />} />
         <Route path="proyectos/:id" element={<ProyectoPage />} />
         <Route path="objetivos" element={<ObjetivosPage />} />

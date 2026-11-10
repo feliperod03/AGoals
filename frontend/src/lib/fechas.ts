@@ -1,4 +1,18 @@
-import { addDays, differenceInCalendarDays, differenceInMinutes, format, parseISO, startOfDay } from 'date-fns'
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  differenceInMinutes,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isValid,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns'
 import { es } from 'date-fns/locale'
 
 // Todo el manejo de fechas del frontend vive aquí. Regla: nunca `toISOString()`,
@@ -250,3 +264,105 @@ export const mensajeRecordatorioNoMovido = (fechaTarea: string, motivo: string) 
 
 /** «Dejar sin fecha» con un recordatorio pendiente: el recordatorio se queda donde estaba. */
 export const mensajeSinFechaConRecordatorio = () => `${mensajeSinFecha()}; el recordatorio no se movió`
+
+// --- Calendario (rebanada 9a) ---
+
+const FORMATO_MES = 'yyyy-MM'
+const EXPRESION_MES = /^\d{4}-(0[1-9]|1[0-2])$/
+const EXPRESION_FECHA = /^\d{4}-\d{2}-\d{2}$/
+
+/** El mes (`YYYY-MM`) de una fecha `YYYY-MM-DD`. */
+export function mesDe(fecha: string): string {
+  return fecha.slice(0, 7)
+}
+
+/** El mes de hoy según el reloj local (`YYYY-MM`). */
+export function mesActual(): string {
+  return mesDe(hoy())
+}
+
+/** `2026-11` -> `2026-11`; cualquier otra cosa (`2026-13`, `2026-1`, `abc`, `null`) -> `null`. */
+export function parsearMes(valor: string | null): string | null {
+  return valor !== null && EXPRESION_MES.test(valor) ? valor : null
+}
+
+/** `true` solo para una fecha `YYYY-MM-DD` que existe en el calendario (rechaza `2026-02-30`). */
+export function esFechaValida(valor: string | null): valor is string {
+  if (valor === null || !EXPRESION_FECHA.test(valor)) return false
+  const fecha = parseISO(valor)
+  return isValid(fecha) && format(fecha, FORMATO_FECHA) === valor
+}
+
+/** Suma (o resta) meses a un `YYYY-MM`. */
+export function sumarMeses(mes: string, n: number): string {
+  return format(addMonths(parseISO(`${mes}-01`), n), FORMATO_MES)
+}
+
+/** Las semanas (lunes a domingo) que cubren el mes: 4 a 6 filas de 7 fechas `YYYY-MM-DD`. */
+export function semanasDelMes(mes: string): string[][] {
+  const primero = parseISO(`${mes}-01`)
+  const dias = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(primero), { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(primero), { weekStartsOn: 1 }),
+  }).map(aFechaLocal)
+  const semanas: string[][] = []
+  for (let i = 0; i < dias.length; i += 7) semanas.push(dias.slice(i, i + 7))
+  return semanas
+}
+
+/** Rango [00:00 de `primera`, 00:00 del día siguiente a `ultima`) para `GET /api/eventos`. */
+export function rangoDeFechas(primera: string, ultima: string): { desde: string; hasta: string } {
+  return { desde: rangoDelDia(primera).desde, hasta: rangoDelDia(ultima).hasta }
+}
+
+/** `2026-11` -> `Noviembre de 2026`. */
+export function formatearMes(mes: string): string {
+  const texto = format(parseISO(`${mes}-01`), "MMMM 'de' yyyy", { locale: es })
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+/** `2026-11-10` -> `martes 10 de noviembre`. */
+export function formatearDiaSemana(fecha: string): string {
+  return format(parseISO(fecha), "EEEE d 'de' MMMM", { locale: es })
+}
+
+/** El lunes y el domingo de la semana (lunes a domingo) que contiene `fecha`. */
+export function limitesDeSemana(fecha: string): { lunes: string; domingo: string } {
+  const dia = parseISO(fecha)
+  return {
+    lunes: aFechaLocal(startOfWeek(dia, { weekStartsOn: 1 })),
+    domingo: aFechaLocal(endOfWeek(dia, { weekStartsOn: 1 })),
+  }
+}
+
+/** Mismo número de día en otro mes, acotado al último día de ese mes (31 ene + 1 mes -> 28 feb). */
+export function moverMesConservandoDia(fecha: string, n: number): string {
+  return aFechaLocal(addMonths(parseISO(fecha), n))
+}
+
+/**
+ * Como `recortarEventoAlDia` (que no cambia: la usa `horario.ts`), pero además dice si el evento
+ * empezó antes de ese día o sigue después. `null` si no toca el día (los bordes exactos no cuentan).
+ */
+export function tramoDelEventoEnDia(
+  evento: { fechaHoraInicio: string; fechaHoraFin: string },
+  fecha: string,
+): { inicioMin: number; finMin: number; empiezaAntes: boolean; terminaDespues: boolean } | null {
+  const recorte = recortarEventoAlDia(evento, fecha)
+  if (!recorte) return null
+  const inicioDia = startOfDay(parseISO(fecha))
+  return {
+    ...recorte,
+    empiezaAntes: parseISO(evento.fechaHoraInicio).getTime() < inicioDia.getTime(),
+    terminaDespues: parseISO(evento.fechaHoraFin).getTime() > addDays(inicioDia, 1).getTime(),
+  }
+}
+
+/** Los siete días de la semana empezando por el lunes: `lun` / `lunes`, ... (para el encabezado del calendario). */
+export function nombresDiasSemana(): { corto: string; largo: string }[] {
+  // 9 de noviembre de 2026 es lunes; solo sirve de referencia para obtener los nombres.
+  return Array.from({ length: 7 }, (_, i) => {
+    const dia = addDays(parseISO('2026-11-09'), i)
+    return { corto: format(dia, 'EEE', { locale: es }), largo: format(dia, 'EEEE', { locale: es }) }
+  })
+}

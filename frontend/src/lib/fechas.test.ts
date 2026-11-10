@@ -44,6 +44,19 @@ import {
   minutosDelDia,
   rangoDelDia,
   recortarEventoAlDia,
+  esFechaValida,
+  formatearDiaSemana,
+  formatearMes,
+  limitesDeSemana,
+  mesActual,
+  mesDe,
+  moverMesConservandoDia,
+  nombresDiasSemana,
+  parsearMes,
+  rangoDeFechas,
+  semanasDelMes,
+  sumarMeses,
+  tramoDelEventoEnDia,
 } from './fechas'
 
 afterEach(() => {
@@ -439,5 +452,198 @@ describe('mensajes de mover el recordatorio al posponer', () => {
 
   it('sin fecha con recordatorio avisa que no se movió', () => {
     expect(mensajeSinFechaConRecordatorio()).toBe('Sin fecha: la verás en el Cofre y en Recomendación; el recordatorio no se movió')
+  })
+})
+
+describe('mesDe / mesActual / parsearMes / esFechaValida', () => {
+  it('mesDe toma el mes de una fecha', () => {
+    expect(mesDe('2026-11-10')).toBe('2026-11')
+  })
+
+  it('mesActual usa el reloj local', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-10T12:00:00-03:00'))
+    expect(mesActual()).toBe('2026-11')
+  })
+
+  it('parsearMes acepta YYYY-MM válido y rechaza el resto', () => {
+    expect(parsearMes('2026-11')).toBe('2026-11')
+    expect(parsearMes('2026-12')).toBe('2026-12')
+    for (const malo of ['2026-13', '2026-00', '2026-1', 'abc', '', '2026-11-10', null]) {
+      expect(parsearMes(malo)).toBeNull()
+    }
+  })
+
+  it('esFechaValida rechaza fechas inexistentes y mal formadas', () => {
+    expect(esFechaValida('2026-11-10')).toBe(true)
+    expect(esFechaValida('2028-02-29')).toBe(true)
+    for (const mala of ['2026-02-30', '2026-02-29', '2026-13-01', '2026-11-1', 'abc', '', null]) {
+      expect(esFechaValida(mala)).toBe(false)
+    }
+  })
+})
+
+describe('sumarMeses / moverMesConservandoDia', () => {
+  it('suma y resta meses cruzando el año', () => {
+    expect(sumarMeses('2026-11', 1)).toBe('2026-12')
+    expect(sumarMeses('2026-12', 1)).toBe('2027-01')
+    expect(sumarMeses('2026-01', -1)).toBe('2025-12')
+    expect(sumarMeses('2026-11', 0)).toBe('2026-11')
+  })
+
+  it('moverMesConservandoDia acota al último día del mes', () => {
+    expect(moverMesConservandoDia('2026-10-31', 1)).toBe('2026-11-30')
+    expect(moverMesConservandoDia('2026-01-31', 1)).toBe('2026-02-28')
+    expect(moverMesConservandoDia('2028-01-31', 1)).toBe('2028-02-29')
+    expect(moverMesConservandoDia('2026-01-15', -1)).toBe('2025-12-15')
+  })
+})
+
+describe('semanasDelMes', () => {
+  const comprobarForma = (semanas: string[][]) => {
+    for (const semana of semanas) {
+      expect(semana).toHaveLength(7)
+      expect(limitesDeSemana(semana[0] ?? '').lunes).toBe(semana[0])
+    }
+  }
+
+  it('febrero de 2026 (28 días, empieza en domingo) ocupa 5 semanas', () => {
+    const semanas = semanasDelMes('2026-02')
+    expect(semanas).toHaveLength(5)
+    expect(semanas[0]?.[0]).toBe('2026-01-26')
+    expect(semanas[4]?.[6]).toBe('2026-03-01')
+    comprobarForma(semanas)
+  })
+
+  it('febrero de 2027 (28 días, empieza en lunes) ocupa exactamente 4 semanas', () => {
+    const semanas = semanasDelMes('2027-02')
+    expect(semanas).toHaveLength(4)
+    expect(semanas[0]?.[0]).toBe('2027-02-01')
+    expect(semanas[3]?.[6]).toBe('2027-02-28')
+    comprobarForma(semanas)
+  })
+
+  it('febrero de 2028 tiene 29 días', () => {
+    const dias = semanasDelMes('2028-02').flat()
+    expect(dias).toContain('2028-02-29')
+    expect(dias).not.toContain('2028-02-30')
+  })
+
+  it('noviembre de 2026 (30 días, empieza en domingo) ocupa 6 semanas', () => {
+    const semanas = semanasDelMes('2026-11')
+    expect(semanas).toHaveLength(6)
+    expect(semanas[0]?.[0]).toBe('2026-10-26')
+    expect(semanas[5]?.[6]).toBe('2026-12-06')
+    comprobarForma(semanas)
+  })
+
+  it('marzo de 2026 (31 días)', () => {
+    const semanas = semanasDelMes('2026-03')
+    expect(semanas[0]?.[0]).toBe('2026-02-23')
+    expect(semanas.flat()).toContain('2026-03-31')
+    comprobarForma(semanas)
+  })
+
+  it('no depende de la zona horaria', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    const semanas = semanasDelMes('2026-11')
+    expect(semanas).toHaveLength(6)
+    expect(semanas.flat()).toHaveLength(42)
+    expect(new Set(semanas.flat()).size).toBe(42)
+  })
+})
+
+describe('rangoDeFechas', () => {
+  it('va de las 00:00 de la primera a las 00:00 del día siguiente a la última, con el desfase local', () => {
+    expect(rangoDeFechas('2026-10-26', '2026-12-06')).toEqual({
+      desde: '2026-10-26T00:00:00-03:00',
+      hasta: '2026-12-07T00:00:00-03:00',
+    })
+  })
+
+  it('en Nueva York cruza el fin del horario de verano: -04:00 al inicio y -05:00 al final', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    expect(rangoDeFechas('2026-10-26', '2026-12-06')).toEqual({
+      desde: '2026-10-26T00:00:00-04:00',
+      hasta: '2026-12-07T00:00:00-05:00',
+    })
+  })
+
+  it('en Kolkata usa +05:30', () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    expect(rangoDeFechas('2026-10-26', '2026-12-06')).toEqual({
+      desde: '2026-10-26T00:00:00+05:30',
+      hasta: '2026-12-07T00:00:00+05:30',
+    })
+  })
+})
+
+describe('formatearMes / formatearDiaSemana / limitesDeSemana', () => {
+  it('formatea el mes con mayúscula inicial', () => {
+    expect(formatearMes('2026-11')).toBe('Noviembre de 2026')
+    expect(formatearMes('2027-02')).toBe('Febrero de 2027')
+  })
+
+  it('formatea el día con su nombre de semana', () => {
+    expect(formatearDiaSemana('2026-11-10')).toBe('martes 10 de noviembre')
+  })
+
+  it('el domingo pertenece a la semana que empezó el lunes anterior', () => {
+    expect(limitesDeSemana('2026-11-08')).toEqual({ lunes: '2026-11-02', domingo: '2026-11-08' })
+    expect(limitesDeSemana('2026-11-09')).toEqual({ lunes: '2026-11-09', domingo: '2026-11-15' })
+    expect(limitesDeSemana('2026-11-10')).toEqual({ lunes: '2026-11-09', domingo: '2026-11-15' })
+  })
+})
+
+describe('tramoDelEventoEnDia', () => {
+  it('evento dentro del día', () => {
+    const e = { fechaHoraInicio: '2026-11-10T09:00:00-03:00', fechaHoraFin: '2026-11-10T10:30:00-03:00' }
+    expect(tramoDelEventoEnDia(e, '2026-11-10')).toEqual({ inicioMin: 540, finMin: 630, empiezaAntes: false, terminaDespues: false })
+    expect(tramoDelEventoEnDia(e, '2026-11-11')).toBeNull()
+  })
+
+  it('cruza la medianoche: dos tramos', () => {
+    const e = { fechaHoraInicio: '2026-11-10T22:00:00-03:00', fechaHoraFin: '2026-11-11T02:00:00-03:00' }
+    expect(tramoDelEventoEnDia(e, '2026-11-10')).toEqual({ inicioMin: 1320, finMin: 1440, empiezaAntes: false, terminaDespues: true })
+    expect(tramoDelEventoEnDia(e, '2026-11-11')).toEqual({ inicioMin: 0, finMin: 120, empiezaAntes: true, terminaDespues: false })
+  })
+
+  it('de tres días: el del medio ocupa el día entero', () => {
+    const e = { fechaHoraInicio: '2026-12-02T09:00:00-03:00', fechaHoraFin: '2026-12-04T18:00:00-03:00' }
+    expect(tramoDelEventoEnDia(e, '2026-12-03')).toEqual({ inicioMin: 0, finMin: 1440, empiezaAntes: true, terminaDespues: true })
+    expect(tramoDelEventoEnDia(e, '2026-12-04')).toEqual({ inicioMin: 0, finMin: 1080, empiezaAntes: true, terminaDespues: false })
+  })
+
+  it('cruza el fin de mes', () => {
+    const e = { fechaHoraInicio: '2026-10-31T20:00:00-03:00', fechaHoraFin: '2026-11-01T10:00:00-03:00' }
+    expect(tramoDelEventoEnDia(e, '2026-10-31')?.terminaDespues).toBe(true)
+    expect(tramoDelEventoEnDia(e, '2026-11-01')?.empiezaAntes).toBe(true)
+  })
+
+  it('los bordes exactos no cuentan', () => {
+    const hastaMedianoche = { fechaHoraInicio: '2026-11-10T22:00:00-03:00', fechaHoraFin: '2026-11-11T00:00:00-03:00' }
+    expect(tramoDelEventoEnDia(hastaMedianoche, '2026-11-11')).toBeNull()
+    expect(tramoDelEventoEnDia(hastaMedianoche, '2026-11-10')).toEqual({ inicioMin: 1320, finMin: 1440, empiezaAntes: false, terminaDespues: false })
+    const desdeMedianoche = { fechaHoraInicio: '2026-11-11T00:00:00-03:00', fechaHoraFin: '2026-11-11T01:00:00-03:00' }
+    expect(tramoDelEventoEnDia(desdeMedianoche, '2026-11-11')?.empiezaAntes).toBe(false)
+    expect(tramoDelEventoEnDia(desdeMedianoche, '2026-11-10')).toBeNull()
+  })
+
+  it('en Kolkata se reparte por el día local de esa zona', () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    // 23:30 del 10/11 en Buenos Aires = 08:00 del 11/11 en Kolkata.
+    const e = { fechaHoraInicio: '2026-11-10T23:30:00-03:00', fechaHoraFin: '2026-11-11T00:30:00-03:00' }
+    expect(tramoDelEventoEnDia(e, '2026-11-10')).toBeNull()
+    expect(tramoDelEventoEnDia(e, '2026-11-11')).toEqual({ inicioMin: 480, finMin: 540, empiezaAntes: false, terminaDespues: false })
+  })
+})
+
+describe('nombresDiasSemana', () => {
+  it('empieza en lunes y termina en domingo', () => {
+    const dias = nombresDiasSemana()
+    expect(dias).toHaveLength(7)
+    expect(dias[0]).toEqual({ corto: 'lun', largo: 'lunes' })
+    expect(dias[2]).toEqual({ corto: 'mié', largo: 'miércoles' })
+    expect(dias[6]).toEqual({ corto: 'dom', largo: 'domingo' })
   })
 })
