@@ -1,6 +1,6 @@
-# AGoals: decisiones de diseño del frontend (rebanada 8)
+# AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 8.5c; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 9a; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -30,7 +30,7 @@ frontend/
     ├── app/          router, layout, providers
     ├── api/          client.ts + un archivo por dominio
     ├── components/   componentes compartidos (PrioridadChip, Tarjeta…) y ui/ (shadcn)
-    ├── features/     agenda, cofre, recomendacion, proyectos, objetivos, ideas, recordatorios, calendario
+    ├── features/     agenda (incluye los recordatorios), cofre, recomendacion, jerarquia (compartido por proyectos y objetivos), proyectos, objetivos, ideas, calendario
     ├── lib/          fechas.ts, texto.ts, utils
     └── types/        DTOs en TypeScript
 ```
@@ -75,7 +75,6 @@ Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fe
 - Siempre se manda la fecha explícita; no se depende del "+1" por defecto del backend.
 - Solo para tareas abiertas con fecha (`puedePosponer`). Las cerradas dan 409; las sin fecha se agendan desde la recomendación o el cofre.
 - Si falla, el diálogo queda abierto con el error; mientras hay una mutación no se puede cerrar.
-- **Pendientes conocidos:** el error de posponer también se ve en el cartel de la lista; cancelar el selector no limpia el error. (Desde 8.5c el recordatorio pendiente se mueve con la tarea: sección «Mover el recordatorio al posponer».)
 
 ## Recomendación (8.3 hecha; commit `f2d0052`)
 - Botón secundario "Recomendación" en el encabezado de Hoy; abre un diálogo (Dialog de shadcn) con tareas abiertas sin fecha o atrasadas.
@@ -108,10 +107,9 @@ Páginas `/proyectos`, `/proyectos/:id`, `/objetivos` y `/objetivos/:id`. Casi i
 - **Listado:** árbol por `padreId` (`armarArbolJerarquia`, a prueba de ciclos y padres inexistentes), filtro de estado (por defecto, abiertos), búsqueda sin tildes, orden fijo (prioridad y nombre). Un hijo que no cumple el filtro se cuenta como «+N subproyectos ocultos por el filtro»; si el que no cumple es el padre, el hijo sube a raíz con «Subproyecto de «X»». Cada fila: `EstadoIcono` (con la prop `decorativo`, porque aquí el estado se escribe en masculino: «Hecho»), selector de estado nativo, prioridad y, en proyectos, «Objetivo: X».
 - **Estados:** el cambio rápido no se propaga a hijos ni a padres. Si el nuevo estado queda fuera del filtro, el aviso lo dice («…pasó a Hecho; ya no se ve con el filtro actual»).
 - **Crear/editar:** `ItemDialog` (react-hook-form) con campo «Padre» con búsqueda (`SelectorPadre` sobre `components/BuscadorLista`; no ofrece el propio ni sus descendientes; abiertos más el padre actual) y, en proyectos, `<select>` de objetivo (abiertos más el actual, que siempre figura aunque la lista falle). `EstadoItemDialog.iniciales` permite abrir la creación con valores prefijados.
-- **Borrar (8.4a3 `9fd2703`):** `BorrarItemDialog` (uno solo para proyectos y objetivos; `categoriasBorrado` vive en la config de cada tipo). Al abrir pide la vista previa (`GET …/impacto-borrado` de 5f, hook `useImpactoBorrado`; clave `['impacto-borrado', tipo, id, elecciones]` con raíz aparte de `['proyectos']`/`['objetivos']`, `staleTime` 0, `gcTime` 5 s, sin reintentos, `keepPreviousData`) y muestra una fila por categoría con `total > 0` (proyecto: subproyectos, tareas, ideas; objetivo: subobjetivos, proyectos, tareas, ideas). Cada fila (`FilaBorrado`) tiene radios nativos dentro de un `fieldset` «Mover / Borrar», por defecto «Mover». Con «Borrar» la ayuda dice cuántos se borran e indica «(incluye subtareas / subproyectos / subobjetivos)» si `borrados > total`. Resumen en vivo en una región `role="status"` propia: «Se borrarán «X», 2 proyectos y 5 tareas.» o «Solo se borrará «X».», más el aviso de proyectos rescatados (solo con `proyectos=borrar`). **Confirmar** solo se habilita con la respuesta de la elección actual (`isSuccess && !isPlaceholderData && !isFetching`) y manda un parámetro explícito por cada fila visible (`parametrosDe`), nunca por las ocultas; sin filas es el diálogo simple y un DELETE sin parámetros. Si la vista previa falla: «No se pudo calcular qué se borra» + «Reintentar» y no se puede confirmar (nunca un DELETE a ciegas). Si el DELETE falla, el diálogo queda abierto con el mensaje. Tras borrar (`invalidarTrasBorrado`) se refrescan proyectos, objetivos, `['tareas']`, `['agenda']` y `['recordatorios']`, y el aviso añade lo demás que se borró («…borrado; también 2 proyectos y 5 tareas»). Lógica pura y textos en `features/jerarquia/borrado.ts`. Desde el detalle, al borrar se vuelve a la lista con el aviso en el `state` del router.
+- **Borrar (8.4a3 `9fd2703`):** `BorrarItemDialog` (uno solo; `categoriasBorrado` en la config de cada tipo). Al abrir pide la vista previa de 5f (`useImpactoBorrado`, clave `['impacto-borrado', tipo, id, elecciones]` con raíz aparte, `staleTime` 0, sin reintentos, `keepPreviousData`) y muestra una fila por categoría con `total > 0`: radios «Mover / Borrar» (por defecto «Mover»), ayuda con cuántos se borran («incluye subtareas…» si `borrados > total`), resumen en vivo en una región `role="status"` propia y aviso de proyectos rescatados. **Confirmar** solo se habilita con la respuesta de la elección actual (`isSuccess && !isPlaceholderData && !isFetching`) y manda un parámetro por cada fila visible (`parametrosDe`). Si la vista previa falla: «No se pudo calcular qué se borra» + «Reintentar», nunca un DELETE a ciegas; si el DELETE falla, el diálogo queda abierto con el mensaje. Tras borrar (`invalidarTrasBorrado`) se refrescan proyectos, objetivos, `['tareas']`, `['agenda']`, `['recordatorios']` e `['ideas']`, y el aviso añade lo demás que se borró. Lógica pura y textos en `features/jerarquia/borrado.ts`; desde el detalle se vuelve a la lista con el aviso en el `state` del router.
 - **Detalle:** datos, padre, hijos directos y secciones propias. En el proyecto, las tareas ligadas (anidadas, de `useTodasLasTareas`). En el objetivo, sus proyectos y «Tareas ligadas directamente» (solo el vínculo directo; las de sus proyectos se ven en cada proyecto). En las dos secciones se puede quitar y vincular tareas (8.4b, sección siguiente).
 - **Vincular proyectos y objetivos (8.4a2):** en el detalle del objetivo, «Agregar proyecto» abre una elección «Crear uno nuevo» (el `ItemDialog` de proyecto con el objetivo prefijado) o «Vincular uno existente» (proyectos abiertos que no son ya del objetivo; si el candidato tiene otro, la fila dice «Ahora es del objetivo «Y»; se moverá»), y cada proyecto tiene «Quitar» (queda sin objetivo; no se borra). El botón solo aparece con el objetivo abierto. En el detalle del proyecto, el objetivo se cambia o se quita ahí mismo con un `<select>` en «Datos» (más «Ver objetivo»). Todo es un PUT del proyecto con los seis campos (`useCambiarObjetivo`), con aviso en la región `status` de la página.
-- **Pendientes de Pulido 2:** `TareasLigadas` define su propio `esCerrada` (duplica `esAbierto` de `jerarquia/tipos.ts`); `BuscadorTareas` podría ser un adaptador de `BuscadorLista`; `SelectorObjetivo` trataría como "sin objetivo" un id que no estuviera en las opciones (carrera improbable).
 
 ## Vincular tareas a proyectos y objetivos (8.4b; commit `0417230`)
 Solo frontend, sin dependencias nuevas. Contrato del backend (verificado en el repo antes de planificar, no cambió):
@@ -129,7 +127,6 @@ Frontend:
 - **Avisos** (`lib/fechas.ts`): `mensajeTareaVinculada` («X» ahora es del proyecto «Y») y `mensajeTareaDesvinculada` («X» ya no es del proyecto «Y»), también para objetivos. Salen por la región `status` de la página donde se abrió el diálogo.
 - **Regla de capas a mantener:** `agenda/` ahora importa de `jerarquia/` (`DialogosAcciones` → `VincularTareaDialog`) y `jerarquia/` ya importaba de `agenda/` (`EstadoIcono`, `useTodasLasTareas`, `useMensajeTemporal`, `ErrorDialogo`, `descendientes`, `BuscadorTareas`, `candidatasMadre`). No hay ciclo de archivos mientras ningún archivo de `jerarquia/` importe `useAccionesTarea`, `DialogosAcciones`, `MenuAcciones` ni `TareaDialog` (comprobado con grep al cerrar la rebanada).
 - **Fuera de alcance:** vínculo en las filas de Hoy, crear una tarea ya ligada (POST y PUT no atómicos), vínculo en el formulario de crear/editar, herencia del vínculo de la madre.
-- **Pendientes conocidos (a Pulido 2):** los avisos de este diálogo salen por la región `status` de la página, que Radix deja con `aria-hidden` mientras hay un diálogo abierto: se ven pero un lector de pantalla no los anunciaría; la consulta directa de `['proyectos']`/`['objetivos']` está ahora en tres sitios (`VincularTareaDialog`, `TareasLigadas` y `useListaJerarquia`).
 
 ## Ideas (8.4c; commit `3548350`)
 Página `/ideas` (reemplaza el placeholder «Próximamente»; el ítem del menú lateral ya existía). Solo frontend, sin dependencias nuevas. Contrato del backend (sin cambios, ver el brief): el PUT **reemplaza todo** (título, descripción, vínculo y conclusión) y no cambia el estado; `concluir` acepta un cuerpo opcional `{conclusion}` (vacío o ausente conserva la anterior; ya concluida = 409); `reabrir` es idempotente y conserva la conclusión; proyecto y objetivo a la vez = 400; borrar = 204 directo.
@@ -145,7 +142,7 @@ Página `/ideas` (reemplaza el placeholder «Próximamente»; el ítem del menú
 - **API (`api/ideas.ts`):** `getIdeas`, `crearIdea`, `actualizarIdea` (PUT con el cuerpo completo), `concluirIdea(id, conclusion?)` (recorta; sin texto no manda cuerpo ni Content-Type), `reabrirIdea`, `borrarIdea`.
 - **Capas:** `ideas/` importa de `jerarquia/`, `agenda/` y `cofre/estilos`; ningún archivo de `jerarquia/`, `agenda/` ni `cofre/` importa de `ideas/` (comprobado con grep al cerrar la rebanada).
 - **Fuera de alcance:** la sección «Ideas ligadas» en el detalle de proyectos y objetivos (hecha en 8.4d, sección siguiente), crear una idea desde el detalle con el vínculo prefijado, filtros persistidos.
-- **Pendientes conocidos:** el PUT reemplaza todo y no hay versionado, así que editar desde una lista vieja puede pisar una conclusión escrita en otra pestaña; el PUT recorta espacios del título, la descripción y la conclusión al reenviar (mismo pendiente que 8.2g); los avisos de los diálogos no llegan a lectores de pantalla (región `status` de la página bajo `aria-hidden`); `todosComoCandidatos` (`ideas/filtros.ts`) quedó como código muerto (solo lo usa su test) al recortar el filtro de vínculo a `<select>` nativos; el error de «Reabrir» persiste en la página hasta el siguiente intento; `test/renderIdeas.tsx` es un helper de una página dentro de `src/test/`.
+- **Pendiente conocido:** el PUT reemplaza todo y no hay versionado, así que editar desde una lista vieja puede pisar una conclusión escrita en otra pestaña. El resto de los pendientes de ideas está en Pulido 2.
 
 ## Ideas ligadas en el detalle (8.4d; commit `8c447ca`)
 Tarjeta «Ideas ligadas» en el detalle de proyectos y objetivos, **solo lectura**. Solo frontend, sin dependencias nuevas ni cambios de `api/`, `types/` o `PaginaDetalle`.
@@ -170,8 +167,6 @@ Solo frontend, sin dependencias nuevas ni cambios de backend. Contrato (sin camb
 - **Tareas cerradas:** un vencido de una tarea hecha o cancelada por otro camino se muestra igual (limitación documentada en `modelo-datos.md`); no se consulta el estado de la tarea.
 - **API:** `getRecordatoriosVencidos(ahora)` y `marcarRecordatorioEnviado(id)` en `api/recordatorios.ts`. `types/recordatorio.ts` no cambió en 8.5a (`canal` se agregó en 8.5b).
 - **Ubicación y capas:** `features/agenda/` (`vencidos.ts`, `useRecordatoriosVencidos.ts`, `AvisoVencidos.tsx`), junto a los demás hooks de recordatorios; `app/Layout.tsx` importa de `features/agenda/`, como `App.tsx` con `HoyPage`. Ningún archivo de `agenda/` importa de `app/`. Deliberado: en 8.5b `agenda/` importa el diálogo de recordatorio, así que lo nuevo de recordatorios no debe vivir en una carpeta que importe de `agenda/` (ciclo).
-- **Tests:** 782 de frontend (764 + 18 nuevos; el polling del banner se prueba con timers falsos).
-- **Pendientes conocidos:** bajo un diálogo abierto el banner queda con `aria-hidden` (Radix) y un lector de pantalla no lo anunciaría (a Pulido 2, como los avisos de 8.4b y 8.4c); el test del 404 no comprueba el mensaje.
 
 ## Recordatorios: crear, editar y borrar (8.5b; commit `2780858`)
 Solo frontend, sin dependencias nuevas ni cambios de backend. Contrato (sin cambios): `POST /api/recordatorios` y `PUT /api/recordatorios/{id}` (reemplazo completo: `tareaId`, `eventoId`, `fechaHora`, `canal`, `descripcion`), solo canal APP, máximo uno por tarea (409), suelto con descripción obligatoria, 404 si ya no existe. Si cambia el instante de `fechaHora`, `enviado` vuelve a false.
@@ -184,8 +179,7 @@ Solo frontend, sin dependencias nuevas ni cambios de backend. Contrato (sin camb
 - **Dónde se abre:** ítem «Recordatorio…» en `MenuAcciones` y botón en `AccionesDeLaTarea` de `TareaDialog`, solo en tareas **abiertas** (reusa `puedeAgregarSubtarea`). `useAccionesTarea` expone `pedirRecordatorio` y `recordatorioTarea` (mismo patrón que `vinculo`) y `DialogosAcciones` lo monta. En la tarjeta «Próximos recordatorios» (`ColumnaLateral`): botón «Nuevo recordatorio» debajo de la lista (también con la tarjeta vacía) y «Editar» por fila.
 - **API y tipos:** `crearRecordatorio` y `actualizarRecordatorio` en `api/recordatorios.ts`; `types/recordatorio.ts` agrega `Canal` (`'APP' | 'CORREO'`), `canal` a `Recordatorio` y `RecordatorioRequest`. La interfaz solo manda `'APP'` (editar uno con CORREO daría 400, visible).
 - **Capas:** todo en `features/agenda/`; ningún archivo nuevo o modificado importa de `app/`, `jerarquia/` ni `ideas/` (el import de `jerarquia/` en `DialogosAcciones` ya existía).
-- **Tests:** 824 de frontend en 68 archivos (782 + 42): api, `lib/fechas` (con `vi.stubEnv('TZ','Asia/Kolkata')`), `recordatorioForm`, `RecordatorioDialog` (tres modos, doble clic, 409, 404, 500, consulta fallida sin escrituras), `HoyPage.recordatorio` y `CofrePage.recordatorio`. No hizo falta ampliar mocks parciales. Pruebas manuales contra la API real; lo visual lo cubren los tests.
-- **Pendientes conocidos:** el diálogo de tarea no avisa de que el recordatorio ya fue enviado (al cambiar la hora vuelve a `enviado=false`); la tarjeta «Próximos» solo muestra los 3 siguientes sin enviar, así que un vencido o el cuarto no se edita desde ahí (el de una tarea siempre se alcanza desde su menú); tras un 404 al editar una fila el diálogo solo ofrece «Cancelar»; `puedeAgregarSubtarea` como criterio de «abierta» tiene un nombre engañoso (a Pulido 2); el aviso de la página bajo un diálogo no llega a lectores de pantalla (como en 8.4b).
+- **Pendiente conocido:** la tarjeta «Próximos» solo muestra los 3 siguientes sin enviar, así que un vencido o el cuarto no se edita desde ahí (el de una tarea siempre se alcanza desde su menú). El resto está en Pulido 2.
 
 ## Mover el recordatorio al posponer (8.5c; commit `e7aa911`)
 Solo frontend, sin dependencias nuevas ni backend.
@@ -193,8 +187,19 @@ Solo frontend, sin dependencias nuevas ni backend.
 - **Casilla «Mover también el recordatorio (cae el …)»**, marcada por defecto, para «Mañana» y «Elegir fecha». La ayuda muestra el instante nuevo de cada destino («Con Mañana: …», «Con la fecha elegida: …») y «Seguirá vencido: el aviso saldrá enseguida.» si aun movido queda en el pasado (se mueve igual: una sola regla). Desmarcada: «El recordatorio se queda donde está.». «Dejar sin fecha» nunca lo mueve: la ayuda y el aviso (`mensajeSinFechaConRecordatorio`) lo dicen.
 - **Cómputo (`lib/fechas.ts`):** `diasEntre` (días de calendario entre la fecha de la tarea y la que confirmó el backend) y `moverInstanteDias` (`addDays` sobre un `Date` local: conserva la hora de pared aunque cambie el horario). Un aviso puesto un día antes de la tarea sigue un día antes.
 - **Hook (`useAccionesTarea`):** `ejecutar(tipo, tarea, fecha?, recordatorio?)`. En `'posponer'`: PATCH y luego PUT con los cinco campos (`requestMovido`, en `recordatorioForm.ts`); `ejecutarAccion` ignora un recordatorio ya enviado. Si el PUT falla (404/409/500) no se relanza: la tarea queda pospuesta, el selector se cierra y el aviso lleva el mensaje del servidor (`mensajeRecordatorioNoMovido`). Éxito: `mensajeRecordatorioMovido`. Si se pasó un recordatorio se invalida `['recordatorios']`. En `'sinFecha'` solo cambia el texto del aviso. Un guard `useRef` (`enCurso`) protege a todas las acciones del doble clic.
-- **Tests:** 857 de frontend en 69 archivos (824 + 33): `lib/fechas` (incluye `TZ` America/New_York cruzando el fin del horario de verano), `requestMovido`, `PosponerDialog.recordatorio.test.tsx` (todos los casos de arriba, fallo del PATCH, consulta cargando y fallida, vencido, doble clic) y la guarda «sin fecha, sin casilla» montando el diálogo. No hizo falta ampliar mocks (los `QueryClient` de test usan `retry: false`). Probado con la app real (Playwright); el movimiento de un vencido no se confirmó a mano.
-- **Pendientes conocidos:** el aviso de 6 s puede pasar desapercibido si falla el PUT; sin destino calculable (sin «Mañana» y sin fecha elegida) la ayuda de la casilla queda vacía; «Posponer» no se ofrece en tareas sin fecha (`puedePosponer`).
+
+## Calendario mensual (9a; commit `26c36bd`)
+Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns (decidido: sin librería; a igual usabilidad, lo más estético). Ruta `/calendario`, todo en `features/calendario/`.
+- **Datos:** eventos con `useEventosEnRango` (`['eventos','rango',desde,hasta]`, rango de la cuadrícula visible con `rangoDeFechas`, `keepPreviousData`: al cambiar de mes se conservan los eventos de los días compartidos y «Cargando…» sale de `isFetching`); tareas de `['tareas','todas']` filtradas por fecha en el cliente (CANCELADO oculto, HECHO atenuado). Cada fuente falla por separado. 9b reusa `useEventosEnRango` con el rango de la semana; 9c invalida `['eventos']`.
+- **Lógica pura (`calendario.ts`):** `elementosPorDia` (un tramo por cada día que toca un evento: `tramoDelEventoEnDia` de `lib/fechas.ts`), orden (con hora por minuto de inicio y el evento antes que la tarea; sin hora por prioridad e id), `recortarParaCelda` (3 líneas; con más, 2 + «+N más»), `textoHora` («desde 22:00», «hasta 06:00», «Todo el día», «22:00–00:00», nunca «24:00»), `etiquetaDia`, `estadoDesdeUrl`, `diaDestino` (teclado). En `lib/fechas.ts`: `semanasDelMes` (lunes a domingo), `limitesDeSemana`, `sumarMeses`, `moverMesConservandoDia`, `parsearMes`, `esFechaValida`.
+- **URL:** `?mes=YYYY-MM&dia=YYYY-MM-DD`, derivados en el render (inválido = valor por defecto, sin reescribir la URL). Lo que cambia el mes hace push (‹ › Hoy, y el teclado que sale de la cuadrícula); cambiar solo el día dentro de la cuadrícula hace replace.
+- **Clic en un día:** lo selecciona y el panel «Detalle del día» (solo lectura: hora, estado, prioridad, «Atrasada») muestra todo lo suyo. No navega a Hoy porque `HoyPage` no admite otra fecha.
+- **Accesibilidad:** `role="grid"` con roving tabindex; cada día es un botón con `aria-label` («martes 10 de noviembre, hoy, 2 eventos, 3 tareas»); flechas ±1 / ±7, Inicio/Fin, RePág/AvPág. El panel es un `aside` con nombre y su título no es región viva.
+- **Aspecto:** una sola tarjeta, números en Fraunces, hoy en círculo `acc`, seleccionado con anillo; evento = rectángulo, tarea = píldora con el círculo de estado.
+- **Responsive (container queries sobre la cuadrícula, medido con Playwright):** < 640 px marcas sin texto; 640–980 chips solo con título; ≥ 980 chips con hora. Un evento de varios días lleva flecha + título (su hora va en el `title` y en el panel). El panel va al lado solo con ≥ 1224 px de contenido (~1560 px de ventana); debajo ocupa todo el ancho, en dos columnas con ≥ 600 px. Felipe usa ventanas de ≤ 1280 px: cuadrícula de 945 px y chips de solo título.
+- **Capas:** `calendario/` importa de `agenda/` (`horario`, `useAhora`, `useTodasLasTareas`, `EstadoIcono`); ningún archivo de `agenda/`, `jerarquia/`, `cofre/` ni `ideas/` importa de `calendario/`. Solo `useEventosEnRango` toca `@/api`.
+- **Fuera de alcance:** vista semanal (9b), crear/editar/borrar eventos (9c), recordatorios de evento (9d), vista anual, barras continuas para eventos largos.
+- **Pendientes:** a Pulido 2 (abajo).
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -214,7 +219,7 @@ Solo frontend, sin dependencias nuevas ni backend.
 - 8.4a Páginas de Proyectos y Objetivos (listado en árbol, detalle, crear/editar/borrar, cambio de estado): hecha (commit `a388d07`).
 - 8.4a2 Vincular proyectos a un objetivo desde su detalle (agregar, quitar, cambiar el objetivo desde el proyecto): hecha (commit `0655bf0`).
 - 5e (backend) Borrar proyectos y objetivos eligiendo qué hacer con cada categoría: `DELETE /api/proyectos/{id}?subproyectos=&tareas=&ideas=` y `DELETE /api/objetivos/{id}?subobjetivos=&proyectos=&tareas=&ideas=` con `borrar|conservar`, mensajes 409 con el nombre: hecha (commit `f17aa98`; semántica en el brief).
-- 5f (backend) Vista previa del impacto del borrado: hecha (commit `43ecec5`). `GET /api/proyectos/{id}/impacto-borrado?subproyectos=&tareas=&ideas=` y `GET /api/objetivos/{id}/impacto-borrado?subobjetivos=&proyectos=&tareas=&ideas=` (solo lectura; ausente = conservar, nunca 409). Respuesta por categoría `{total, borrados}` (`proyectos` de un objetivo suma `rescatados`); `borrados` puede superar a `total` por lo arrastrado (subtareas, subproyectos). Contrato completo en el brief.
+- 5f (backend) Vista previa del impacto del borrado: hecha (commit `43ecec5`). `GET …/impacto-borrado` de proyectos y objetivos, solo lectura, ausente = conservar; contrato en el brief.
 - 8.4a3 Diálogo de borrado con un interruptor «Mover / Borrar» por categoría (solo las que tienen `total > 0`, resumen en vivo con los `borrados` de 5f): hecha (commit `9fd2703`).
 - 8.4b Asignar y quitar el proyecto u objetivo de una tarea (diálogo desde el menú y la edición; «Quitar» y «Vincular una existente» en el detalle): hecha (commit `0417230`). 635 tests de frontend.
 - 8.4c Página de Ideas (crear, editar, concluir, reabrir, borrar; filtros de estado, vínculo y búsqueda): hecha (commit `3548350`). 735 tests de frontend.
@@ -222,7 +227,8 @@ Solo frontend, sin dependencias nuevas ni backend.
 - 8.5a Aviso de recordatorios vencidos (banner persistente en el Layout; polling de `/vencidos` cada 30 s; «Entendido» marca como enviado): hecha (commit `76719fd`). 782 tests de frontend.
 - 8.5b Crear, editar y borrar recordatorios (diálogo propio desde la tarea; sueltos desde Hoy con «Nuevo recordatorio» y «Editar» por fila): hecha (commit `2780858`). 824 tests de frontend. El aviso al cerrar una tarea con recordatorio pendiente ya se hizo en 8.2b.
 - 8.5c Mover el recordatorio al posponer (casilla en `PosponerDialog`): hecha (commit `e7aa911`). 857 tests de frontend.
-- 9 Calendario (librería a decidir entonces): ← próxima.
+- 9a Calendario mensual en lectura (grilla propia; eventos y tareas con fecha; detalle del día; URL `?mes=&dia=`): hecha (commit `26c36bd`). 980 tests de frontend.
+- 9b Vista semanal en lectura: ← próxima. 9c CRUD de eventos. 9d Recordatorios de evento (el backend ya los soporta con `eventoId`; la interfaz es la de 8.5b).
 - 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
 - Pulido 2 al final.
 
@@ -257,7 +263,6 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 
 ## Pendiente de decidir (de Felipe)
 - Tarjeta de objetivos con porcentaje de progreso: el backend no lo calcula (requeriría endpoint nuevo). Para la v1: lista de objetivos con estado y prioridad.
-- Librería del calendario (rebanada 9).
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
 - Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
 - Selector de hora del formulario: hoy es el input nativo y se ve feo; mejorarlo.
@@ -273,3 +278,4 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Aviso de vencidos (8.5a): bajo un diálogo abierto el banner queda con `aria-hidden` y un lector de pantalla no lo anunciaría; el test del 404 de «Entendido» no comprueba el mensaje.
   - Recordatorios (8.5b): renombrar el criterio de «tarea abierta» que hoy se llama `puedeAgregarSubtarea`; indicar en el diálogo de tarea que el recordatorio ya fue enviado; tras un 404 al editar una fila ofrecer una salida clara; los avisos del diálogo de recordatorio tampoco llegan a lectores de pantalla.
   - Posponer con recordatorio (8.5c): aviso persistente ante el fallo parcial (el de 6 s puede pasar desapercibido); ayuda vacía de la casilla si no hay destino calculable.
+  - Calendario (9a): con el panel debajo (ventanas de menos de ~1560 px) el detalle del día queda bajo el pliegue (posible scroll suave hasta el panel, solo con clic); subir la base de la cuadrícula de 900 a 980 px si se usa una pantalla grande (así conserva la hora en los chips al pasar a «panel al lado»); «Hoy» pulsado varias veces podría apilar entradas de historial (sin verificar).

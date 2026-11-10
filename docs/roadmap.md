@@ -23,4 +23,8 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
      - `RecordatorioService → TareaService, EventoService` (solo `validarExiste`, 400 si no existen); tarea y evento **no** conocen a recordatorio, sin ciclo de beans.
      - Limitación conocida: el módulo no mira el estado de la tarea; la resuelve el frontend (ver `modelo-datos.md`).
 8. **Frontend React**: agenda del día primero, luego el resto.
-9. **Calendario**: vistas mensual y semanal (librería, no a mano).
+9. **Calendario**, en cuatro partes (grilla propia con date-fns, sin librería; las tareas con fecha también se ven, diferenciadas de los eventos):
+   - **9a Vista mensual en lectura** (hecha, `26c36bd`): `/calendario` con cuadrícula lunes a domingo, panel con el detalle del día y estado en la URL (`?mes=&dia=`).
+   - **9b Vista semanal en lectura.**
+   - **9c CRUD de eventos** (crear, editar y borrar).
+   - **9d Recordatorios de evento** (el backend ya los soporta con `eventoId`).
