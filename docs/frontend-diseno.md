@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanada 8)
 
-> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 8.5a; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 8.5b; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -75,7 +75,7 @@ Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fe
 - Siempre se manda la fecha explícita; no se depende del "+1" por defecto del backend.
 - Solo para tareas abiertas con fecha (`puedePosponer`). Las cerradas dan 409; las sin fecha se agendan desde la recomendación o el cofre.
 - Si falla, el diálogo queda abierto con el error; mientras hay una mutación no se puede cerrar.
-- **Pendientes conocidos:** el recordatorio pendiente no se mueve con la tarea (se resuelve en 8.5b); el error de posponer también se ve en el cartel de la lista; cancelar el selector no limpia el error.
+- **Pendientes conocidos:** el recordatorio pendiente no se mueve con la tarea (se resuelve en 8.5c); el error de posponer también se ve en el cartel de la lista; cancelar el selector no limpia el error.
 
 ## Recomendación (8.3 hecha; commit `f2d0052`)
 - Botón secundario "Recomendación" en el encabezado de Hoy; abre un diálogo (Dialog de shadcn) con tareas abiertas sin fecha o atrasadas.
@@ -169,18 +169,33 @@ Solo frontend, sin dependencias nuevas ni cambios de backend. Contrato (sin camb
 - **Banner (`AvisoVencidos`):** región `role="status"` `aria-live="polite"` siempre en el DOM aunque esté vacía (una región que aparece junto con su contenido no se anuncia); es la segunda región `status` de cada página (la otra es la del `Aviso`). Una fila por recordatorio (`FilaVencido`): texto (`useTituloRecordatorio`: descripción o, si no hay, el título de la tarea/evento), «Para el <fecha y hora corta>» y botón «Entendido» (`aria-label="Entendido: <texto>"`). Máximo 5 filas (`MAX_VENCIDOS_VISIBLES`) y «+N más pendientes»; al descartar entran las siguientes. Orden del servidor. La lógica pura (`partirVencidos`, las constantes) está en `vencidos.ts`.
 - **«Entendido» (`useMarcarEnviado`):** una mutación a la vez con guard `useRef` liberado en `onSettled` (como `useVincularTarea`). Éxito: `await invalidateQueries(['recordatorios'])`, así el guard sigue tomado hasta que la fila ya no está. Error: el mensaje del servidor queda bajo esa fila y el botón vuelve a estar activo; con 404 se refresca la lista y la fila se va (el mensaje apenas llega a verse). Todos los «Entendido» se deshabilitan mientras hay una llamada.
 - **Tareas cerradas:** un vencido de una tarea hecha o cancelada por otro camino se muestra igual (limitación documentada en `modelo-datos.md`); no se consulta el estado de la tarea.
-- **API:** `getRecordatoriosVencidos(ahora)` y `marcarRecordatorioEnviado(id)` en `api/recordatorios.ts`. `types/recordatorio.ts` no cambió (sigue sin `canal`: se agrega en 8.5b).
-- **Ubicación y capas:** `features/agenda/` (`vencidos.ts`, `useRecordatoriosVencidos.ts`, `AvisoVencidos.tsx`), junto a los demás hooks de recordatorios; `app/Layout.tsx` importa de `features/agenda/`, como `App.tsx` con `HoyPage`. Ningún archivo de `agenda/` importa de `app/`. Deliberado: en 8.5b `agenda/` importará el diálogo de recordatorio, así que lo nuevo de recordatorios no debe vivir en una carpeta que importe de `agenda/` (ciclo).
+- **API:** `getRecordatoriosVencidos(ahora)` y `marcarRecordatorioEnviado(id)` en `api/recordatorios.ts`. `types/recordatorio.ts` no cambió en 8.5a (`canal` se agregó en 8.5b).
+- **Ubicación y capas:** `features/agenda/` (`vencidos.ts`, `useRecordatoriosVencidos.ts`, `AvisoVencidos.tsx`), junto a los demás hooks de recordatorios; `app/Layout.tsx` importa de `features/agenda/`, como `App.tsx` con `HoyPage`. Ningún archivo de `agenda/` importa de `app/`. Deliberado: en 8.5b `agenda/` importa el diálogo de recordatorio, así que lo nuevo de recordatorios no debe vivir en una carpeta que importe de `agenda/` (ciclo).
 - **Tests:** 782 de frontend (764 + 18 nuevos: 2 de `api/recordatorios`, 3 de `vencidos.ts`, 12 del banner —con el polling bajo timers falsos— y 1 de `App.test` que lo ve en `/ideas`).
 - **Pendientes conocidos:** bajo un diálogo abierto el banner queda con `aria-hidden` (Radix) y un lector de pantalla no lo anunciaría (a Pulido 2, como los avisos de 8.4b y 8.4c); el test del 404 no comprueba el mensaje.
 
-## Recordatorios: crear, editar y mover (8.5b; decidido el 10/11, pendiente)
-Decisiones de Felipe antes de planificar:
-- **Diálogo propio «Recordatorio de «X»»**, abierto desde el menú de acciones de la tarea y desde un botón del diálogo de edición (encima de la edición, como `VincularTareaDialog`): crear, cambiar o quitar con llamadas inmediatas. Máximo uno por tarea: se consulta `getRecordatoriosDeTarea` antes y se ofrece editar en vez de crear (así no se llega al 409, que queda de respaldo). Hora con `input type="datetime-local"` nativo, convertida con `aIsoConDesfase`.
-- **Recordatorio suelto** (exige descripción): botón «Nuevo recordatorio» en la tarjeta «Próximos recordatorios» de Hoy, que también permite editar o borrar cada fila.
-- **Recordatorios de evento:** esperan a la rebanada 9 (todavía no hay formulario de eventos).
-- **PUT reemplaza todo** (`tareaId`, `eventoId`, `fechaHora`, `canal`, `descripcion`): hay que agregar `canal` a `types/recordatorio.ts`. Si cambia el instante de `fechaHora`, `enviado` vuelve a false.
-- **Posponer:** si la tarea tiene un recordatorio sin enviar, `PosponerDialog` pregunta «¿Mover también el recordatorio?»; si se acepta, el recordatorio se corre los mismos días que la tarea conservando la hora (PUT con la `fechaHora` nueva, que lo deja `enviado=false`). «Dejar sin fecha» no mueve nada y lo avisa.
+## Recordatorios: crear, editar y borrar (8.5b; commit `2780858`)
+Solo frontend, sin dependencias nuevas ni cambios de backend. Contrato (sin cambios): `POST /api/recordatorios` y `PUT /api/recordatorios/{id}` (reemplazo completo: `tareaId`, `eventoId`, `fechaHora`, `canal`, `descripcion`), solo canal APP, máximo uno por tarea (409), suelto con descripción obligatoria, 404 si ya no existe. Si cambia el instante de `fechaHora`, `enviado` vuelve a false.
+- **Un solo diálogo (`RecordatorioDialog`)** con la prop `destino`: `{tipo:'tarea', tarea}` («Recordatorio de «X»»), `{tipo:'suelto'}` («Nuevo recordatorio») y `{tipo:'existente', recordatorio}` («Editar recordatorio»). Un solo diálogo (no dos): comparten formulario, hook y textos. Se monta solo mientras está abierto y no se cierra con una mutación en curso. Estado local, sin react-hook-form (son dos campos).
+- **Modo tarea:** se consulta el recordatorio de la tarea (`useRecordatorioDeTarea`, clave `['recordatorios',{tareaId}]`, la misma de 8.2b; `staleTime` 0 y `refetchOnMount: 'always'`; `cargando` incluye los refrescos). Mientras carga o si falla («No se pudo consultar el recordatorio de esta tarea» + «Reintentar») los campos y botones quedan deshabilitados: nunca se escribe a ciegas. Sin recordatorio: «Crear recordatorio»; con uno: «Guardar cambios» y «Quitar recordatorio» (inmediato, sin confirmar, como pidió Felipe). Cada acción es una llamada inmediata y el diálogo queda abierto (se cierra con «Listo»); el formulario se reinicia con `key` según el id del recordatorio, así que tras un 409 al crear (el refresco trae el existente) pasa a editar solo, y tras un 404 vuelve a crear. Puede abrirse encima del diálogo de edición de la tarea.
+- **Modo suelto y existente:** se cierra al guardar o borrar. Borrar desde una fila pide confirmación dentro del mismo diálogo («Conservar» / «Borrar recordatorio»). La descripción es obligatoria (se recorta; vacía = error local sin llamada) solo si no hay `tareaId` ni `eventoId`; el PUT conserva `tareaId`, `eventoId` y `canal` tal cual. No se puso `maxLength` (el backend no define límite).
+- **Valores por defecto (`recordatorioForm.ts`):** tarea con `horaInicio` → esa fecha y hora; solo fecha → ese día a las 09:00 (`HORA_POR_DEFECTO`); sin fecha, y todo suelto → mañana a las 09:00. Si el instante elegido ya pasó, nota «Esa hora ya pasó: el aviso saldrá enseguida.» sin bloquear (el banner de 8.5a lo mostrará). Descripción opcional en tareas (se envía `""`).
+- **Fechas (`lib/fechas.ts`):** `aValorDatetimeLocal` (ISO con desfase → `yyyy-MM-dd'T'HH:mm` en hora local), `deValorDatetimeLocal` (→ `aIsoConDesfase`, o `null` si el campo está vacío o es inválido: nunca se manda un `Invalid Date`) y los mensajes `mensajeRecordatorioCreado/Guardado/Quitado`.
+- **Mutaciones (`useAccionesRecordatorio`):** una sola mutación con acción `crear|actualizar|borrar`; guard `useRef` liberado en `onSettled`; el éxito hace `await invalidateQueries(['recordatorios'])` (refresca banner, Próximos y la consulta por tarea); 404 y 409 refrescan y dejan el mensaje del servidor en `error`. `resultado` alimenta la región `role="status"` propia del diálogo (en modo fila va `sr-only`), además del aviso de la página.
+- **Dónde se abre:** ítem «Recordatorio…» en `MenuAcciones` y botón en `AccionesDeLaTarea` de `TareaDialog`, solo en tareas **abiertas** (reusa `puedeAgregarSubtarea`). `useAccionesTarea` expone `pedirRecordatorio` y `recordatorioTarea` (mismo patrón que `vinculo`) y `DialogosAcciones` lo monta. En la tarjeta «Próximos recordatorios» (`ColumnaLateral`): botón «Nuevo recordatorio» debajo de la lista (también con la tarjeta vacía) y «Editar» por fila.
+- **API y tipos:** `crearRecordatorio` y `actualizarRecordatorio` en `api/recordatorios.ts`; `types/recordatorio.ts` agrega `Canal` (`'APP' | 'CORREO'`), `canal` a `Recordatorio` y `RecordatorioRequest`. La interfaz solo manda `'APP'` (editar uno con CORREO daría 400, visible).
+- **Capas:** todo en `features/agenda/`; ningún archivo nuevo o modificado importa de `app/`, `jerarquia/` ni `ideas/` (el import de `jerarquia/` en `DialogosAcciones` ya existía).
+- **Tests:** 824 de frontend en 68 archivos (782 + 42): api, `lib/fechas` (con `vi.stubEnv('TZ','Asia/Kolkata')`), `recordatorioForm`, `RecordatorioDialog` (tres modos, doble clic, 409, 404, 500, consulta fallida sin escrituras), `HoyPage.recordatorio` y `CofrePage.recordatorio`. No hizo falta ampliar mocks parciales. Pruebas manuales contra la API real; lo visual lo cubren los tests.
+- **Pendientes conocidos:** el diálogo de tarea no avisa de que el recordatorio ya fue enviado (al cambiar la hora vuelve a `enviado=false`); la tarjeta «Próximos» solo muestra los 3 siguientes sin enviar, así que un vencido o el cuarto no se edita desde ahí (el de una tarea siempre se alcanza desde su menú); tras un 404 al editar una fila el diálogo solo ofrece «Cancelar»; `puedeAgregarSubtarea` como criterio de «abierta» tiene un nombre engañoso (a Pulido 2); el aviso de la página bajo un diálogo no llega a lectores de pantalla (como en 8.4b).
+
+## Mover el recordatorio al posponer (8.5c; decidido, pendiente)
+Solo frontend. Decisiones de Felipe del 10/11 más los ajustes de la revisión del plan de 8.5b:
+- **`PosponerDialog`** consulta el recordatorio de la tarea (`useRecordatorioDeTarea`, solo con el selector abierto). «Hay algo que mover» = existe y `enviado=false`; si ya fue enviado no hay pregunta.
+- **Casilla «Mover también el recordatorio…»**, marcada por defecto, para «Mañana» y «Elegir fecha» (muestra la fecha actual y la nueva). «Dejar sin fecha» no mueve nada y lo dice (texto de ayuda y aviso). Sin casilla si la tarea no tiene fecha (no hay base para calcular los días).
+- **Cómputo:** `diasEntre(fechaVieja, fechaNueva)` (días de calendario) y `moverInstanteDias(iso, dias)` con `addDays` sobre un `Date` local, que conserva la hora de pared aunque cambie el horario.
+- **Orden y fallo parcial:** primero el PATCH de posponer, luego el PUT con los cinco campos (`canal` y `descripcion` originales). Si el PUT falla, la tarea ya cambió: el diálogo se cierra, se invalida `['recordatorios']` y el aviso dice que se pospuso pero no se pudo mover el recordatorio (`mensajeRecordatorioNoMovido`). `acciones.ejecutar('posponer', tarea, fecha, mover?)` recibe el recordatorio como cuarto parámetro opcional.
+- **Estados de carga:** mientras la consulta carga, los botones de posponer quedan deshabilitados; si falla, se puede posponer sin mover y una nota lo dice.
+- **Tests y mocks:** los mocks parciales de `@/api/recordatorios` (`HoyPage.test`, `HoyPage.vinculo.test`, `AccionesTarea.test`, `BorrarConSubtareas.test`, `App.test`, `AvisoVencidos.test`) deben agregar `getRecordatoriosDeTarea: vi.fn().mockResolvedValue([])`; revisar antes la config de reintentos del `QueryClient` de los tests.
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -206,7 +221,8 @@ Decisiones de Felipe antes de planificar:
 - 8.4c Página de Ideas (crear, editar, concluir, reabrir, borrar; filtros de estado, vínculo y búsqueda): hecha (commit `3548350`). 735 tests de frontend.
 - 8.4d Ideas ligadas en el detalle de proyectos y objetivos (solo lectura más enlace a `/ideas` con el filtro puesto): hecha (commit `8c447ca`). 764 tests de frontend.
 - 8.5a Aviso de recordatorios vencidos (banner persistente en el Layout; polling de `/vencidos` cada 30 s; «Entendido» marca como enviado): hecha (commit `76719fd`). 782 tests de frontend.
-- 8.5b Crear, editar y borrar recordatorios (diálogo propio desde la tarea; sueltos desde Hoy) y moverlos al posponer: ← próxima. El aviso al cerrar una tarea con recordatorio pendiente ya se hizo en 8.2b.
+- 8.5b Crear, editar y borrar recordatorios (diálogo propio desde la tarea; sueltos desde Hoy con «Nuevo recordatorio» y «Editar» por fila): hecha (commit `2780858`). 824 tests de frontend. El aviso al cerrar una tarea con recordatorio pendiente ya se hizo en 8.2b.
+- 8.5c Mover el recordatorio al posponer (casilla en `PosponerDialog`): ← próxima.
 - 9 Calendario (librería a decidir entonces).
 - 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
 - Pulido 2 al final.
@@ -246,7 +262,7 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
 - Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
 - Selector de hora del formulario: hoy es el input nativo y se ve feo; mejorarlo.
-- Al posponer una tarea, su recordatorio pendiente no se mueve con ella (queda en la fecha original). Se resuelve en 8.5b.
+- Al posponer una tarea, su recordatorio pendiente no se mueve con ella (queda en la fecha original). Se resuelve en 8.5c.
 - Recomendación: el aviso de la página puede aparecer dentro del diálogo aunque venga de otra acción; el error de agendar persiste hasta el siguiente intento.
 - Cofre: filtro de vínculo con búsqueda por nombre si la lista de proyectos crece.
 - **Pulido 2 (acumulado, además de lo anterior):**
@@ -257,3 +273,4 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Vincular tareas (8.4b): los avisos del diálogo no llegan a lectores de pantalla (la región `status` de la página queda `aria-hidden` bajo el diálogo); unificar la consulta directa de `['proyectos']`/`['objetivos']` (hoy en `VincularTareaDialog`, `TareasLigadas` y `useListaJerarquia`); opcional: mostrar el proyecto/objetivo en las filas de Hoy.
   - Ideas (8.4c): quitar `todosComoCandidatos` (código muerto) o usarlo; el error de «Reabrir» persiste hasta el siguiente intento; mover `test/renderIdeas.tsx` junto a la página; los avisos de los diálogos de ideas tampoco llegan a lectores de pantalla.
   - Aviso de vencidos (8.5a): bajo un diálogo abierto el banner queda con `aria-hidden` y un lector de pantalla no lo anunciaría; el test del 404 de «Entendido» no comprueba el mensaje.
+  - Recordatorios (8.5b): renombrar el criterio de «tarea abierta» que hoy se llama `puedeAgregarSubtarea`; indicar en el diálogo de tarea que el recordatorio ya fue enviado; tras un 404 al editar una fila ofrecer una salida clara; los avisos del diálogo de recordatorio tampoco llegan a lectores de pantalla.
