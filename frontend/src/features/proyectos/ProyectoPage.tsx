@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 
+import { IdeasLigadas } from '@/features/ideas/IdeasLigadas'
 import { CONFIG_OBJETIVO, CONFIG_PROYECTO } from '@/features/jerarquia/config'
 import { PaginaDetalle } from '@/features/jerarquia/PaginaDetalle'
 import { SelectorObjetivo } from '@/features/jerarquia/SelectorObjetivo'
@@ -28,15 +29,18 @@ export function ProyectoPage() {
         </>
       )}
       secciones={(p, contexto) => (
-        <TareasLigadas
-          campo="proyectoId"
-          id={p.id}
-          titulo="Tareas ligadas"
-          textoVacio="Este proyecto no tiene tareas ligadas."
-          nombre={p.nombre}
-          abierto={esAbierto(p.estado)}
-          alMensaje={contexto.alMensaje}
-        />
+        <>
+          <TareasLigadas
+            campo="proyectoId"
+            id={p.id}
+            titulo="Tareas ligadas"
+            textoVacio="Este proyecto no tiene tareas ligadas."
+            nombre={p.nombre}
+            abierto={esAbierto(p.estado)}
+            alMensaje={contexto.alMensaje}
+          />
+          <IdeasLigadas campo="proyectoId" id={p.id} />
+        </>
       )}
     />
   )

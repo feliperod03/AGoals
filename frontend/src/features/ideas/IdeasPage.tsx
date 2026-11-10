@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { Aviso } from '@/components/Aviso'
 import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
@@ -8,7 +9,7 @@ import { useMensajeTemporal } from '@/features/agenda/useMensajeTemporal'
 import { CONFIG_OBJETIVO, CONFIG_PROYECTO } from '@/features/jerarquia/config'
 import { useListaJerarquia } from '@/features/jerarquia/useListaJerarquia'
 import { DialogosIdeas } from './DialogosIdeas'
-import { FILTROS_POR_DEFECTO, filtrarIdeas, ordenarIdeas, textoVacioIdeas, type FiltrosIdeas as Filtros } from './filtros'
+import { filtrarIdeas, filtrosDesdeQuery, ordenarIdeas, textoVacioIdeas, type FiltrosIdeas as Filtros } from './filtros'
 import { FiltrosIdeas } from './FiltrosIdeas'
 import { ListaIdeas } from './ListaIdeas'
 import { useAccionesIdeas } from './useAccionesIdeas'
@@ -20,7 +21,9 @@ export function IdeasPage() {
   // Las mismas consultas del Cofre y de Proyectos/Objetivos (comparten caché): nombres del vínculo y candidatos.
   const proyectos = useListaJerarquia(CONFIG_PROYECTO)
   const objetivos = useListaJerarquia(CONFIG_OBJETIVO)
-  const [filtros, setFiltros] = useState<Filtros>(FILTROS_POR_DEFECTO)
+  // El enlace «Ver todas» de los detalles llega con `?proyecto=N` / `?objetivo=N`: solo se lee al montar.
+  const [params] = useSearchParams()
+  const [filtros, setFiltros] = useState<Filtros>(() => filtrosDesdeQuery(params))
   const confirmacion = useMensajeTemporal()
   const acciones = useAccionesIdeas({ alMensaje: confirmacion.mostrar })
 

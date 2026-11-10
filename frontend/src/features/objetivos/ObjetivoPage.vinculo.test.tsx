@@ -29,6 +29,8 @@ vi.mock('@/api/objetivos', () => ({
   quitarTarea: vi.fn(),
 }))
 vi.mock('@/api/tareas', () => ({ getTareas: vi.fn() }))
+// La sección «Ideas ligadas» pide la lista de ideas; aquí no importa su contenido (se prueba en *.ideas.test.tsx).
+vi.mock('@/api/ideas', () => ({ getIdeas: vi.fn(async () => []) }))
 import { asignarTarea, getObjetivos, quitarTarea } from '@/api/objetivos'
 import { asignarTarea as asignarProyecto, getProyectos, quitarTarea as quitarProyecto } from '@/api/proyectos'
 import { getTareas } from '@/api/tareas'

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 
 import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
 import { Button } from '@/components/ui/button'
+import { IdeasLigadas } from '@/features/ideas/IdeasLigadas'
 import { CONFIG_OBJETIVO, CONFIG_PROYECTO } from '@/features/jerarquia/config'
 import { ItemDialog } from '@/features/jerarquia/ItemDialog'
 import { ListaEnlaces } from '@/features/jerarquia/ListaEnlaces'
@@ -37,6 +38,7 @@ export function ObjetivoPage() {
             abierto={esAbierto(o.estado)}
             alMensaje={contexto.alMensaje}
           />
+          <IdeasLigadas campo="objetivoId" id={o.id} />
         </>
       )}
     />

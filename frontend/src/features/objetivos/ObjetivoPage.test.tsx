@@ -14,6 +14,8 @@ import { ObjetivosPage } from './ObjetivosPage'
 vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
 vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
 vi.mock('@/api/tareas', () => ({ getTareas: vi.fn() }))
+// La sección «Ideas ligadas» pide la lista de ideas; aquí no importa su contenido (se prueba en *.ideas.test.tsx).
+vi.mock('@/api/ideas', () => ({ getIdeas: vi.fn(async () => []) }))
 import { actualizarObjetivo, borrarObjetivo, getImpactoBorradoObjetivo, getObjetivos } from '@/api/objetivos'
 import { getProyectos } from '@/api/proyectos'
 import { getTareas } from '@/api/tareas'

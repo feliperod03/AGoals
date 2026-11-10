@@ -103,3 +103,40 @@ describe('IdeasPage: filtro de vínculo', () => {
     expect(screen.getByText('Cargando…')).toBeInTheDocument()
   })
 })
+
+describe('IdeasPage: filtro desde la URL (enlace «Ver todas» de los detalles)', () => {
+  async function abrir(ruta: string) {
+    renderizarIdeas(ruta)
+    // El contador «N ideas» aparece cuando la lista ya cargó.
+    await screen.findByText(/^\d+ ideas?$/)
+  }
+
+  it('/ideas?proyecto=5 abre con ese proyecto y todas las ideas (planteadas y concluidas)', async () => {
+    vi.mocked(getIdeas).mockResolvedValue([
+      idea({ id: 1, titulo: 'Suelta uno' }),
+      idea({ id: 2, titulo: 'De la casa', proyectoId: 5 }),
+      idea({ id: 3, titulo: 'Casa concluida', proyectoId: 5, estado: 'CONCLUIDA', fechaCierre: '2026-11-05T10:00:00-03:00' }),
+      idea({ id: 4, titulo: 'Del viejo', proyectoId: 6 }),
+    ])
+    await abrir('/ideas?proyecto=5')
+    await screen.findByText('Casa concluida')
+    expect(titulos()).toEqual(['Casa concluida', 'De la casa'])
+    expect(screen.getByLabelText('Estado')).toHaveValue('todas')
+    expect(screen.getByLabelText('Vínculo')).toHaveValue('proyecto')
+    expect(await screen.findByLabelText('Proyecto')).toHaveValue('5')
+  })
+
+  it('/ideas?objetivo=8 abre con ese objetivo', async () => {
+    await abrir('/ideas?objetivo=8')
+    await screen.findByText('De salud')
+    expect(titulos()).toEqual(['De salud'])
+    expect(screen.getByLabelText('Vínculo')).toHaveValue('objetivo')
+  })
+
+  it('con un parámetro inválido o con proyecto y objetivo a la vez abre la vista por defecto', async () => {
+    await abrir('/ideas?proyecto=5&objetivo=8')
+    expect(screen.getByLabelText('Estado')).toHaveValue('planteadas')
+    expect(screen.getByLabelText('Vínculo')).toHaveValue('todas')
+    expect(titulos()).toHaveLength(4)
+  })
+})

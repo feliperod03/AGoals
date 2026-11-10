@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { proyecto } from '@/features/jerarquia/fabrica'
 import { idea } from './fabrica'
-import { FILTROS_POR_DEFECTO, filtrarIdeas, hayFiltrosActivos, ordenarIdeas, textoVacioIdeas, todosComoCandidatos, type FiltrosIdeas } from './filtros'
+import { FILTROS_POR_DEFECTO, filtrarIdeas, filtrosDesdeQuery, hayFiltrosActivos, ordenarIdeas, textoVacioIdeas, todosComoCandidatos, type FiltrosIdeas } from './filtros'
 
 const f = (parcial: Partial<FiltrosIdeas>): FiltrosIdeas => ({ ...FILTROS_POR_DEFECTO, ...parcial })
 
@@ -132,5 +132,25 @@ describe('todosComoCandidatos', () => {
       ['Alfa', 'Hecho'],
       ['Zeta', 'Pendiente'],
     ])
+  })
+})
+
+describe('filtrosDesdeQuery', () => {
+  const q = (s: string) => filtrosDesdeQuery(new URLSearchParams(s))
+
+  it('proyecto: ese vínculo y estado «Todas»', () => {
+    expect(q('proyecto=5')).toEqual({ estado: 'todas', vinculo: { tipo: 'proyecto', id: 5 }, busqueda: '' })
+  })
+  it('objetivo: ese vínculo y estado «Todas»', () => {
+    expect(q('objetivo=8')).toEqual({ estado: 'todas', vinculo: { tipo: 'objetivo', id: 8 }, busqueda: '' })
+  })
+  it('sin parámetros: la vista por defecto', () => {
+    expect(q('')).toEqual(FILTROS_POR_DEFECTO)
+  })
+  it('proyecto y objetivo a la vez: la vista por defecto', () => {
+    expect(q('proyecto=5&objetivo=8')).toEqual(FILTROS_POR_DEFECTO)
+  })
+  it('id no numérico, vacío o negativo: la vista por defecto', () => {
+    for (const s of ['proyecto=abc', 'proyecto=', 'objetivo=-1', 'objetivo=2x', 'proyecto=1.5']) expect(q(s)).toEqual(FILTROS_POR_DEFECTO)
   })
 })

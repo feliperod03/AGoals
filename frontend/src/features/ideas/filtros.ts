@@ -24,6 +24,23 @@ export function hayFiltrosActivos(filtros: FiltrosIdeas): boolean {
   return JSON.stringify(filtros) !== JSON.stringify(FILTROS_POR_DEFECTO)
 }
 
+const ENTERO = /^\d+$/
+
+/**
+ * Filtros iniciales de `/ideas?proyecto=N` u `/ideas?objetivo=N` (enlace «Ver todas» del detalle): ese vínculo y
+ * estado «Todas», porque el detalle muestra planteadas y concluidas. Sin parámetro, con un id no numérico o con
+ * proyecto y objetivo a la vez (una idea no puede tener los dos), la vista por defecto.
+ */
+export function filtrosDesdeQuery(params: URLSearchParams): FiltrosIdeas {
+  const proyecto = params.get('proyecto')
+  const objetivo = params.get('objetivo')
+  if ((proyecto !== null) === (objetivo !== null)) return FILTROS_POR_DEFECTO
+  const tipo = proyecto !== null ? 'proyecto' : 'objetivo'
+  const valor = proyecto ?? objetivo ?? ''
+  if (!ENTERO.test(valor)) return FILTROS_POR_DEFECTO
+  return { ...FILTROS_POR_DEFECTO, estado: 'todas', vinculo: { tipo, id: Number(valor) } }
+}
+
 function cumpleVinculo(idea: Idea, v: FiltroVinculoIdea): boolean {
   switch (v.tipo) {
     case 'todas':
