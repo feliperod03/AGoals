@@ -366,3 +366,38 @@ export function nombresDiasSemana(): { corto: string; largo: string }[] {
     return { corto: format(dia, 'EEE', { locale: es }), largo: format(dia, 'EEEE', { locale: es }) }
   })
 }
+
+// --- Calendario semanal (rebanada 9b) ---
+
+/** Las 7 fechas (lunes a domingo) de la semana que contiene `fecha`. */
+export function diasDeLaSemana(fecha: string): string[] {
+  const { lunes, domingo } = limitesDeSemana(fecha)
+  return eachDayOfInterval({ start: parseISO(lunes), end: parseISO(domingo) }).map(aFechaLocal)
+}
+
+/**
+ * Título de la semana que empieza el lunes `lunes`: `9–15 de noviembre de 2026`; si cruza el mes,
+ * `30 de noviembre – 6 de diciembre de 2026`; si cruza el año, `28 de diciembre de 2026 – 3 de enero de 2027`.
+ */
+export function formatearRangoSemana(lunes: string): string {
+  const inicio = parseISO(lunes)
+  const fin = addDays(inicio, 6)
+  const conLocale = (fecha: Date, patron: string) => format(fecha, patron, { locale: es })
+  if (inicio.getFullYear() !== fin.getFullYear()) {
+    return `${conLocale(inicio, "d 'de' MMMM 'de' yyyy")} – ${conLocale(fin, "d 'de' MMMM 'de' yyyy")}`
+  }
+  if (inicio.getMonth() !== fin.getMonth()) {
+    return `${conLocale(inicio, "d 'de' MMMM")} – ${conLocale(fin, "d 'de' MMMM 'de' yyyy")}`
+  }
+  return `${conLocale(inicio, 'd')}–${conLocale(fin, "d 'de' MMMM 'de' yyyy")}`
+}
+
+/** Minutos entre dos instantes ISO con desfase (la duración real, aunque cruce un cambio de horario). */
+export function duracionEnMinutos(inicioIso: string, finIso: string): number {
+  return differenceInMinutes(parseISO(finIso), parseISO(inicioIso))
+}
+
+/** `2026-11-09` -> `lunes 9` (nombre corto del encabezado de un día en la semana). */
+export function formatearDiaCorto(fecha: string): string {
+  return format(parseISO(fecha), 'EEEE d', { locale: es })
+}

@@ -57,6 +57,9 @@ import {
   semanasDelMes,
   sumarMeses,
   tramoDelEventoEnDia,
+  diasDeLaSemana,
+  formatearDiaCorto,
+  formatearRangoSemana,
 } from './fechas'
 
 afterEach(() => {
@@ -645,5 +648,52 @@ describe('nombresDiasSemana', () => {
     expect(dias[0]).toEqual({ corto: 'lun', largo: 'lunes' })
     expect(dias[2]).toEqual({ corto: 'mié', largo: 'miércoles' })
     expect(dias[6]).toEqual({ corto: 'dom', largo: 'domingo' })
+  })
+})
+
+describe('diasDeLaSemana', () => {
+  it('desde cualquier día devuelve lunes a domingo', () => {
+    const semana = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']
+    expect(diasDeLaSemana('2026-11-09')).toEqual(semana)
+    expect(diasDeLaSemana('2026-11-12')).toEqual(semana)
+    expect(diasDeLaSemana('2026-11-15')).toEqual(semana)
+  })
+
+  it('cruza el mes y el año', () => {
+    expect(diasDeLaSemana('2026-12-02')[0]).toBe('2026-11-30')
+    expect(diasDeLaSemana('2027-01-01')).toEqual([
+      '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03',
+    ])
+  })
+
+  it('no depende de la zona horaria (Kolkata y Nueva York con fin del horario de verano)', () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    expect(diasDeLaSemana('2026-11-10')[0]).toBe('2026-11-09')
+    expect(rangoDeFechas('2026-11-09', '2026-11-15')).toEqual({
+      desde: '2026-11-09T00:00:00+05:30',
+      hasta: '2026-11-16T00:00:00+05:30',
+    })
+    vi.stubEnv('TZ', 'America/New_York')
+    // El 1/11/2026 (domingo) termina el horario de verano.
+    expect(diasDeLaSemana('2026-11-01')).toEqual([
+      '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01',
+    ])
+    expect(rangoDeFechas('2026-10-26', '2026-11-01')).toEqual({
+      desde: '2026-10-26T00:00:00-04:00',
+      hasta: '2026-11-02T00:00:00-05:00',
+    })
+  })
+})
+
+describe('formatearRangoSemana / formatearDiaCorto', () => {
+  it('mismo mes, cruza el mes y cruza el año', () => {
+    expect(formatearRangoSemana('2026-11-09')).toBe('9–15 de noviembre de 2026')
+    expect(formatearRangoSemana('2026-11-30')).toBe('30 de noviembre – 6 de diciembre de 2026')
+    expect(formatearRangoSemana('2026-12-28')).toBe('28 de diciembre de 2026 – 3 de enero de 2027')
+  })
+
+  it('nombre corto del día', () => {
+    expect(formatearDiaCorto('2026-11-09')).toBe('lunes 9')
+    expect(formatearDiaCorto('2026-11-15')).toBe('domingo 15')
   })
 })

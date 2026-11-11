@@ -91,6 +91,18 @@ describe('distribuirSolapes', () => {
     expect(columnas(entrada)).toEqual({ a: [0, 2], b: [1, 2] })
     expect(entrada.map((b) => b.clave)).toEqual(['b', 'a'])
   })
+
+  it('conserva los campos propios de cada elemento (es genérica)', () => {
+    const propios = [
+      { inicioMin: h(9), finMin: h(11), nombre: 'uno', extra: { id: 1 } },
+      { inicioMin: h(10), finMin: h(12), nombre: 'dos', extra: { id: 2 } },
+    ]
+    const colocados = distribuirSolapes(propios)
+    expect(colocados.map((c) => [c.nombre, c.extra.id, c.columna, c.totalColumnas])).toEqual([
+      ['uno', 1, 0, 2],
+      ['dos', 2, 1, 2],
+    ])
+  })
 })
 
 describe('finDeTarea', () => {

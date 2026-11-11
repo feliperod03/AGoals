@@ -1,5 +1,7 @@
-import { finDeTarea } from '@/features/agenda/horario'
+import { calcularRango, finDeTarea, type Rango } from '@/features/agenda/horario'
 import {
+  diasDeLaSemana,
+  duracionEnMinutos,
   esFechaValida,
   formatearDiaSemana,
   formatearMinutos,
@@ -123,13 +125,14 @@ const horaDeMinutos = (minutos: number) => formatearMinutos(minutos % 1440)
 
 /**
  * Texto de la hora de un elemento: `09:30–10:00`; `desde 22:00` (primer día de un evento que sigue al día
- * siguiente); `Todo el día` (día intermedio de uno largo); `hasta 02:00` (su último día). Un evento que termina
+ * siguiente); `Todo el día` (día intermedio de uno largo, o un tramo de 00:00 a 00:00 del día siguiente); `hasta 02:00` (su último día). Un evento que termina
  * justo a medianoche conserva `22:00–00:00` (1440 min se escribe `00:00`, nunca `24:00`). `null` para una tarea sin hora.
  */
 export function textoHora(e: ElementoDia): string | null {
   if (e.inicioMin === null || e.finMin === null) return null
   if (e.tipo === 'tarea') return `${horaDeMinutos(e.inicioMin)}–${horaDeMinutos(e.finMin)}`
-  if (e.empiezaAntes && e.terminaDespues) return 'Todo el día'
+  // Ocupa el día entero: intermedio de uno largo, o de 00:00 a 00:00 del día siguiente (nunca «00:00–00:00»).
+  if ((e.empiezaAntes && e.terminaDespues) || (e.inicioMin === 0 && e.finMin === 1440)) return 'Todo el día'
   if (e.empiezaAntes) return `hasta ${horaDeMinutos(e.finMin)}`
   if (e.terminaDespues) return `desde ${horaDeMinutos(e.inicioMin)}`
   return `${horaDeMinutos(e.inicioMin)}–${horaDeMinutos(e.finMin)}`
@@ -202,4 +205,104 @@ export function diaDestino(fecha: string, tecla: string): string | null {
     default:
       return null
   }
+}
+
+// --- Vista semanal (rebanada 9b) ---
+
+export type Vista = 'mes' | 'semana'
+
+/** Alto de una hora en la línea de tiempo de la semana (Hoy usa 56: la semana prioriza ver 08–21 sin bajar). */
+export const PX_POR_HORA_SEMANA = 48
+
+/** Un evento que dura esto o más va a la franja «Sin hora» en cada día que toca (como hacen otros calendarios). */
+export const MINUTOS_EVENTO_LARGO = 24 * 60
+
+/** `semana` -> semana; cualquier otra cosa (ausente, `mes`, basura) -> mes, la vista de 9a. */
+export function vistaDesdeUrl(valor: string | null): Vista {
+  return valor === 'semana' ? 'semana' : 'mes'
+}
+
+/** Día seleccionado y las 7 fechas de su semana. `dia` inválido o ausente -> hoy (sin reescribir la URL). */
+export function semanaDesdeUrl(diaParam: string | null, hoy: string): { dia: string; dias: string[] } {
+  const dia = esFechaValida(diaParam) ? diaParam : hoy
+  return { dia, dias: diasDeLaSemana(dia) }
+}
+
+/** Día al que lleva una tecla en los encabezados de la semana; `null` si la tecla no mueve. */
+export function diaDestinoSemana(fecha: string, tecla: string): string | null {
+  switch (tecla) {
+    case 'ArrowLeft':
+      return sumarDias(fecha, -1)
+    case 'ArrowRight':
+      return sumarDias(fecha, 1)
+    case 'Home':
+      return limitesDeSemana(fecha).lunes
+    case 'End':
+      return limitesDeSemana(fecha).domingo
+    case 'PageUp':
+      return sumarDias(fecha, -7)
+    case 'PageDown':
+      return sumarDias(fecha, 7)
+    default:
+      return null
+  }
+}
+
+/** Un elemento que se dibuja en la línea de tiempo: siempre tiene inicio y fin en minutos. */
+export type ElementoConHora = ElementoDia & { inicioMin: number; finMin: number }
+
+/** Va a la franja «Sin hora»: una tarea sin hora o un evento que dura 24 h o más (en todos sus días). */
+export function esDeFranja(e: ElementoDia): boolean {
+  if (e.tipo === 'tarea') return e.inicioMin === null
+  return duracionEnMinutos(e.evento.fechaHoraInicio, e.evento.fechaHoraFin) >= MINUTOS_EVENTO_LARGO
+}
+
+/** Separa lo de un día en franja y línea de tiempo, conservando el orden de `ordenarElementos`. */
+export function repartirDia(elementos: ElementoDia[]): { sinHora: ElementoDia[]; conHora: ElementoConHora[] } {
+  const sinHora: ElementoDia[] = []
+  const conHora: ElementoConHora[] = []
+  for (const e of elementos) {
+    if (esDeFranja(e) || e.inicioMin === null || e.finMin === null) sinHora.push(e)
+    else conHora.push(e as ElementoConHora)
+  }
+  return { sinHora, conHora }
+}
+
+/** Rango común de las 7 columnas: 08–21 o lo que haga falta para que entre todo lo de la semana. */
+export function rangoDeLaSemana(conHoraPorDia: ElementoConHora[][]): Rango {
+  return calcularRango(conHoraPorDia.flat())
+}
+
+/**
+ * Texto para lectores de pantalla de un elemento de la semana, sin el estado (lo pone `EstadoIcono`):
+ * `Evento, 09:00–10:00` / `Tarea, sin hora`. La hora visible puede ocultarse por ancho; esta no.
+ */
+export function tipoYHoraParaLector(e: ElementoDia): string {
+  return `${e.tipo === 'evento' ? 'Evento' : 'Tarea'}, ${textoHora(e) ?? 'sin hora'}`
+}
+
+/** Texto del `title` de un bloque: `EVENTO · 09:00–10:00 — Reunión`. */
+export function tituloDeBloque(e: ElementoDia): string {
+  const hora = textoHora(e)
+  return `${e.tipo === 'evento' ? 'EVENTO' : 'TAREA'}${hora ? ` · ${hora}` : ''} — ${e.titulo}`
+}
+
+/** Alto de una línea de texto de 12 px en los bloques y relleno vertical total del bloque. */
+const PX_LINEA = 16
+const PX_RELLENO_BLOQUE = 6
+
+/** Cuántas líneas de título caben en un bloque de `altoPx` (al menos 1); `conHora` resta la línea de la hora. */
+export function lineasDeTitulo(altoPx: number, conHora: boolean): number {
+  const disponible = altoPx - PX_RELLENO_BLOQUE - (conHora ? PX_LINEA : 0)
+  return Math.max(1, Math.floor(disponible / PX_LINEA))
+}
+
+/** Un bloque con al menos este alto lleva la hora en su propia línea y el título debajo. */
+export const ALTO_BLOQUE_CON_DOS_LINEAS = 40
+
+/** Hora corta de un bloque: `09:30`, `desde 22:00` o `hasta 06:00` (un evento cortado por la medianoche). */
+export function textoHoraBloque(e: ElementoConHora): string {
+  if (e.tipo === 'evento' && e.empiezaAntes) return `hasta ${horaDeMinutos(e.finMin)}`
+  if (e.tipo === 'evento' && e.terminaDespues) return `desde ${horaDeMinutos(e.inicioMin)}`
+  return horaDeMinutos(e.inicioMin)
 }

@@ -26,7 +26,8 @@ export function DetalleDia({ fecha, hoy, elementos }: { fecha: string; hoy: stri
   )
 }
 
-function FilaDetalle({ elemento, hoy }: { elemento: ElementoDia; hoy: string }) {
+/** Una fila del detalle (tipo, hora, «Atrasada», prioridad, estado y título). También la usa la lista de la semana. */
+export function FilaDetalle({ elemento, hoy }: { elemento: ElementoDia; hoy: string }) {
   const esEvento = elemento.tipo === 'evento'
   const hora = textoHora(elemento)
   const hecha = elemento.tipo === 'tarea' && elemento.estado === 'HECHO'

@@ -331,3 +331,195 @@ describe('CalendarioPage: zona horaria', () => {
     expect(within(celda(/martes 10 de noviembre/)).queryByText('Cena tardía')).not.toBeInTheDocument()
   })
 })
+
+// --- Vista semanal (9b) ---
+
+const ubicacion = () => screen.getByTestId('ubicacion')
+const atras = () => userEvent.click(screen.getByRole('button', { name: 'Atrás' }))
+const diaDeLaSemana = (nombre: RegExp | string) => screen.getByRole('group', { name: nombre })
+const encabezado = (nombre: string) => screen.getByRole('button', { name: nombre })
+
+describe('CalendarioPage: panel del mes', () => {
+  it('un evento de 00:00 a 00:00 del día siguiente dice «Todo el día» (antes «00:00–00:00»)', async () => {
+    vi.mocked(getEventos).mockResolvedValue([evento('Feriado', '2026-11-12T00:00:00-03:00', '2026-11-13T00:00:00-03:00')])
+    montar(['/calendario?mes=2026-11&dia=2026-11-12'])
+    expect(await detalle().findByText('Feriado')).toBeInTheDocument()
+    expect(detalle().getByText('Todo el día')).toBeInTheDocument()
+    expect(detalle().queryByText('00:00–00:00')).not.toBeInTheDocument()
+  })
+})
+
+describe('CalendarioPage: selector de vista', () => {
+  it('sin parámetros abre el mes con «Mes» pulsado', () => {
+    montar()
+    expect(titulo()).toHaveTextContent('Noviembre de 2026')
+    expect(screen.getByRole('button', { name: 'Mes' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Semana' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('Mes → Semana conserva el día (push) y pide el rango de esa semana; «atrás» vuelve al mes', async () => {
+    montar(['/calendario?mes=2026-12&dia=2026-12-15'])
+    await userEvent.click(screen.getByRole('button', { name: 'Semana' }))
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-12-15')
+    expect(titulo()).toHaveTextContent('14–20 de diciembre de 2026')
+    expect(screen.getByRole('button', { name: 'Semana' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() =>
+      expect(getEventos).toHaveBeenLastCalledWith({ desde: '2026-12-14T00:00:00-03:00', hasta: '2026-12-21T00:00:00-03:00' }),
+    )
+    expect(encabezado('martes 15')).toHaveAttribute('aria-pressed', 'true')
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/calendario?mes=2026-12&dia=2026-12-15')
+    expect(titulo()).toHaveTextContent('Diciembre de 2026')
+  })
+
+  it('Semana → Mes lleva el día al mes que lo contiene', async () => {
+    montar(['/calendario?vista=semana&dia=2026-12-31'])
+    expect(titulo()).toHaveTextContent('28 de diciembre de 2026 – 3 de enero de 2027')
+    await userEvent.click(screen.getByRole('button', { name: 'Mes' }))
+    expect(ubicacion()).toHaveTextContent('/calendario?mes=2026-12&dia=2026-12-31')
+    expect(titulo()).toHaveTextContent('Diciembre de 2026')
+    expect(detalleTitulo()).toHaveTextContent('jueves 31 de diciembre')
+  })
+
+  it('pulsar la vista actual no navega', async () => {
+    montar(['/otra', '/calendario'])
+    await userEvent.click(screen.getByRole('button', { name: 'Mes' }))
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/otra')
+  })
+})
+
+describe('CalendarioPage: semana', () => {
+  it('pide los eventos de lunes 00:00 al lunes siguiente 00:00 y las tareas una sola vez', async () => {
+    montar(['/calendario?vista=semana&dia=2026-11-10'])
+    expect(titulo()).toHaveTextContent('9–15 de noviembre de 2026')
+    await waitFor(() =>
+      expect(getEventos).toHaveBeenCalledWith({ desde: '2026-11-09T00:00:00-03:00', hasta: '2026-11-16T00:00:00-03:00' }),
+    )
+    expect(getTareas).toHaveBeenCalledTimes(1)
+  })
+
+  it('muestra eventos y tareas en su día, con hoy marcado y sin panel de detalle', async () => {
+    vi.mocked(getEventos).mockResolvedValue([evento('Reunión', '2026-11-12T10:00:00-03:00', '2026-11-12T11:00:00-03:00')])
+    vi.mocked(getTareas).mockResolvedValue([tarea({ titulo: 'Pagar luz', fecha: '2026-11-12' })])
+    montar(['/calendario?vista=semana&dia=2026-11-10'])
+    const jueves = diaDeLaSemana(/^jueves 12 de noviembre/)
+    expect(await within(jueves).findByText('Evento, 10:00–11:00, Reunión')).toBeInTheDocument()
+    expect(within(jueves).getByText(/Tarea, sin hora, .*Pagar luz/)).toBeInTheDocument()
+    expect(jueves).toHaveAccessibleName('jueves 12 de noviembre, 1 evento, 1 tarea')
+    expect(encabezado('martes 10')).toHaveAttribute('aria-current', 'date')
+    expect(screen.queryByRole('complementary', { name: 'Detalle del día' })).not.toBeInTheDocument()
+  })
+
+  it('«Semana siguiente» y «Semana anterior» hacen push conservando el día de la semana', async () => {
+    montar(['/calendario?vista=semana&dia=2026-11-10'])
+    await userEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }))
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-17')
+    expect(titulo()).toHaveTextContent('16–22 de noviembre de 2026')
+    await userEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }))
+    expect(titulo()).toHaveTextContent('23–29 de noviembre de 2026')
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-17')
+    await userEvent.click(screen.getByRole('button', { name: 'Semana anterior' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Semana anterior' }))
+    expect(titulo()).toHaveTextContent('2–8 de noviembre de 2026')
+  })
+
+  it('una semana que cruza el mes tiene su título y su rango', async () => {
+    montar(['/calendario?vista=semana&dia=2026-12-02'])
+    expect(titulo()).toHaveTextContent('30 de noviembre – 6 de diciembre de 2026')
+    await waitFor(() =>
+      expect(getEventos).toHaveBeenCalledWith({ desde: '2026-11-30T00:00:00-03:00', hasta: '2026-12-07T00:00:00-03:00' }),
+    )
+  })
+
+  it('una semana que cruza el año pide el rango de diciembre a enero', async () => {
+    montar(['/calendario?vista=semana&dia=2027-01-01'])
+    expect(titulo()).toHaveTextContent('28 de diciembre de 2026 – 3 de enero de 2027')
+    await waitFor(() =>
+      expect(getEventos).toHaveBeenCalledWith({ desde: '2026-12-28T00:00:00-03:00', hasta: '2027-01-04T00:00:00-03:00' }),
+    )
+  })
+
+  it('elegir un día de la semana hace replace: «atrás» sale del calendario', async () => {
+    montar(['/otra', '/calendario?vista=semana&dia=2026-11-10'])
+    await userEvent.click(encabezado('jueves 12'))
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-12')
+    expect(encabezado('jueves 12')).toHaveAttribute('aria-pressed', 'true')
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/otra')
+  })
+
+  it('← desde el lunes pasa a la semana anterior (push) y el foco sigue al día', async () => {
+    montar(['/calendario?vista=semana&dia=2026-11-09'])
+    encabezado('lunes 9').focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-08')
+    expect(titulo()).toHaveTextContent('2–8 de noviembre de 2026')
+    await waitFor(() => expect(encabezado('domingo 8')).toHaveFocus())
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-09')
+  })
+
+  it('URLs inválidas: una vista desconocida es el mes; un día inexistente en la semana es hoy', () => {
+    montar(['/calendario?vista=xyz&dia=2026-12-15'])
+    expect(titulo()).toHaveTextContent('Noviembre de 2026')
+  })
+
+  it('un día inexistente en la semana cae a la semana de hoy, sin reescribir la URL', () => {
+    montar(['/calendario?vista=semana&dia=2026-02-30'])
+    expect(titulo()).toHaveTextContent('9–15 de noviembre de 2026')
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-02-30')
+  })
+
+  it('las URLs de 9a siguen abriendo el mes (también con vista=mes)', () => {
+    montar(['/calendario?vista=mes&mes=2026-12&dia=2026-12-15'])
+    expect(titulo()).toHaveTextContent('Diciembre de 2026')
+    expect(detalleTitulo()).toHaveTextContent('martes 15 de diciembre')
+  })
+
+  it('si fallan los eventos, las tareas de la semana se siguen viendo', async () => {
+    vi.mocked(getEventos).mockRejectedValue(new Error('boom'))
+    vi.mocked(getTareas).mockResolvedValue([tarea({ titulo: 'Pagar luz' })])
+    montar(['/calendario?vista=semana&dia=2026-11-10'])
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron cargar los eventos: boom')
+    expect(within(diaDeLaSemana(/^martes 10 de noviembre/)).getByText(/Tarea, sin hora, .*Pagar luz/)).toBeInTheDocument()
+  })
+
+  it('en Kolkata (+05:30) el rango de la semana lleva ese desfase y el evento cae en su día local', async () => {
+    vi.stubEnv('TZ', 'Asia/Kolkata')
+    vi.mocked(getEventos).mockResolvedValue([evento('Cena tardía', '2026-11-10T23:30:00-03:00', '2026-11-11T00:30:00-03:00')])
+    montar(['/calendario?vista=semana&dia=2026-11-10'])
+    await waitFor(() =>
+      expect(getEventos).toHaveBeenCalledWith({ desde: '2026-11-09T00:00:00+05:30', hasta: '2026-11-16T00:00:00+05:30' }),
+    )
+    expect(await within(diaDeLaSemana(/^miércoles 11 de noviembre/)).findByText('Evento, 08:00–09:00, Cena tardía')).toBeInTheDocument()
+  })
+})
+
+describe('CalendarioPage: «Hoy» no apila entradas', () => {
+  it('en la semana, «Hoy» dos veces deja una sola entrada', async () => {
+    montar(['/otra', '/calendario?vista=semana&dia=2026-12-15'])
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-11-10')
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/calendario?vista=semana&dia=2026-12-15')
+  })
+
+  it('en el mes, «Hoy» dos veces deja una sola entrada', async () => {
+    montar(['/otra', '/calendario?mes=2027-02'])
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    expect(ubicacion()).toHaveTextContent('/calendario?mes=2026-11&dia=2026-11-10')
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/calendario?mes=2027-02')
+  })
+
+  it('si ya se está en hoy, «Hoy» no añade nada aunque los parámetros vengan en otro orden', async () => {
+    montar(['/otra', '/calendario?dia=2026-11-10&mes=2026-11'])
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    await atras()
+    expect(ubicacion()).toHaveTextContent('/otra')
+  })
+})

@@ -4,7 +4,18 @@ import type { Evento } from '@/types/evento'
 import type { Estado, Prioridad, Tarea } from '@/types/tarea'
 import {
   diaDestino,
+  diaDestinoSemana,
   diasDeLaCuadricula,
+  esDeFranja,
+  lineasDeTitulo,
+  rangoDeLaSemana,
+  repartirDia,
+  semanaDesdeUrl,
+  textoHoraBloque,
+  tipoYHoraParaLector,
+  tituloDeBloque,
+  vistaDesdeUrl,
+  type ElementoConHora,
   elementosPorDia,
   estadoDesdeUrl,
   etiquetaDia,
@@ -365,5 +376,175 @@ describe('textoHoraCelda', () => {
   it('días intermedio y último de un evento largo: sin hora (va en el title y en el panel)', () => {
     expect(textoHoraCelda(evt({ inicioMin: 0, finMin: 1440, empiezaAntes: true, terminaDespues: true }))).toBeNull()
     expect(textoHoraCelda(evt({ inicioMin: 0, finMin: 120, empiezaAntes: true }))).toBeNull()
+  })
+})
+
+// --- Vista semanal (9b) ---
+
+const SEMANA = ['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11', '2026-12-12', '2026-12-13']
+
+describe('textoHora: tramo de un día entero', () => {
+  it('un evento de 00:00 a 00:00 del día siguiente dice «Todo el día», no «00:00–00:00»', () => {
+    const e = evento('2026-12-08T00:00:00-03:00', '2026-12-09T00:00:00-03:00')
+    const [elemento] = elementosPorDia(SEMANA, [e], []).get('2026-12-08') ?? []
+    expect(textoHora(elemento as ElementoDia)).toBe('Todo el día')
+  })
+})
+
+describe('vistaDesdeUrl / semanaDesdeUrl', () => {
+  it('solo «semana» elige la semana; lo demás es el mes', () => {
+    expect(vistaDesdeUrl('semana')).toBe('semana')
+    expect(vistaDesdeUrl('mes')).toBe('mes')
+    expect(vistaDesdeUrl(null)).toBe('mes')
+    expect(vistaDesdeUrl('Semana')).toBe('mes')
+    expect(vistaDesdeUrl('xyz')).toBe('mes')
+  })
+
+  it('un día válido da su semana de lunes a domingo', () => {
+    expect(semanaDesdeUrl('2026-12-10', '2026-11-10')).toEqual({ dia: '2026-12-10', dias: SEMANA })
+  })
+
+  it('un día inválido o ausente cae a hoy', () => {
+    for (const valor of [null, '', '2026-02-30', 'abc', '2026-12-1']) {
+      const { dia, dias } = semanaDesdeUrl(valor, '2026-11-10')
+      expect(dia).toBe('2026-11-10')
+      expect(dias[0]).toBe('2026-11-09')
+    }
+  })
+})
+
+describe('diaDestinoSemana', () => {
+  it('flechas ±1 día, Inicio y Fin = lunes y domingo, RePág y AvPág ±1 semana', () => {
+    expect(diaDestinoSemana('2026-12-10', 'ArrowLeft')).toBe('2026-12-09')
+    expect(diaDestinoSemana('2026-12-10', 'ArrowRight')).toBe('2026-12-11')
+    expect(diaDestinoSemana('2026-12-10', 'Home')).toBe('2026-12-07')
+    expect(diaDestinoSemana('2026-12-10', 'End')).toBe('2026-12-13')
+    expect(diaDestinoSemana('2026-12-10', 'PageUp')).toBe('2026-12-03')
+    expect(diaDestinoSemana('2026-12-10', 'PageDown')).toBe('2026-12-17')
+  })
+
+  it('las flechas salen de la semana por el lunes y el domingo; ↑ ↓ y otras teclas no mueven', () => {
+    expect(diaDestinoSemana('2026-12-07', 'ArrowLeft')).toBe('2026-12-06')
+    expect(diaDestinoSemana('2026-12-13', 'ArrowRight')).toBe('2026-12-14')
+    expect(diaDestinoSemana('2026-12-31', 'ArrowRight')).toBe('2027-01-01')
+    expect(diaDestinoSemana('2026-12-10', 'ArrowUp')).toBeNull()
+    expect(diaDestinoSemana('2026-12-10', 'ArrowDown')).toBeNull()
+    expect(diaDestinoSemana('2026-12-10', 'a')).toBeNull()
+  })
+})
+
+describe('repartirDia / esDeFranja', () => {
+  const del = (mapa: Map<string, ElementoDia[]>, dia: string) => repartirDia(mapa.get(dia) ?? [])
+
+  it('una tarea sin hora va a la franja y una con hora a la línea de tiempo', () => {
+    const mapa = elementosPorDia(SEMANA, [], [
+      tarea({ fecha: '2026-12-08', titulo: 'Sin hora' }),
+      tarea({ fecha: '2026-12-08', titulo: 'Con hora', horaInicio: '14:00:00', horaFin: '15:00:00' }),
+    ])
+    const { sinHora, conHora } = del(mapa, '2026-12-08')
+    expect(sinHora.map((e) => e.titulo)).toEqual(['Sin hora'])
+    expect(conHora.map((e) => e.titulo)).toEqual(['Con hora'])
+  })
+
+  it('un evento de menos de 24 h que cruza la medianoche va a la línea de tiempo en los dos días', () => {
+    const guardia = evento('2026-12-09T22:00:00-03:00', '2026-12-10T06:00:00-03:00')
+    const mapa = elementosPorDia(SEMANA, [guardia], [])
+    expect(del(mapa, '2026-12-09').conHora[0]).toMatchObject({ inicioMin: 1320, finMin: 1440, terminaDespues: true })
+    expect(del(mapa, '2026-12-10').conHora[0]).toMatchObject({ inicioMin: 0, finMin: 360, empiezaAntes: true })
+    expect(del(mapa, '2026-12-09').sinHora).toHaveLength(0)
+  })
+
+  it('un evento de 23 h 59 min sigue en la línea de tiempo; uno de exactamente 24 h va a la franja', () => {
+    const casi = evento('2026-12-08T09:00:00-03:00', '2026-12-09T08:59:00-03:00')
+    const justo = evento('2026-12-11T09:00:00-03:00', '2026-12-12T09:00:00-03:00')
+    const mapa = elementosPorDia(SEMANA, [casi, justo], [])
+    expect(del(mapa, '2026-12-08').conHora).toHaveLength(1)
+    expect(del(mapa, '2026-12-11').sinHora).toHaveLength(1)
+    expect(del(mapa, '2026-12-12').sinHora).toHaveLength(1)
+    expect(del(mapa, '2026-12-12').conHora).toHaveLength(0)
+  })
+
+  it('un evento de tres días va a la franja en los tres', () => {
+    const congreso = evento('2026-12-08T09:00:00-03:00', '2026-12-10T18:00:00-03:00')
+    const mapa = elementosPorDia(SEMANA, [congreso], [])
+    for (const dia of ['2026-12-08', '2026-12-09', '2026-12-10']) {
+      expect(del(mapa, dia).sinHora).toHaveLength(1)
+      expect(del(mapa, dia).conHora).toHaveLength(0)
+    }
+    const [primero] = mapa.get('2026-12-08') ?? []
+    expect(esDeFranja(primero as ElementoDia)).toBe(true)
+  })
+
+  it('las HECHAS se quedan y las CANCELADAS no llegan', () => {
+    const mapa = elementosPorDia(SEMANA, [], [
+      tarea({ fecha: '2026-12-08', estado: 'HECHO' }),
+      tarea({ fecha: '2026-12-08', estado: 'CANCELADO' }),
+    ])
+    expect(del(mapa, '2026-12-08').sinHora.map((e) => e.tipo === 'tarea' && e.estado)).toEqual(['HECHO'])
+  })
+
+  it('conserva el orden del día en cada parte', () => {
+    const mapa = elementosPorDia(SEMANA, [evento('2026-12-08T09:00:00-03:00', '2026-12-08T10:00:00-03:00', { titulo: 'B' })], [
+      tarea({ fecha: '2026-12-08', titulo: 'A', horaInicio: '08:00:00' }),
+      tarea({ fecha: '2026-12-08', titulo: 'C', horaInicio: '11:00:00' }),
+    ])
+    expect(del(mapa, '2026-12-08').conHora.map((e) => e.titulo)).toEqual(['A', 'B', 'C'])
+  })
+})
+
+describe('rangoDeLaSemana', () => {
+  const conHora = (mapa: Map<string, ElementoDia[]>) => SEMANA.map((d) => repartirDia(mapa.get(d) ?? []).conHora)
+
+  it('sin nada con hora: 08–21', () => {
+    expect(rangoDeLaSemana(conHora(elementosPorDia(SEMANA, [], [tarea({ fecha: '2026-12-08' })])))).toEqual({ inicioHora: 8, finHora: 21 })
+  })
+
+  it('una tarea a las 07:30 lo abre a las 07; una guardia nocturna lo lleva a 00–24', () => {
+    expect(rangoDeLaSemana(conHora(elementosPorDia(SEMANA, [], [tarea({ fecha: '2026-12-08', horaInicio: '07:30:00' })])))).toEqual({
+      inicioHora: 7,
+      finHora: 21,
+    })
+    const guardia = evento('2026-12-09T22:00:00-03:00', '2026-12-10T06:00:00-03:00')
+    expect(rangoDeLaSemana(conHora(elementosPorDia(SEMANA, [guardia], [])))).toEqual({ inicioHora: 0, finHora: 24 })
+  })
+
+  it('un evento largo (franja) no estira el rango', () => {
+    const congreso = evento('2026-12-08T09:00:00-03:00', '2026-12-10T18:00:00-03:00')
+    expect(rangoDeLaSemana(conHora(elementosPorDia(SEMANA, [congreso], [])))).toEqual({ inicioHora: 8, finHora: 21 })
+  })
+})
+
+describe('textos de los bloques de la semana', () => {
+  const unDia = (eventos: Evento[], tareas: Tarea[], dia: string) => elementosPorDia(SEMANA, eventos, tareas).get(dia) ?? []
+
+  it('para lectores: tipo y hora completa, o «sin hora»', () => {
+    const [ev] = unDia([evento('2026-12-08T09:00:00-03:00', '2026-12-08T10:00:00-03:00')], [], '2026-12-08')
+    const [ta] = unDia([], [tarea({ fecha: '2026-12-08' })], '2026-12-08')
+    expect(tipoYHoraParaLector(ev as ElementoDia)).toBe('Evento, 09:00–10:00')
+    expect(tipoYHoraParaLector(ta as ElementoDia)).toBe('Tarea, sin hora')
+  })
+
+  it('title: tipo en mayúsculas, hora y título', () => {
+    const [ev] = unDia([evento('2026-12-09T22:00:00-03:00', '2026-12-10T06:00:00-03:00', { titulo: 'Guardia' })], [], '2026-12-10')
+    const [ta] = unDia([], [tarea({ fecha: '2026-12-08', titulo: 'Pagar' })], '2026-12-08')
+    expect(tituloDeBloque(ev as ElementoDia)).toBe('EVENTO · hasta 06:00 — Guardia')
+    expect(tituloDeBloque(ta as ElementoDia)).toBe('TAREA — Pagar')
+  })
+
+  it('hora corta: inicio, «desde» el primer día y «hasta» el siguiente', () => {
+    const guardia = evento('2026-12-09T22:00:00-03:00', '2026-12-10T06:00:00-03:00')
+    const mapa = elementosPorDia(SEMANA, [guardia], [tarea({ fecha: '2026-12-08', horaInicio: '09:30:00' })])
+    const primero = (dia: string) => repartirDia(mapa.get(dia) ?? []).conHora[0] as ElementoConHora
+    expect(textoHoraBloque(primero('2026-12-08'))).toBe('09:30')
+    expect(textoHoraBloque(primero('2026-12-09'))).toBe('desde 22:00')
+    expect(textoHoraBloque(primero('2026-12-10'))).toBe('hasta 06:00')
+  })
+
+  it('lineasDeTitulo: al menos una; resta la línea de la hora', () => {
+    expect(lineasDeTitulo(24, false)).toBe(1)
+    expect(lineasDeTitulo(24, true)).toBe(1)
+    expect(lineasDeTitulo(48, true)).toBe(1)
+    expect(lineasDeTitulo(48, false)).toBe(2)
+    expect(lineasDeTitulo(96, true)).toBe(4)
   })
 })

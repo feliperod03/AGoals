@@ -29,10 +29,13 @@ export interface Bloque {
   tarea?: Tarea
 }
 
-export interface BloqueColocado extends Bloque {
+/** Lo que `distribuirSolapes` le agrega a cada bloque: su columna dentro del grupo de solapes y cuántas hay. */
+export interface Colocacion {
   columna: number
   totalColumnas: number
 }
+
+export type BloqueColocado = Bloque & Colocacion
 
 /** 08-21 por defecto; se amplía a horas enteras si algún bloque cae fuera de ese tramo. */
 export function calcularRango(bloques: { inicioMin: number; finMin: number }[]): Rango {
@@ -63,14 +66,15 @@ export function posicionBloque(
  * Coloca los bloques solapados lado a lado. Los que se tocan (aunque sea en cadena: A con B y
  * B con C) forman un grupo que reparte el ancho en las mismas columnas; cada bloque ocupa la
  * primera columna libre. Los bordes exactos no cuentan como choque. Para decidir el choque
- * un bloque dura al menos `DURACION_MINIMA_VISUAL_MIN`, porque así se dibuja.
+ * un bloque dura al menos `DURACION_MINIMA_VISUAL_MIN`, porque así se dibuja. Genérica: conserva los demás
+ * campos de cada bloque (el calendario semanal coloca sus propios elementos, con el evento o la tarea dentro).
  */
-export function distribuirSolapes(bloques: Bloque[]): BloqueColocado[] {
-  const fin = (b: Bloque) => Math.max(b.finMin, b.inicioMin + DURACION_MINIMA_VISUAL_MIN)
+export function distribuirSolapes<T extends { inicioMin: number; finMin: number }>(bloques: T[]): (T & Colocacion)[] {
+  const fin = (b: T) => Math.max(b.finMin, b.inicioMin + DURACION_MINIMA_VISUAL_MIN)
   const ordenados = [...bloques].sort((a, b) => a.inicioMin - b.inicioMin || fin(b) - fin(a))
 
-  const resultado: BloqueColocado[] = []
-  let grupo: BloqueColocado[] = []
+  const resultado: (T & Colocacion)[] = []
+  let grupo: (T & Colocacion)[] = []
   let finColumnas: number[] = []
   let finGrupo = -Infinity
 
