@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 9a; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 10/11/2026 (hecho hasta 9b; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -45,14 +45,12 @@ Antes de 8.2d el frontend no podía crear subtareas (el backend sí: `padreId` e
 - Ítem **"Agregar subtarea"** en el menú de acciones de cada tarea abierta (no hecha ni cancelada; Hoy y Cofre) y botón en el diálogo de edición (para las tareas de la planificación por horas, que no tienen menú). Desde 8.2g abre primero el diálogo **"Agregar subtarea a «X»"** con dos caminos: **"Crear una nueva"** (foco inicial; abre "Nueva subtarea de «X»" con `padreId` fijado, descripción "Anota el paso que falta." y el aviso `mensajeSubtareaAgregada`) y **"Vincular una existente"** (sección siguiente).
 - Una subtarea nueva sin fecha va al Cofre, y el aviso lo dice: "Subtarea agregada a «X»; sin fecha: la verás en el Cofre" (P1a).
 - Desde el diálogo de edición, el de elección se abre **encima** (cancelar o vincular deja la edición intacta); la edición solo se reemplaza al elegir "Crear una nueva" (se pierden los cambios sin guardar; está comentado en el código).
-- Asignar proyecto u objetivo a una tarea: 8.4b (más abajo).
 
 ## Vincular una subtarea existente (8.2g; commit `c6afad8`)
 - "Vincular una existente" despliega `BuscadorTareas` (búsqueda por título sin tildes ni mayúsculas, lista de botones nativos, máximo 50 filas), compartido con el selector de madre de 8.2f. Una tarea por vez.
 - Candidatas (`candidatasSubtarea`): tareas abiertas, salvo la madre, sus ancestros (evita ciclos; el backend igual da 400) y sus subtareas directas. Si la candidata ya tiene otra madre, la fila dice "Ahora es subtarea de «Z»; se moverá".
 - Al elegir: PUT de esa tarea con todos sus campos y el `padreId` nuevo (`requestConPadre`, sobre `aRequest(valoresIniciales(...))`); aviso "«Y» ahora es subtarea de «X»".
 - Lista cargando o fallida: solo "Vincular" se deshabilita; "Crear una nueva" siempre está disponible. El error del servidor se ve en el diálogo (estado propio, no el `acciones.error` compartido).
-- **Pendiente conocido:** el PUT que reenvía la tarea recorta los segundos de las horas, recorta espacios del título y convierte una descripción vacía en null (ya ocurría con cancelar y reactivar; la interfaz nunca genera segundos).
 
 ## Borrar con subtareas (5d `dc6c3c1`; 8.2e `be0913b`)
 - **Backend:** `DELETE /api/tareas/{id}?subtareas=borrar|conservar` (204). Sin el parámetro y con subtareas: 409 con el título («X» tiene subtareas: indica si quieres borrarlas o conservarlas). Valor inválido → 400; vacío = ausente. Todo en una transacción.
@@ -72,7 +70,6 @@ Antes "Posponer" mandaba un PATCH sin cuerpo y el backend sumaba un día a la fe
   - **Mañana:** manda `hoy + 1` explícito. Solo se ofrece si la fecha actual de la tarea es anterior a mañana (el backend exige una fecha posterior a la actual).
   - **Elegir fecha:** `input type="date"` nativo (sin dependencias nuevas), con mínimo = el mayor entre (fecha de la tarea + 1) y (hoy + 1).
   - **Dejar sin fecha:** PUT de la tarea con `fecha`, `horaInicio` y `horaFin` en null, reenviando `estado` y `padreId` (`requestSinFecha`). No suma `veces_pospuesta`. La tarea queda "sin fecha" y aparece en el Cofre y en la recomendación.
-- Siempre se manda la fecha explícita; no se depende del "+1" por defecto del backend.
 - Solo para tareas abiertas con fecha (`puedePosponer`). Las cerradas dan 409; las sin fecha se agendan desde la recomendación o el cofre.
 - Si falla, el diálogo queda abierto con el error; mientras hay una mutación no se puede cerrar.
 
@@ -93,7 +90,6 @@ Inventario de **todas** las tareas, con filtros. Nació como lugar para las tare
 - **Subtareas anidadas:** una tarea que cumple y cuya madre también se anida bajo ella; si la madre no cumple, la hija sube a raíz con "Subtarea de «madre»"; una madre que no cumple no se muestra; "+N subtareas ocultas por el filtro". Protegido contra ciclos y padres inexistentes.
 - **Acciones:** las de Hoy (editar, hecha, reabrir, posponer, cancelar, reactivar, borrar) más "Agendar para hoy" en abiertas sin fecha, atrasadas o futuras. Sin subtareas candidatas agenda directo (el error 409/400 sale en el cartel de la página); con candidatas abre un diálogo con "Incluir N subtareas". "Nueva tarea" en el encabezado. `subtareasCandidatas` replica en el cliente la regla de "Agendar con subtareas" del backend.
 - **Chips de filtros activos (P1b; commit `4ff8cc8`):** fila `<ul aria-label="Filtros activos">` bajo la barra, visible con "Más filtros" plegado. Un chip por dimensión fuera de su neutro (fecha ≠ todas, estado ≠ abiertas, prioridad ≠ cualquiera, vínculo ≠ cualquiera) que no tenga un acceso rápido anclado y encendido; la "×" devuelve esa dimensión a su neutro (estado a "abiertas"; fecha también limpia el rango). La búsqueda no genera chip. El botón dice "Más filtros (N)" con N = chips (sin "(0)"). Texto de vacío: "No hay tareas con estos filtros: …" (nombra todos, incluida la búsqueda), "No hay tareas abiertas." si solo queda la línea base y "No hay tareas sin fecha." en la vista por defecto. **Pendiente:** al quitar un chip el foco del teclado se pierde.
-- **A decidir tras usar el Cofre:** la vista por defecto y si ofrecer orden por nombre. **Opcional:** contador en Hoy que lleve al cofre.
 - **No hay posposición automática:** una tarea no completada queda en su fecha como atrasada; se ve en el cofre (filtro "Atrasadas") y en la recomendación.
 
 ## Aviso flotante y color-scheme (P1a; commit `1642c9a`)
@@ -141,7 +137,6 @@ Página `/ideas` (reemplaza el placeholder «Próximamente»; el ítem del menú
 - **Avisos y fechas** (`lib/fechas.ts`): `mensajeIdeaCreada/Guardada/Concluida/Reabierta/Borrada` («Idea «X» …») y `formatearFechaCorta(iso)` («10 nov 2026»). Salen por la región `status` de la página.
 - **API (`api/ideas.ts`):** `getIdeas`, `crearIdea`, `actualizarIdea` (PUT con el cuerpo completo), `concluirIdea(id, conclusion?)` (recorta; sin texto no manda cuerpo ni Content-Type), `reabrirIdea`, `borrarIdea`.
 - **Capas:** `ideas/` importa de `jerarquia/`, `agenda/` y `cofre/estilos`; ningún archivo de `jerarquia/`, `agenda/` ni `cofre/` importa de `ideas/` (comprobado con grep al cerrar la rebanada).
-- **Fuera de alcance:** la sección «Ideas ligadas» en el detalle de proyectos y objetivos (hecha en 8.4d, sección siguiente), crear una idea desde el detalle con el vínculo prefijado, filtros persistidos.
 - **Pendiente conocido:** el PUT reemplaza todo y no hay versionado, así que editar desde una lista vieja puede pisar una conclusión escrita en otra pestaña. El resto de los pendientes de ideas está en Pulido 2.
 
 ## Ideas ligadas en el detalle (8.4d; commit `8c447ca`)
@@ -151,8 +146,6 @@ Tarjeta «Ideas ligadas» en el detalle de proyectos y objetivos, **solo lectura
 - **Límite:** 5 ideas (`LIMITE_IDEAS_LIGADAS`); si hay más, «+N más» (enlace al mismo destino filtrado). «Ver todas en Ideas» solo aparece con al menos una idea; sin ninguna, solo «Aún no hay ideas ligadas». Cargando: «Cargando ideas…». Error de la lista: `ErrorEnLinea` dentro de la tarjeta y el resto del detalle sigue funcionando.
 - **Dónde vive:** `features/ideas/IdeasLigadas.tsx` + `ligadas.ts` (lógica pura y `rutaIdeasDe`). `ProyectoPage` y `ObjetivoPage` (en `proyectos/` y `objetivos/`) lo montan dentro de `secciones`, tras «Tareas ligadas»; así `jerarquia/` sigue sin importar de `ideas/`. Datos de `useIdeas` (`['ideas']`), sin consultas nuevas: lo que se cambie en `/ideas` se ve aquí.
 - **Enlace con filtro:** `/ideas?proyecto=N` o `/ideas?objetivo=N`. `IdeasPage` toma el estado inicial de `filtrosDesdeQuery(useSearchParams())`: ese vínculo y estado «Todas» (porque el detalle muestra planteadas y concluidas). Sin parámetro, con un id no numérico o con proyecto y objetivo a la vez, la vista por defecto. Solo se lee al montar; no se sincroniza la URL con los filtros.
-- **Tests:** `test/renderIdeas.tsx` ahora envuelve en `MemoryRouter` y acepta una ruta inicial; cinco tests existentes de los detalles suman `vi.mock('@/api/ideas')` porque el detalle ahora pide `['ideas']`. 764 tests de frontend.
-- **Capas:** ningún archivo de `jerarquia/`, `agenda/` ni `cofre/` importa de `ideas/` (grep al cerrar la rebanada).
 - **Fuera de alcance:** acciones desde el detalle, ideas de hijos o de los proyectos de un objetivo, sincronizar la URL de `/ideas` con los filtros.
 - **Pendiente conocido:** si ya estás en `/ideas` y llega otra URL con `?proyecto=` sin desmontar la página, el filtro no se actualiza (solo se lee al montar); hoy no hay forma de llegar así desde la interfaz.
 
@@ -190,7 +183,7 @@ Solo frontend, sin dependencias nuevas ni backend.
 
 ## Calendario mensual (9a; commit `26c36bd`)
 Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns (decidido: sin librería; a igual usabilidad, lo más estético). Ruta `/calendario`, todo en `features/calendario/`.
-- **Datos:** eventos con `useEventosEnRango` (`['eventos','rango',desde,hasta]`, rango de la cuadrícula visible con `rangoDeFechas`, `keepPreviousData`: al cambiar de mes se conservan los eventos de los días compartidos y «Cargando…» sale de `isFetching`); tareas de `['tareas','todas']` filtradas por fecha en el cliente (CANCELADO oculto, HECHO atenuado). Cada fuente falla por separado. 9b reusa `useEventosEnRango` con el rango de la semana; 9c invalida `['eventos']`.
+- **Datos:** eventos con `useEventosEnRango` (`['eventos','rango',desde,hasta]`, rango de la cuadrícula visible con `rangoDeFechas`, `keepPreviousData`: al cambiar de mes se conservan los eventos de los días compartidos y «Cargando…» sale de `isFetching`); tareas de `['tareas','todas']` filtradas por fecha en el cliente (CANCELADO oculto, HECHO atenuado). Cada fuente falla por separado. 9b lo reusa con el rango de la vista; 9c invalidará `['eventos']`.
 - **Lógica pura (`calendario.ts`):** `elementosPorDia` (un tramo por cada día que toca un evento: `tramoDelEventoEnDia` de `lib/fechas.ts`), orden (con hora por minuto de inicio y el evento antes que la tarea; sin hora por prioridad e id), `recortarParaCelda` (3 líneas; con más, 2 + «+N más»), `textoHora` («desde 22:00», «hasta 06:00», «Todo el día», «22:00–00:00», nunca «24:00»), `etiquetaDia`, `estadoDesdeUrl`, `diaDestino` (teclado). En `lib/fechas.ts`: `semanasDelMes` (lunes a domingo), `limitesDeSemana`, `sumarMeses`, `moverMesConservandoDia`, `parsearMes`, `esFechaValida`.
 - **URL:** `?mes=YYYY-MM&dia=YYYY-MM-DD`, derivados en el render (inválido = valor por defecto, sin reescribir la URL). Lo que cambia el mes hace push (‹ › Hoy, y el teclado que sale de la cuadrícula); cambiar solo el día dentro de la cuadrícula hace replace.
 - **Clic en un día:** lo selecciona y el panel «Detalle del día» (solo lectura: hora, estado, prioridad, «Atrasada») muestra todo lo suyo. No navega a Hoy porque `HoyPage` no admite otra fecha.
@@ -198,14 +191,22 @@ Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns (d
 - **Aspecto:** una sola tarjeta, números en Fraunces, hoy en círculo `acc`, seleccionado con anillo; evento = rectángulo, tarea = píldora con el círculo de estado.
 - **Responsive (container queries sobre la cuadrícula, medido con Playwright):** < 640 px marcas sin texto; 640–980 chips solo con título; ≥ 980 chips con hora. Un evento de varios días lleva flecha + título (su hora va en el `title` y en el panel). El panel va al lado solo con ≥ 1224 px de contenido (~1560 px de ventana); debajo ocupa todo el ancho, en dos columnas con ≥ 600 px. Felipe usa ventanas de ≤ 1280 px: cuadrícula de 945 px y chips de solo título.
 - **Capas:** `calendario/` importa de `agenda/` (`horario`, `useAhora`, `useTodasLasTareas`, `EstadoIcono`); ningún archivo de `agenda/`, `jerarquia/`, `cofre/` ni `ideas/` importa de `calendario/`. Solo `useEventosEnRango` toca `@/api`.
-- **Fuera de alcance:** vista semanal (9b), crear/editar/borrar eventos (9c), recordatorios de evento (9d), vista anual, barras continuas para eventos largos.
-- **Pendientes:** a Pulido 2 (abajo).
+- **Fuera de alcance:** crear/editar/borrar eventos (9c), recordatorios de evento (9d), vista anual, barras continuas para eventos largos. Pendientes: Pulido 2 (abajo).
+
+## Calendario semanal (9b; commit `7f10dce`)
+Solo frontend, sin dependencias nuevas ni backend. Mismo `/calendario`. `lib/fechas.ts` suma `diasDeLaSemana`, `formatearRangoSemana`, `duracionEnMinutos` y `formatearDiaCorto`; en `agenda/horario.ts` solo cambia el tipo de `distribuirSolapes` (genérica; Hoy no cambia).
+- **URL:** el mes sigue igual (`?mes=&dia=`, vista por defecto); la semana es `?vista=semana&dia=YYYY-MM-DD` (la que contiene ese día; `dia` inválido o ausente = hoy; `vista` desconocida = mes). El selector «Mes | Semana» hace push y lleva el día elegido en los dos sentidos. ‹ ›, «Hoy» y el teclado que sale de la semana hacen push; mover el día dentro, replace. «Hoy» hace replace si la URL no cambia (`mismaBusqueda`, sin importar el orden de los parámetros): arregla el apilado de historial también en el mes.
+- **Datos:** un solo `useEventosEnRango` con el rango de la vista y `elementosPorDia` de 9a. `repartirDia`: a la franja «Sin hora» van las tareas sin hora y los eventos de 24 h o más (en cada día que tocan); el resto a la línea de tiempo, cortado en 00:00/24:00 si cruza la medianoche. `textoHora`: un tramo 00:00–24:00 de un día es «Todo el día» (también en el panel del mes).
+- **Grilla (≥ 560 px de contenido):** eje de 56 px; encabezado de días `sticky`; franja de alto común (24 px por elemento, sin «+N más»); rango = unión de la semana (08–21 o más), 48 px por hora (Hoy, 56); línea de ahora solo en hoy. Bloques con container query: altos (≥ 40 px) con la hora arriba (desde 56 px de ancho interior) y el título debajo; cortos en una línea con la hora delante desde 100 px. Evento = rectángulo (recto donde lo corta la medianoche), tarea = píldora con círculo de estado. El `title` va en el div visual y el lector oye «Evento, 09:00–10:00, Reunión».
+- **Accesibilidad:** cada día es un `role="group"` (no `grid`) con `etiquetaDia`; solo los 7 encabezados («lunes 9») son controles, con roving tabindex (← →, Inicio/Fin, RePág/AvPág). Los bloques no son clicables (en 9c pasan a botones). Sin panel de detalle en la semana.
+- **< 560 px:** `ListaSemana` (7 secciones con `FilaDetalle` de 9a). Las dos variantes están en el DOM y una se oculta por container query (los tests usan `within`).
+- **Medido (Playwright):** `sticky` correcto; 1 petición a eventos por semana y ninguna a tareas; columna de 127 px a 1280.
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
 - 8.1 Agenda del día en lectura (tareas + eventos, lista del día y horas, próximos recordatorios y eventos): hecha (commit `e9ba44d`).
 - 8.2a Crear y editar tareas, hecha (diálogo con formulario; fecha vacía -> cofre; revisar el riesgo del `PUT` antes de editar).
-- 8.2b Acciones rápidas, hecha (hecha, reabrir, posponer, cancelar, reactivar, borrar con confirmación; pregunta por el recordatorio pendiente al marcar hecha o cancelar; errores 409 legibles).
+- 8.2b Acciones rápidas (hecha, reabrir, posponer, cancelar, reactivar, borrar; pregunta por el recordatorio pendiente al cerrar): hecha.
 - 8.3 Recomendación, hecha (commit `f2d0052`).
 - 8.2c Posponer con opciones (mañana / elegir fecha / dejar sin fecha), solo frontend: hecha (commit `2a78695`).
 - Refactor previo al cofre: hecho (commit `1e3256f`).
@@ -216,19 +217,20 @@ Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns (d
 - 8.2f Cambiar o quitar la madre de una tarea: hecha (commit `f195a8b`).
 - 8.2g Vincular una tarea existente como subtarea: hecha (commit `c6afad8`).
 - P1 Pulido 1: hecho (P1a `1642c9a`: aviso flotante, `color-scheme`, aviso de subtarea sin fecha; P1b `4ff8cc8`: chips de filtros activos).
-- 8.4a Páginas de Proyectos y Objetivos (listado en árbol, detalle, crear/editar/borrar, cambio de estado): hecha (commit `a388d07`).
-- 8.4a2 Vincular proyectos a un objetivo desde su detalle (agregar, quitar, cambiar el objetivo desde el proyecto): hecha (commit `0655bf0`).
-- 5e (backend) Borrar proyectos y objetivos eligiendo qué hacer con cada categoría: `DELETE /api/proyectos/{id}?subproyectos=&tareas=&ideas=` y `DELETE /api/objetivos/{id}?subobjetivos=&proyectos=&tareas=&ideas=` con `borrar|conservar`, mensajes 409 con el nombre: hecha (commit `f17aa98`; semántica en el brief).
-- 5f (backend) Vista previa del impacto del borrado: hecha (commit `43ecec5`). `GET …/impacto-borrado` de proyectos y objetivos, solo lectura, ausente = conservar; contrato en el brief.
-- 8.4a3 Diálogo de borrado con un interruptor «Mover / Borrar» por categoría (solo las que tienen `total > 0`, resumen en vivo con los `borrados` de 5f): hecha (commit `9fd2703`).
-- 8.4b Asignar y quitar el proyecto u objetivo de una tarea (diálogo desde el menú y la edición; «Quitar» y «Vincular una existente» en el detalle): hecha (commit `0417230`). 635 tests de frontend.
-- 8.4c Página de Ideas (crear, editar, concluir, reabrir, borrar; filtros de estado, vínculo y búsqueda): hecha (commit `3548350`). 735 tests de frontend.
-- 8.4d Ideas ligadas en el detalle de proyectos y objetivos (solo lectura más enlace a `/ideas` con el filtro puesto): hecha (commit `8c447ca`). 764 tests de frontend.
-- 8.5a Aviso de recordatorios vencidos (banner persistente en el Layout; polling de `/vencidos` cada 30 s; «Entendido» marca como enviado): hecha (commit `76719fd`). 782 tests de frontend.
-- 8.5b Crear, editar y borrar recordatorios (diálogo propio desde la tarea; sueltos desde Hoy con «Nuevo recordatorio» y «Editar» por fila): hecha (commit `2780858`). 824 tests de frontend. El aviso al cerrar una tarea con recordatorio pendiente ya se hizo en 8.2b.
-- 8.5c Mover el recordatorio al posponer (casilla en `PosponerDialog`): hecha (commit `e7aa911`). 857 tests de frontend.
-- 9a Calendario mensual en lectura (grilla propia; eventos y tareas con fecha; detalle del día; URL `?mes=&dia=`): hecha (commit `26c36bd`). 980 tests de frontend.
-- 9b Vista semanal en lectura: ← próxima. 9c CRUD de eventos. 9d Recordatorios de evento (el backend ya los soporta con `eventoId`; la interfaz es la de 8.5b).
+- 8.4a Páginas de Proyectos y Objetivos: hecha (commit `a388d07`).
+- 8.4a2 Vincular proyectos a un objetivo desde su detalle: hecha (commit `0655bf0`).
+- 5e (backend) Borrar proyectos y objetivos eligiendo qué hacer con cada categoría (`borrar|conservar`, 409 con el nombre): hecha (commit `f17aa98`; semántica en el brief).
+- 5f (backend) Vista previa del impacto del borrado (`GET …/impacto-borrado`): hecha (commit `43ecec5`; contrato en el brief).
+- 8.4a3 Diálogo de borrado con un interruptor «Mover / Borrar» por categoría: hecha (commit `9fd2703`).
+- 8.4b Asignar y quitar el proyecto u objetivo de una tarea: hecha (commit `0417230`). 635 tests.
+- 8.4c Página de Ideas: hecha (commit `3548350`). 735 tests.
+- 8.4d Ideas ligadas en el detalle de proyectos y objetivos: hecha (commit `8c447ca`). 764 tests.
+- 8.5a Aviso de recordatorios vencidos (banner en el Layout): hecha (commit `76719fd`). 782 tests.
+- 8.5b Crear, editar y borrar recordatorios: hecha (commit `2780858`). 824 tests.
+- 8.5c Mover el recordatorio al posponer: hecha (commit `e7aa911`). 857 tests.
+- 9a Calendario mensual en lectura: hecha (commit `26c36bd`). 980 tests.
+- 9b Vista semanal en lectura: hecha (commit `7f10dce`). 1046 tests.
+- 9c CRUD de eventos: ← próxima. 9d Recordatorios de evento (el backend ya los soporta con `eventoId`; la interfaz es la de 8.5b).
 - 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
 - Pulido 2 al final.
 
@@ -264,7 +266,6 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 ## Pendiente de decidir (de Felipe)
 - Tarjeta de objetivos con porcentaje de progreso: el backend no lo calcula (requeriría endpoint nuevo). Para la v1: lista de objetivos con estado y prioridad.
 - Planificación por horas: un evento que cruza la medianoche estira el rango a 00:00 y deja una franja larga vacía; posible mejora futura: plegar las horas vacías.
-- Etiquetas de prioridad: hoy se ven "Alta/Media/Baja"; el boceto decía "ALTA/MEDIA/BAJA" (cosmético).
 - Selector de hora del formulario: hoy es el input nativo y se ve feo; mejorarlo.
 - Recomendación: el aviso de la página puede aparecer dentro del diálogo aunque venga de otra acción; el error de agendar persiste hasta el siguiente intento.
 - Cofre: filtro de vínculo con búsqueda por nombre si la lista de proyectos crece.
@@ -278,4 +279,5 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Aviso de vencidos (8.5a): bajo un diálogo abierto el banner queda con `aria-hidden` y un lector de pantalla no lo anunciaría; el test del 404 de «Entendido» no comprueba el mensaje.
   - Recordatorios (8.5b): renombrar el criterio de «tarea abierta» que hoy se llama `puedeAgregarSubtarea`; indicar en el diálogo de tarea que el recordatorio ya fue enviado; tras un 404 al editar una fila ofrecer una salida clara; los avisos del diálogo de recordatorio tampoco llegan a lectores de pantalla.
   - Posponer con recordatorio (8.5c): aviso persistente ante el fallo parcial (el de 6 s puede pasar desapercibido); ayuda vacía de la casilla si no hay destino calculable.
-  - Calendario (9a): con el panel debajo (ventanas de menos de ~1560 px) el detalle del día queda bajo el pliegue (posible scroll suave hasta el panel, solo con clic); subir la base de la cuadrícula de 900 a 980 px si se usa una pantalla grande (así conserva la hora en los chips al pasar a «panel al lado»); «Hoy» pulsado varias veces podría apilar entradas de historial (sin verificar).
+  - Calendario (9a): con el panel debajo (ventanas de menos de ~1560 px) el detalle del día queda bajo el pliegue (posible scroll suave hasta el panel, solo con clic); subir la base de la cuadrícula de 900 a 980 px si se usa una pantalla grande.
+  - Calendario (9b): Hoy escribe «22:00–24:00» y el calendario nunca «24:00» (unificar); entre 768 y 894 px de ventana el contenido baja de 560 px y la semana pasa a lista, y por debajo de 768 vuelve la grilla (salto no monótono); la columna seleccionada en oscuro (`bg-side`) se ve como un hueco (revisar mes y semana juntos); un evento nocturno lleva la semana a 00–24 (plegar horas vacías, como en Hoy); `EstadoIcono` deja un espacio antes de la coma en el texto del lector.
