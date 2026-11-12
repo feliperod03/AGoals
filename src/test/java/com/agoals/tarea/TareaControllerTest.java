@@ -493,6 +493,46 @@ class TareaControllerTest {
 	}
 
 	@Test
+	void recomendacionConHastaPasaElParametroAlService() throws Exception {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		LocalDate hasta = LocalDate.of(2026, 11, 13);
+		when(service.recomendacion(hoy, OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null, hasta))
+				.thenReturn(List.of(new TareaRecomendadaResponse(respuesta(1L, "futura"), List.of())));
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("hasta", "2026-11-13"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].tarea.titulo").value("futura"));
+	}
+
+	@Test
+	void recomendacionSinHastaLlamaALaFirmaSinHorizonte() throws Exception {
+		LocalDate hoy = LocalDate.of(2026, 11, 6);
+		when(service.recomendacion(hoy, OrdenRecomendacion.PRIORIDAD, SentidoOrden.DESC, null, null, null))
+				.thenReturn(List.of());
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06")).andExpect(status().isOk());
+
+		org.mockito.Mockito.verify(service, org.mockito.Mockito.never())
+				.recomendacion(any(), any(), any(), any(), any(), any(), any());
+	}
+
+	@Test
+	void recomendacionConHastaMalFormadoDevuelve400() throws Exception {
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("hasta", "13-11-2026"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void recomendacionConHastaAnteriorAFechaSegunElServiceDevuelve400() throws Exception {
+		when(service.recomendacion(any(), any(), any(), any(), any(), any(), eq(LocalDate.of(2026, 11, 1))))
+				.thenThrow(new TareaInvalidaException("hasta anterior a fecha"));
+
+		mvc.perform(get("/api/tareas/recomendacion").param("fecha", "2026-11-06").param("hasta", "2026-11-01"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensaje").value("hasta anterior a fecha"));
+	}
+
+	@Test
 	void recomendacionConLimiteInvalidoSegunElServiceDevuelve400() throws Exception {
 		when(service.recomendacion(any(), any(), any(), eq(0), any(), any()))
 				.thenThrow(new TareaInvalidaException("limite debe ser mayor que 0"));

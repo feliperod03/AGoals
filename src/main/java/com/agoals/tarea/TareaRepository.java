@@ -32,6 +32,13 @@ public interface TareaRepository extends JpaRepository<Tarea, Long> {
 	List<Tarea> findCandidatasRecomendacion(@Param("usuarioId") Long usuarioId, @Param("fecha") LocalDate fecha,
 			@Param("estados") Collection<Estado> estados);
 
+	// Futuras dentro del horizonte (5c): abiertas con fecha > :fecha y <= :hasta (hoy no entra, hasta sí).
+	// Los dos extremos son siempre no nulos: el service no llama a este método sin horizonte.
+	@Query("select t from Tarea t where t.usuarioId = :usuarioId and t.estado in :estados "
+			+ "and t.fecha > :fecha and t.fecha <= :hasta")
+	List<Tarea> findFuturasRecomendacion(@Param("usuarioId") Long usuarioId, @Param("fecha") LocalDate fecha,
+			@Param("hasta") LocalDate hasta, @Param("estados") Collection<Estado> estados);
+
 	List<Tarea> findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(Long usuarioId, Long proyectoId);
 
 	List<Tarea> findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(Long usuarioId, Long objetivoId);

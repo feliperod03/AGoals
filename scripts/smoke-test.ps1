@@ -323,6 +323,31 @@ try {
     $rc9 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + "&limite=0")
     Verificar "recomendacion con limite 0 -> 400" ($rc9.Status -eq 400) "status $($rc9.Status)"
 
+    # --- Recomendacion con tareas futuras (hasta, 5c) ---
+    # $limite = 2098-01-10 es "hoy" (Y, de hoy, no entra). F (01-12) entra con hasta=01-15; G (01-20) queda fuera.
+    $rf = Llamar "POST" $Base '{"titulo":"smoke-rc-F futura","prioridad":"ALTA","fecha":"2098-01-12"}'
+    if ($rf.Json) { $ids += $rf.Json.id }
+    $rg = Llamar "POST" $Base '{"titulo":"smoke-rc-G lejana","fecha":"2098-01-20"}'
+    if ($rg.Json) { $ids += $rg.Json.id }
+    if (-not ($rf.Json -and $rg.Json)) { throw "No se pudieron crear las tareas futuras de recomendacion." }
+    foreach ($x in @($rf, $rg)) { [void](Llamar "PUT" ($BaseProyectos + "/" + $rp.Json.id + "/tareas/" + $x.Json.id)) }
+    $rh0 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro)
+    $raicesH0 = @($rh0.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion sin hasta: la futura no aparece" (($rh0.Status -eq 200) -and (-not ($raicesH0 -contains "smoke-rc-F futura"))) ($raicesH0 -join "|")
+    $rh1 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&hasta=2098-01-15")
+    $raicesH1 = @($rh1.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion con hasta: la futura va al final y la lejana y la de hoy no entran" (($rh1.Status -eq 200) -and (($raicesH1 -join "|") -eq "smoke-rc-M madre|smoke-rc-X sin fecha|smoke-rc-W atrasada|smoke-rc-F futura")) ($raicesH1 -join "|")
+    $rh2 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&hasta=2098-01-15&orden=antiguedad&sentido=asc")
+    $raicesH2 = @($rh2.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion con hasta: el bloque futuro ignora orden y sentido" ($raicesH2[-1] -eq "smoke-rc-F futura") ($raicesH2 -join "|")
+    $rh3 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&hasta=" + $limite)
+    $raicesH3 = @($rh3.Json | ForEach-Object { $_.tarea.titulo })
+    Verificar "recomendacion con hasta igual a fecha -> 200 sin futuras" (($rh3.Status -eq 200) -and (($raicesH3 -join "|") -eq "smoke-rc-M madre|smoke-rc-X sin fecha|smoke-rc-W atrasada")) ($raicesH3 -join "|")
+    $rh4 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&hasta=2098-01-09")
+    Verificar "recomendacion con hasta anterior a fecha -> 400" ($rh4.Status -eq 400) "status $($rh4.Status)"
+    $rh5 = Llamar "GET" ($Base + "/recomendacion?fecha=" + $limite + $filtro + "&hasta=raro")
+    Verificar "recomendacion con hasta mal formado -> 400" ($rh5.Status -eq 400) "status $($rh5.Status)"
+
     # --- Agendar una tarea con sus subtareas (PATCH /{id}/agendar) ---
     # Fechas en 2098 para no tocar tareas reales. hoy = 2098-06-01; se agenda para 2098-07-01.
     # Arbol: M (atrasada, con horas) -> H1 (sin fecha) -> N (sin fecha)

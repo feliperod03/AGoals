@@ -1110,6 +1110,194 @@ class TareaServiceTest {
 		assertThat(recomendar(null, null, null, null, null)).isEmpty();
 	}
 
+	// ---- Recomendación con tareas futuras (5c) ----
+
+	private static final LocalDate HASTA_REC = HOY_REC.plusDays(7);
+
+	private void futuras(Tarea... tareas) {
+		when(repository.findFuturasRecomendacion(TareaService.USUARIO_ID, HOY_REC, HASTA_REC, ABIERTOS))
+				.thenReturn(List.of(tareas));
+	}
+
+	/** Futura armada a mano: {@code dias} después de HOY_REC. */
+	private static Tarea futura(long id, int dias, Prioridad prioridad, Long padreId) {
+		return cand(id, "f" + id, HOY_REC.plusDays(dias), null, prioridad, padreId, null, null);
+	}
+
+	private List<TareaRecomendadaResponse> recomendarHasta(OrdenRecomendacion o, SentidoOrden s, Integer limite,
+			Long p, Long ob) {
+		return service.recomendacion(HOY_REC, o, s, limite, p, ob, HASTA_REC);
+	}
+
+	@Test
+	void recomendacionSinHastaNoConsultaFuturas() {
+		candidatas(cand(1, "actual", null));
+
+		assertThat(raices(recomendar(null, null, null, null, null))).containsExactly("actual");
+
+		verify(repository, never()).findFuturasRecomendacion(any(), any(), any(), any());
+	}
+
+	@Test
+	void recomendacionConHastaAgregaLasFuturasAlFinal() {
+		// Aunque la futura tenga prioridad ALTA y la actual BAJA, el bloque futuro va después.
+		candidatas(cand(1, "actual", Prioridad.BAJA));
+		futuras(futura(2, 3, Prioridad.ALTA, null));
+
+		assertThat(raices(recomendarHasta(null, null, null, null, null))).containsExactly("actual", "f2");
+	}
+
+	@Test
+	void recomendacionConHastaIgualAFechaNoConsultaNiAgregaNada() {
+		candidatas(cand(1, "actual", null));
+
+		assertThat(raices(service.recomendacion(HOY_REC, null, null, null, null, null, HOY_REC)))
+				.containsExactly("actual");
+
+		verify(repository, never()).findFuturasRecomendacion(any(), any(), any(), any());
+	}
+
+	@Test
+	void recomendacionConHastaAnteriorAFechaLanza400() {
+		assertThatThrownBy(() -> service.recomendacion(HOY_REC, null, null, null, null, null, HOY_REC.minusDays(1)))
+				.isInstanceOf(TareaInvalidaException.class)
+				.hasMessageContaining("hasta");
+	}
+
+	@Test
+	void recomendacionBloqueFuturoOrdenaPorFechaPrioridadEId() {
+		candidatas();
+		futuras(
+				futura(1, 3, Prioridad.BAJA, null),
+				futura(2, 2, Prioridad.MEDIA, null),
+				futura(3, 2, Prioridad.ALTA, null),
+				futura(4, 2, Prioridad.ALTA, null),
+				futura(5, 2, null, null));
+
+		assertThat(raices(recomendarHasta(null, null, null, null, null)))
+				.containsExactly("f3", "f4", "f2", "f5", "f1");
+	}
+
+	@Test
+	void recomendacionBloqueFuturoNoCambiaConAntiguedadNiConSentidoAsc() {
+		candidatas(cand(20, "a-alta", Prioridad.ALTA), cand(21, "a-baja", Prioridad.BAJA));
+		futuras(futura(1, 3, Prioridad.BAJA, null), futura(2, 2, Prioridad.MEDIA, null), futura(3, 2, Prioridad.ALTA, null));
+
+		// El bloque actual sí se reordena (como hoy); el futuro queda igual.
+		assertThat(raices(recomendarHasta(OrdenRecomendacion.PRIORIDAD, SentidoOrden.ASC, null, null, null)))
+				.containsExactly("a-baja", "a-alta", "f3", "f2", "f1");
+		assertThat(raices(recomendarHasta(OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.ASC, null, null, null)))
+				.endsWith("f3", "f2", "f1");
+		assertThat(raices(recomendarHasta(OrdenRecomendacion.ANTIGUEDAD, SentidoOrden.DESC, null, null, null)))
+				.endsWith("f3", "f2", "f1");
+	}
+
+	@Test
+	void recomendacionLimiteRecortaLaListaCombinadaYLasFuturasCaenPrimero() {
+		candidatas(cand(30, "a1", Prioridad.ALTA), cand(31, "a2", Prioridad.MEDIA));
+		futuras(futura(1, 2, Prioridad.ALTA, null));
+
+		assertThat(raices(recomendarHasta(null, null, 2, null, null))).containsExactly("a1", "a2");
+		assertThat(raices(recomendarHasta(null, null, 3, null, null))).containsExactly("a1", "a2", "f1");
+	}
+
+	@Test
+	void recomendacionMadreFuturaEsRaizConSusHijasCandidatasAnidadas() {
+		Tarea sinFecha = cand(2, "h sin fecha", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, 1L, null, null);
+		Tarea atrasada = cand(3, "h atrasada", HOY_REC.minusDays(2), null, Prioridad.ALTA, 1L, null, null);
+		candidatas(sinFecha, atrasada);
+		// La hija futura (4) no se anida ni se muestra: su madre es candidata (futura).
+		futuras(futura(1, 2, Prioridad.ALTA, null), futura(4, 3, null, 1L));
+
+		List<TareaRecomendadaResponse> r = recomendarHasta(null, null, null, null, null);
+
+		// Las hijas actuales ya no salen sueltas: van bajo su madre futura, ordenadas como cualquier subárbol.
+		assertThat(raices(r)).containsExactly("f1");
+		assertThat(r.get(0).subtareas()).extracting(x -> x.tarea().titulo()).containsExactly("h atrasada", "h sin fecha");
+	}
+
+	@Test
+	void recomendacionSubtareaFuturaConMadreCandidataNoSeMuestra() {
+		candidatas(cand(1, "madre actual", Prioridad.ALTA));
+		futuras(futura(2, 2, null, 1L));
+
+		List<TareaRecomendadaResponse> r = recomendarHasta(null, null, null, null, null);
+
+		assertThat(raices(r)).containsExactly("madre actual");
+		assertThat(r.get(0).subtareas()).isEmpty();
+	}
+
+	@Test
+	void recomendacionSubtareaFuturaConMadreNoCandidataEsRaiz() {
+		// La madre (99) no es candidata ni futura visible (p. ej. HECHO o fuera del horizonte).
+		candidatas();
+		futuras(futura(2, 2, null, 99L));
+
+		assertThat(raices(recomendarHasta(null, null, null, null, null))).containsExactly("f2");
+	}
+
+	@Test
+	void recomendacionHijaActualDeFuturaOcultaSigueSiendoRaiz() {
+		// abuela (candidata) -> madre futura (oculta, su madre es candidata) -> nieta sin fecha: la nieta sale como hoy.
+		candidatas(
+				cand(1, "abuela", null, LocalDate.of(2026, 10, 1), Prioridad.ALTA, null, null, null),
+				cand(3, "nieta", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, 2L, null, null));
+		futuras(futura(2, 2, null, 1L));
+
+		List<TareaRecomendadaResponse> r = recomendarHasta(null, null, null, null, null);
+
+		assertThat(raices(r)).containsExactly("abuela", "nieta");
+		assertThat(r.get(0).subtareas()).isEmpty();
+	}
+
+	@Test
+	void recomendacionConHastaFiltraFuturasPorProyectoYObjetivo() {
+		candidatas(cand(1, "actual p7", null, LocalDate.of(2026, 10, 1), null, null, 7L, null));
+		futuras(
+				cand(2, "f p7", HOY_REC.plusDays(2), null, null, null, 7L, null),
+				cand(3, "f p8", HOY_REC.plusDays(2), null, null, null, 8L, null),
+				cand(4, "f o9", HOY_REC.plusDays(2), null, null, null, null, 9L));
+
+		assertThat(raices(recomendarHasta(null, null, null, 7L, null))).containsExactly("actual p7", "f p7");
+		assertThat(raices(recomendarHasta(null, null, null, null, 9L))).containsExactly("f o9");
+	}
+
+	@Test
+	void agendarAdelantaUnaFuturaAHoySinSumarPospuesta() {
+		// 5b no cambia: solo rechaza fechas anteriores a hoy; llevar una futura a hoy es válido.
+		Tarea futura = madreAgendable(1, HOY_REC.plusDays(3), Estado.PENDIENTE);
+		futura.setHoraInicio(LocalTime.of(9, 0));
+		existe(futura);
+		when(repository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+		candidatas();
+
+		service.agendar(1L, new AgendarRequest(HOY_REC, HOY_REC, true));
+
+		assertThat(futura.getFecha()).isEqualTo(HOY_REC);
+		assertThat(futura.getHoraInicio()).isNull();
+		assertThat(futura.getVecesPospuesta()).isZero();
+	}
+
+	@Test
+	void agendarMadreFuturaMueveExactamenteLoQueLaVistaPreviaConHastaAnidaBajoElla() {
+		Tarea madre = futura(1, 3, Prioridad.ALTA, null);
+		Tarea h2 = cand(2, "h2", null, LocalDate.of(2026, 10, 1), Prioridad.BAJA, 1L, null, null);
+		Tarea h3 = cand(3, "h3", HOY_REC.minusDays(3), null, Prioridad.ALTA, 1L, null, null);
+		Tarea n4 = cand(4, "n4", null, LocalDate.of(2026, 10, 1), null, 3L, null, null);
+		Tarea h5 = futura(5, 4, null, 1L); // futura: ni se anida ni se mueve
+		candidatas(h2, h3, n4);
+		futuras(madre, h5);
+
+		TareaRecomendadaResponse enVistaPrevia = recomendarHasta(null, null, null, null, null).stream()
+				.filter(r -> r.tarea().id() == 1L).findFirst().orElseThrow();
+		List<Long> esperado = new java.util.ArrayList<>(List.of(1L));
+		aplanar(enVistaPrevia, esperado);
+
+		assertThat(esperado).containsExactly(1L, 3L, 4L, 2L);
+		assertThat(agendar(madre, true)).containsExactlyElementsOf(esperado);
+		assertThat(h5.getFecha()).isEqualTo(HOY_REC.plusDays(4));
+	}
+
 	// ---- Agendar tarea con sus subtareas ----
 
 	private static final LocalDate NUEVA = HOY_REC.plusDays(5);

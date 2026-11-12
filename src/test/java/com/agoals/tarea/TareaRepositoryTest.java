@@ -210,6 +210,44 @@ class TareaRepositoryTest {
 	}
 
 	@Test
+	void futurasRecomendacionRespetaBordesYEstados() {
+		LocalDate hoy = LocalDate.of(2097, 3, 10);
+		LocalDate hasta = hoy.plusDays(5);
+		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);
+		Tarea manana = nueva("fu manana");
+		manana.setFecha(hoy.plusDays(1));
+		Tarea enHasta = nueva("fu en hasta");
+		enHasta.setFecha(hasta);
+		enHasta.setEstado(Estado.EN_PROGRESO);
+		Tarea enPausa = nueva("fu en pausa");
+		enPausa.setFecha(hoy.plusDays(2));
+		enPausa.setEstado(Estado.EN_PAUSA);
+		Tarea deHoy = nueva("fu de hoy");
+		deHoy.setFecha(hoy);
+		Tarea pasadoHasta = nueva("fu hasta mas uno");
+		pasadoHasta.setFecha(hasta.plusDays(1));
+		Tarea atrasada = nueva("fu atrasada");
+		atrasada.setFecha(hoy.minusDays(1));
+		Tarea sinFecha = nueva("fu sin fecha");
+		Tarea hecha = nueva("fu hecha");
+		hecha.setFecha(hoy.plusDays(2));
+		hecha.setEstado(Estado.HECHO);
+		Tarea cancelada = nueva("fu cancelada");
+		cancelada.setFecha(hoy.plusDays(2));
+		cancelada.setEstado(Estado.CANCELADO);
+		repository.saveAllAndFlush(List.of(manana, enHasta, enPausa, deHoy, pasadoHasta, atrasada, sinFecha, hecha,
+				cancelada));
+
+		List<Tarea> r = repository.findFuturasRecomendacion(1L, hoy, hasta, abiertos);
+
+		// La base puede tener tareas del usuario: se comprueba lo propio con contains / doesNotContain.
+		assertThat(r).extracting(Tarea::getTitulo)
+				.contains("fu manana", "fu en hasta", "fu en pausa")
+				.doesNotContain("fu de hoy", "fu hasta mas uno", "fu atrasada", "fu sin fecha", "fu hecha", "fu cancelada");
+		assertThat(repository.findFuturasRecomendacion(2L, hoy, hasta, abiertos)).isEmpty();
+	}
+
+	@Test
 	void candidatasRecomendacionTraeTareasConCualquierVinculoYPadre() {
 		LocalDate hoy = LocalDate.of(2026, 11, 6);
 		List<Estado> abiertos = List.of(Estado.PENDIENTE, Estado.EN_PROGRESO, Estado.EN_PAUSA);

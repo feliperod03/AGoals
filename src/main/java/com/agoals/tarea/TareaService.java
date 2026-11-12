@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 @Service
 @Transactional
@@ -180,8 +181,23 @@ public class TareaService {
 	@Transactional(readOnly = true)
 	public List<TareaRecomendadaResponse> recomendacion(LocalDate fecha, OrdenRecomendacion orden, SentidoOrden sentido,
 			Integer limite, Long proyectoId, Long objetivoId) {
+		return recomendacion(fecha, orden, sentido, limite, proyectoId, objetivoId, null);
+	}
+
+	/**
+	 * Igual que la recomendación base, y con {@code hasta} (5c) suma un bloque de tareas FUTURAS al final: abiertas
+	 * con fecha > {@code fecha} y <= {@code hasta}. Las futuras no se anidan bajo nadie (la regla de {@code agendar}
+	 * no cambia: {@code hijasDe} sale solo de las candidatas actuales) y su bloque va ordenado por fecha, prioridad
+	 * e id, sin importar {@code orden} ni {@code sentido}. El {@code limite} recorta la lista combinada.
+	 */
+	@Transactional(readOnly = true)
+	public List<TareaRecomendadaResponse> recomendacion(LocalDate fecha, OrdenRecomendacion orden, SentidoOrden sentido,
+			Integer limite, Long proyectoId, Long objetivoId, LocalDate hasta) {
 		if (limite != null && limite <= 0) {
 			throw new TareaInvalidaException("limite debe ser mayor que 0");
+		}
+		if (hasta != null && hasta.isBefore(fecha)) {
+			throw new TareaInvalidaException("hasta (" + hasta + ") no puede ser anterior a fecha (" + fecha + ")");
 		}
 		int tope = limite == null ? LIMITE_RECOMENDACION_DEFECTO : Math.min(limite, LIMITE_RECOMENDACION_MAXIMO);
 		Comparator<Tarea> comparador = comparadorRecomendacion(
@@ -190,17 +206,37 @@ public class TareaService {
 
 		ArbolCandidatas arbol = cargarCandidatas(fecha);
 		List<Tarea> candidatas = arbol.candidatas();
-		Map<Long, Tarea> porId = arbol.porId();
 		Map<Long, List<Tarea>> hijasDe = arbol.hijasDe();
+
+		// Con hasta == fecha el rango está vacío: ni se consulta.
+		List<Tarea> futuras = hasta == null || hasta.equals(fecha) ? List.of()
+				: repository.findFuturasRecomendacion(USUARIO_ID, fecha, hasta, ESTADOS_ABIERTOS);
+		List<Tarea> futurasVisibles = futurasVisibles(futuras, arbol.porId());
+		Map<Long, Tarea> porId = new HashMap<>(arbol.porId());
+		futurasVisibles.forEach(t -> porId.put(t.getId(), t));
 
 		Predicate<Tarea> cumple = t -> (proyectoId == null || proyectoId.equals(t.getProyectoId()))
 				&& (objetivoId == null || objetivoId.equals(t.getObjetivoId()));
-		return candidatas.stream()
-				.filter(cumple)
-				.filter(t -> !tieneAncestroQueCumple(t, porId, cumple))
-				.sorted(comparador)
+		Predicate<Tarea> esRaiz = t -> cumple.test(t) && !tieneAncestroQueCumple(t, porId, cumple);
+
+		Stream<Tarea> bloqueActual = candidatas.stream().filter(esRaiz).sorted(comparador);
+		Stream<Tarea> bloqueFuturo = futurasVisibles.stream().filter(esRaiz).sorted(ORDEN_ATRASADAS);
+		return Stream.concat(bloqueActual, bloqueFuturo)
 				.limit(tope)
 				.map(t -> aRecomendada(t, hijasDe, comparador))
+				.toList();
+	}
+
+	/**
+	 * De las futuras, las que se muestran: las que no tienen madre candidata (ni actual ni futura). Una subtarea
+	 * futura cuya madre sí es candidata no se muestra, igual que {@code agendar} no la mueve con la madre.
+	 */
+	private static List<Tarea> futurasVisibles(List<Tarea> futuras, Map<Long, Tarea> actualesPorId) {
+		Set<Long> idsFuturas = new HashSet<>();
+		futuras.forEach(t -> idsFuturas.add(t.getId()));
+		return futuras.stream()
+				.filter(t -> t.getPadreId() == null
+						|| (!actualesPorId.containsKey(t.getPadreId()) && !idsFuturas.contains(t.getPadreId())))
 				.toList();
 	}
 

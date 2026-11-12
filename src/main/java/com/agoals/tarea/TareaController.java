@@ -57,10 +57,16 @@ public class TareaController {
 			@RequestParam(required = false) String sentido,
 			@RequestParam(required = false) Integer limite,
 			@RequestParam(required = false) Long proyectoId,
-			@RequestParam(required = false) Long objetivoId) {
+			@RequestParam(required = false) Long objetivoId,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
 		// orden y sentido llegan como texto y se validan aquí: un valor desconocido responde 400 con mensaje claro.
-		return service.recomendacion(fecha, OrdenRecomendacion.desde(orden), SentidoOrden.desde(sentido),
-				limite, proyectoId, objetivoId);
+		OrdenRecomendacion ordenValido = OrdenRecomendacion.desde(orden);
+		SentidoOrden sentidoValido = SentidoOrden.desde(sentido);
+		// Sin "hasta" se llama a la firma de siempre: el comportamiento anterior queda intacto.
+		if (hasta == null) {
+			return service.recomendacion(fecha, ordenValido, sentidoValido, limite, proyectoId, objetivoId);
+		}
+		return service.recomendacion(fecha, ordenValido, sentidoValido, limite, proyectoId, objetivoId, hasta);
 	}
 
 	@PatchMapping("/{id}/reabrir")
