@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 12/11/2026 (hecho hasta 9e; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 12/11/2026 (hecho hasta 5c y 8.3c; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -57,7 +57,7 @@ Sin cambios de backend (ya aceptaba `{fecha}`). `PosponerDialog` (montado una ve
 ## Recomendación (8.3; commit `f2d0052`)
 - Botón "Recomendación" en el encabezado de Hoy: diálogo con tareas abiertas sin fecha o atrasadas. Orden (Prioridad / Antigüedad) con botón de sentido en palabras; filtro Todos / Proyecto / Objetivo (búsqueda en el cliente, chip con "×"; uno a la vez).
 - Filas: "Sin fecha" / "Atrasada desde <día>", chip de prioridad, proyecto u objetivo, subtareas anidadas de vista previa. Agendar: "Agendar «título» para hoy" y "Incluir N subtareas" (todos los niveles; marcado). Aviso "«X» agendada para hoy (con N subtareas)"; el diálogo sigue abierto. Región `role="status"` propia (Radix deja la página con `aria-hidden`).
-- **Pendiente (8.3c, tras la 5c de backend):** "Incluir próximos N días" para adelantar tareas futuras. Mientras tanto lo cubre el Cofre (filtro "Futuras" y "Agendar para hoy").
+- **Incluir próximos N días (5c backend `c3ff1dc` + 8.3c `7a3dd9e`):** interruptor (`role="switch"`) «Incluir próximos N días» con selector 7/14/30 (`aria-label="Cantidad de días"`); apagado por defecto, no se guarda, al encenderlo empieza en 7. `useRecomendacion` guarda `horizonte` y manda `hasta = hoy + N` (en la clave de la consulta; `undefined` si está apagado). El servidor añade al FINAL las abiertas con fecha en (hoy, hasta], por fecha, prioridad e id, ignorando orden/sentido; nunca anidadas como hijas. Una madre futura es raíz y lleva sus hijas sin fecha/atrasadas (lo mismo que mueve `PATCH /agendar`), así que «Incluir N subtareas» sale de `contarSubtareas` sin caso especial. Filas: «Para el <día corto>» con icono `CalendarClock` (`esFutura` en `lib/fechas.ts`). `hasta < fecha` da 400. Vacío: «No hay tareas para recomendar ni para los próximos N días.» El filtro «Futuras» del Cofre sigue existiendo. 1314 tests (85 archivos).
 
 ## Cofre (8.3b; commit `a33fcce`)
 Inventario de **todas** las tareas, sin cambios de backend (`GET /api/tareas`; filtros, orden y anidado en el cliente; clave `['tareas','todas']`). Vista por defecto: abiertas sin fecha ("Volver a la vista por defecto" restablece todo).
@@ -218,7 +218,7 @@ Solo frontend, sin dependencias nuevas ni backend. Modelo: 8.5c (`PosponerDialog
 - 9c CRUD de eventos: hecha (commit `ffa1562`). 1221 tests al terminar la implementación (más los de H1 y H2).
 - 9d Recordatorios de evento (botón «Recordatorio…» en la edición del evento; aviso 60 min antes por defecto): hecha (commit `1da4b2e`).
 - 9e Mover el recordatorio al mover el evento (P7; casilla marcada por defecto, conserva la distancia al inicio, fallo parcial sin reintento): hecha (commit `d949a6b`). Con ella queda completa la fase 9.
-- 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
+- 5c (backend) + 8.3c: tareas futuras en la recomendación: hecha (commits `c3ff1dc` y `7a3dd9e`). 1314 tests de frontend.
 - Pulido 2 al final.
 
 Sesiones con Sonnet; `/clear` entre rebanadas. Escritorio primero, móvil después (layout responsive desde el inicio, PWA más adelante).
@@ -271,3 +271,4 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Calendario (9c): H3, tras borrar un evento sobra un `GET /api/recordatorios?eventoId=N` (cerrar la confirmación antes de esperar `['recordatorios']`); H5, «Agregar evento» y «Nuevo recordatorio» miden 32 px (táctil 44 px; revisar con los botones `sm`); con rango 08–21 el último hueco es 20:30 (diseñado, con test); vista de DÍA para cualquier fecha, accesible desde el calendario (como Hoy, con tareas y horas); `Campo` duplicado por tercera vez; los avisos del diálogo de eventos no llegan a lectores de pantalla; devolver el foco al cerrar los demás diálogos; comentario viejo en `EventoService.eliminar`.
   - Calendario (9d): crear un evento con su recordatorio en un solo paso (hoy se crea el evento y luego se edita); campana en el calendario (chips, bloques y panel) para los eventos con recordatorio; hora del aviso parametrizable por usuario, por evento o por recordatorio (hoy 60 min antes, o 09:00 en eventos de días completos; la constante está en `recordatorioForm.ts`); los botones de `RecordatorioDialog` miden 40 px (solo «Recordatorio…» llega a 44 px en móvil; unificar con H5).
   - Calendario (9e): el aviso del fallo parcial (evento guardado, recordatorio no movido) dura 6 s como el de 8.5c (hacerlo persistente); con un recordatorio ya enviado no se ofrece la casilla y el diálogo no dice por qué.
+  - Recomendación (8.3c): la etiqueta del interruptor lleva el literal «N» (decisión de la rebanada); los botones `size="sm"` siguen en 32 px (H5).
