@@ -35,6 +35,14 @@ export interface AccionesEvento {
   disparador: { current: HTMLElement | null }
   /** Elemento que tenía el foco al pedir el borrado («Borrar evento»): ahí vuelve al cancelar la confirmación. */
   disparadorBorrado: { current: HTMLElement | null }
+  /** Evento cuyo recordatorio se está editando (9d), en un diálogo abierto encima de la edición. */
+  recordatorioDe: Evento | null
+  pedirRecordatorio: (evento: Evento) => void
+  cerrarRecordatorio: () => void
+  /** Elemento que tenía el foco al pedir el recordatorio («Recordatorio…»): ahí vuelve al cerrarlo. */
+  disparadorRecordatorio: { current: HTMLElement | null }
+  /** Aviso flotante de la página, para el diálogo de recordatorio. */
+  alMensaje: (mensaje: string) => void
 }
 
 interface Opciones {
@@ -47,7 +55,7 @@ interface Opciones {
 const esStatus = (e: unknown, status: number) => e instanceof ApiError && e.status === status
 
 /**
- * Crear, editar y borrar eventos (9c). Una sola mutación a la vez: el guard es un `useRef` (no `isPending`, que se
+ * Crear, editar y borrar eventos (9c), y abrir el recordatorio del evento (9d; la mutación es la de `RecordatorioDialog`). Una sola mutación a la vez: el guard es un `useRef` (no `isPending`, que se
  * actualiza en el siguiente render y dejaría pasar un doble clic) y se libera en `onSettled`.
  *
  * Al terminar bien, primero se espera el refresco y DESPUÉS se cierra el diálogo: así, cuando Radix devuelve el foco,
@@ -62,9 +70,11 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
   const queryClient = useQueryClient()
   const [dialogo, setDialogo] = useState<EstadoEventoDialog | null>(null)
   const [aBorrar, setABorrar] = useState<Evento | null>(null)
+  const [recordatorioDe, setRecordatorioDe] = useState<Evento | null>(null)
   const enCurso = useRef(false)
   const disparador = useRef<HTMLElement | null>(null)
   const disparadorBorrado = useRef<HTMLElement | null>(null)
+  const disparadorRecordatorio = useRef<HTMLElement | null>(null)
 
   const invalidarEventos = () => queryClient.invalidateQueries({ queryKey: ['eventos'] })
   const invalidarTodo = () => Promise.all([invalidarEventos(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
@@ -123,6 +133,7 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
     disparador.current = enfocado()
     guardarMutacion.reset()
     setABorrar(null)
+    setRecordatorioDe(null)
     setDialogo(estado)
   }
 
@@ -149,5 +160,13 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
     errorBorrar: borrarMutacion.error?.message ?? null,
     disparador,
     disparadorBorrado,
+    recordatorioDe,
+    pedirRecordatorio: (evento) => {
+      disparadorRecordatorio.current = enfocado()
+      setRecordatorioDe(evento)
+    },
+    cerrarRecordatorio: () => setRecordatorioDe(null),
+    disparadorRecordatorio,
+    alMensaje,
   }
 }

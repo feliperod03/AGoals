@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import type { Evento, EventoRequest } from '@/types/evento'
+import type { Recordatorio } from '@/types/recordatorio'
 import { CalendarioPage } from './CalendarioPage'
 
 // Integración de 9c en el calendario: puntos de entrada, navegación tras guardar (P8), foco y refrescos.
@@ -18,9 +19,14 @@ vi.mock('@/api/eventos', () => ({
   borrarEvento: vi.fn(),
 }))
 vi.mock('@/api/tareas', () => ({ getTareas: vi.fn() }))
-vi.mock('@/api/recordatorios', () => ({ getRecordatoriosDeEvento: vi.fn() }))
+vi.mock('@/api/recordatorios', () => ({
+  getRecordatoriosDeEvento: vi.fn(),
+  crearRecordatorio: vi.fn(),
+  actualizarRecordatorio: vi.fn(),
+  borrarRecordatorio: vi.fn(),
+}))
 import { actualizarEvento, borrarEvento, crearEvento, getEventos } from '@/api/eventos'
-import { getRecordatoriosDeEvento } from '@/api/recordatorios'
+import { crearRecordatorio, getRecordatoriosDeEvento } from '@/api/recordatorios'
 import { getTareas } from '@/api/tareas'
 
 /** «Servidor» en memoria: lo que se crea, edita o borra se ve en el siguiente GET. */
@@ -273,5 +279,29 @@ describe('CalendarioPage 9c: atajos de mouse', () => {
     expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-15')
     // Un hueco no enfoca nada: el foco va a «Nuevo evento».
     await waitFor(() => expect(nuevoEvento()).toHaveFocus())
+  })
+})
+
+describe('CalendarioPage 9d: recordatorio de un evento', () => {
+  it('editar → «Recordatorio…» → crear → «Listo»: el botón pasa a mostrar la hora y el evento no se toca', async () => {
+    servidor = [evento('Dentista', '2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')]
+    let recordatorios: Recordatorio[] = []
+    vi.mocked(getRecordatoriosDeEvento).mockImplementation(async (id) => recordatorios.filter((r) => r.eventoId === id))
+    vi.mocked(crearRecordatorio).mockImplementation(async (req) => {
+      const nuevo = { id: 70, enviado: false, ...req }
+      recordatorios = [nuevo]
+      return nuevo
+    })
+    const user = montar('/calendario?mes=2026-12&dia=2026-12-15')
+    await user.click(await panel().findByRole('button', { name: 'Editar evento: Dentista, 09:00–10:00' }))
+    await user.click(await screen.findByRole('button', { name: 'Recordatorio…' }))
+    const recordatorio = within(await screen.findByRole('dialog', { name: 'Recordatorio de «Dentista»' }))
+    const crear = await recordatorio.findByRole('button', { name: 'Crear recordatorio' })
+    await waitFor(() => expect(crear).toBeEnabled())
+    await user.click(crear)
+    await user.click(await recordatorio.findByRole('button', { name: 'Listo' }))
+    expect(await screen.findByRole('button', { name: 'Recordatorio: mar 15 dic · 08:00' })).toBeInTheDocument()
+    expect(screen.getByText('Recordatorio creado para el mar 15 dic · 08:00')).toBeInTheDocument()
+    expect(actualizarEvento).not.toHaveBeenCalled()
   })
 })

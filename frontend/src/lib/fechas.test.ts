@@ -6,6 +6,7 @@ import {
   formatearRangoEvento,
   mensajeEventoBorrado,
   mensajeEventoCreado,
+  mensajeEventoEmpieza,
   mensajeEventoGuardado,
   mensajeEventoYaNoExistia,
   minutosEntre,
@@ -777,5 +778,7 @@ describe('formatearRangoEvento y mensajes de eventos', () => {
     expect(mensajeEventoBorrado('Dentista', false)).toBe('Evento «Dentista» borrado')
     expect(mensajeEventoBorrado('Dentista', true)).toBe('Evento «Dentista» borrado, con su recordatorio')
     expect(mensajeEventoYaNoExistia('Dentista')).toBe('El evento «Dentista» ya no existía')
+    expect(mensajeEventoEmpieza('2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')).toBe('El evento empieza el mar 15 dic · 09:00')
+    expect(mensajeEventoEmpieza('2026-12-15T00:00:00-03:00', '2026-12-16T00:00:00-03:00')).toBe('El evento es mar 15 dic, todo el día')
   })
 })

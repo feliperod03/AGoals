@@ -215,3 +215,40 @@ describe('useAccionesEvento: borrar', () => {
     expect(result.current.dialogo).not.toBeNull()
   })
 })
+
+describe('useAccionesEvento: recordatorio (9d)', () => {
+  it('pedirRecordatorio lo abre sin tocar la edición; cerrarRecordatorio lo cierra', () => {
+    const { result } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.pedirRecordatorio(EVENTO))
+    expect(result.current.recordatorioDe).toEqual(EVENTO)
+    expect(result.current.dialogo?.evento).toEqual(EVENTO)
+    act(() => result.current.cerrarRecordatorio())
+    expect(result.current.recordatorioDe).toBeNull()
+    expect(result.current.dialogo?.evento).toEqual(EVENTO)
+  })
+
+  it('guarda el elemento enfocado al pedirlo, para devolverle el foco', () => {
+    const boton = document.createElement('button')
+    document.body.append(boton)
+    boton.focus()
+    const { result } = preparar()
+    act(() => result.current.pedirRecordatorio(EVENTO))
+    expect(result.current.disparadorRecordatorio.current).toBe(boton)
+    boton.remove()
+  })
+
+  it('abrir otro diálogo cierra el de recordatorio, y no se invalida nada solo por abrirlo', () => {
+    const { result, claves } = preparar()
+    act(() => result.current.pedirRecordatorio(EVENTO))
+    act(() => result.current.abrirEditar(EVENTO))
+    expect(result.current.recordatorioDe).toBeNull()
+    expect(claves()).toEqual([])
+  })
+
+  it('expone alMensaje para el diálogo de recordatorio', () => {
+    const { result, alMensaje } = preparar()
+    result.current.alMensaje('hola')
+    expect(alMensaje).toHaveBeenCalledWith('hola')
+  })
+})

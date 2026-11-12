@@ -1,15 +1,32 @@
 import { parseISO } from 'date-fns'
 
-import { aFechaLocal, deValorDatetimeLocal, sumarDias } from '@/lib/fechas'
+import { aFechaLocal, deValorDatetimeLocal, esDeDiasCompletos, partesLocales, sumarDias, sumarMinutos } from '@/lib/fechas'
+import type { Evento } from '@/types/evento'
 import type { Canal, Recordatorio, RecordatorioRequest } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
 
 /** Hora del aviso cuando la tarea no trae una (o no tiene fecha). */
 export const HORA_POR_DEFECTO = '09:00'
 
+/**
+ * Minutos de anticipación del aviso de un evento que tiene hora. Hoy es fijo y vive solo aquí. A futuro podría
+ * parametrizarlo el usuario, cada evento o cada recordatorio; no se diseña todavía.
+ */
+export const MINUTOS_AVISO_EVENTO = 60
+
+/** Lo que devuelven `useRecordatorioDeTarea` y `useRecordatorioDeEvento`. */
+export interface ConsultaRecordatorio {
+  recordatorio: Recordatorio | null
+  /** Incluye los refrescos: mientras se refresca no se sabe si el recordatorio sigue existiendo. */
+  cargando: boolean
+  fallo: boolean
+  reintentar: () => void
+}
+
 /** A quién pertenece el recordatorio que se abre en `RecordatorioDialog`. */
 export type DestinoRecordatorio =
   | { tipo: 'tarea'; tarea: Tarea }
+  | { tipo: 'evento'; evento: Evento }
   | { tipo: 'suelto' }
   | { tipo: 'existente'; recordatorio: Recordatorio }
 
@@ -21,6 +38,17 @@ export function valorInicialTarea(tarea: Tarea, ahora: Date): string {
   if (tarea.fecha === null) return valorInicialSuelto(ahora)
   const hora = tarea.horaInicio ? tarea.horaInicio.slice(0, 5) : HORA_POR_DEFECTO
   return `${tarea.fecha}T${hora}`
+}
+
+/**
+ * Valor inicial del recordatorio de un evento: de días completos, su primer día a las 09:00; con hora, `MINUTOS_AVISO_EVENTO`
+ * minutos antes del inicio (puede caer el día anterior).
+ */
+export function valorInicialEvento(evento: Evento): string {
+  const inicio = partesLocales(evento.fechaHoraInicio)
+  if (esDeDiasCompletos(evento.fechaHoraInicio, evento.fechaHoraFin)) return `${inicio.fecha}T${HORA_POR_DEFECTO}`
+  const aviso = sumarMinutos(inicio, -MINUTOS_AVISO_EVENTO)
+  return aviso ? `${aviso.fecha}T${aviso.hora}` : `${inicio.fecha}T${inicio.hora}`
 }
 
 /** Un recordatorio suelto arranca mañana a las 09:00. */

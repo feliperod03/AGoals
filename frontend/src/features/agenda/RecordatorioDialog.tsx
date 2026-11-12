@@ -2,12 +2,24 @@ import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { aValorDatetimeLocal, formatearFechaHoraCorta } from '@/lib/fechas'
+import { aValorDatetimeLocal, formatearFechaHoraCorta, mensajeEventoEmpieza } from '@/lib/fechas'
+import type { Evento } from '@/types/evento'
 import type { Recordatorio, RecordatorioRequest } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
 import { ErrorDialogo } from './ErrorDialogo'
-import { armarRequest, exigeDescripcion, valorInicialSuelto, valorInicialTarea, yaPaso, type BaseRecordatorio, type DestinoRecordatorio } from './recordatorioForm'
+import {
+  armarRequest,
+  exigeDescripcion,
+  valorInicialEvento,
+  valorInicialSuelto,
+  valorInicialTarea,
+  yaPaso,
+  type BaseRecordatorio,
+  type ConsultaRecordatorio,
+  type DestinoRecordatorio,
+} from './recordatorioForm'
 import { useAccionesRecordatorio, type AccionesRecordatorio } from './useAccionesRecordatorio'
+import { useRecordatorioDeEvento } from './useRecordatorioDeEvento'
 import { useRecordatorioDeTarea } from './useRecordatorioDeTarea'
 
 interface Props {
@@ -15,6 +27,8 @@ interface Props {
   alCerrar: () => void
   /** Aviso flotante de la página desde donde se abrió. */
   alMensaje: (mensaje: string) => void
+  /** Qué hacer con el foco al cerrar (los diálogos son controlados y Radix no sabe a dónde devolverlo). */
+  alCerrarFoco?: (evento: Event) => void
 }
 
 const CAMPO =
@@ -26,15 +40,18 @@ const CAMPO =
  * - `tarea`: «Recordatorio de «X»». Se consulta el recordatorio de la tarea (máximo uno): si lo hay se edita o
  *   se quita; si no, se crea. Cada cambio es una llamada inmediata y el diálogo sigue abierto (no hay «Guardar»
  *   global); puede abrirse encima de la edición de la tarea.
+ * - `evento`: igual que `tarea` («Recordatorio de «X»», máximo uno, llamadas inmediatas), con la línea de cuándo empieza.
  * - `suelto` y `existente`: se cierra al guardar o borrar (el borrado pide confirmación).
  */
-export function RecordatorioDialog({ destino, alCerrar, alMensaje }: Props) {
+export function RecordatorioDialog({ destino, alCerrar, alMensaje, alCerrarFoco }: Props) {
   const acciones = useAccionesRecordatorio({ alMensaje })
   return (
     <Dialog open onOpenChange={(open) => !open && !acciones.pendiente && alCerrar()}>
-      <DialogContent>
+      <DialogContent onCloseAutoFocus={alCerrarFoco}>
         {destino.tipo === 'tarea' ? (
           <ContenidoTarea tarea={destino.tarea} acciones={acciones} alCerrar={alCerrar} />
+        ) : destino.tipo === 'evento' ? (
+          <ContenidoEvento evento={destino.evento} acciones={acciones} alCerrar={alCerrar} />
         ) : (
           <ContenidoFila destino={destino} acciones={acciones} alCerrar={alCerrar} />
         )}
@@ -43,24 +60,78 @@ export function RecordatorioDialog({ destino, alCerrar, alMensaje }: Props) {
   )
 }
 
+/** Textos que cambian según de quién es el recordatorio. */
+const TEXTOS = {
+  tarea: { ya: 'Esta tarea ya tiene un recordatorio. Cada cambio se aplica al momento.', fallo: 'No se pudo consultar el recordatorio de esta tarea.' },
+  evento: { ya: 'Este evento ya tiene un recordatorio. Cada cambio se aplica al momento.', fallo: 'No se pudo consultar el recordatorio de este evento.' },
+} as const
+
+/**
+ * `useRecordatorioDeTarea` y `useRecordatorioDeEvento` no se pueden llamar condicionalmente: cada envoltorio llama al
+ * suyo y le pasa la consulta a `ContenidoConsultado`, que es el mismo para los dos.
+ */
 function ContenidoTarea({ tarea, acciones, alCerrar }: { tarea: Tarea; acciones: AccionesRecordatorio; alCerrar: () => void }) {
-  const { recordatorio, cargando, fallo, reintentar } = useRecordatorioDeTarea(tarea.id)
+  const consulta = useRecordatorioDeTarea(tarea.id)
+  return (
+    <ContenidoConsultado
+      consulta={consulta}
+      sujeto="tarea"
+      titulo={tarea.titulo}
+      base={{ tareaId: tarea.id, eventoId: null, canal: 'APP' }}
+      valorNuevo={valorInicialTarea(tarea, new Date())}
+      acciones={acciones}
+      alCerrar={alCerrar}
+    />
+  )
+}
+
+function ContenidoEvento({ evento, acciones, alCerrar }: { evento: Evento; acciones: AccionesRecordatorio; alCerrar: () => void }) {
+  const consulta = useRecordatorioDeEvento(evento.id)
+  return (
+    <ContenidoConsultado
+      consulta={consulta}
+      sujeto="evento"
+      titulo={evento.titulo}
+      base={{ tareaId: null, eventoId: evento.id, canal: 'APP' }}
+      valorNuevo={valorInicialEvento(evento)}
+      nota={mensajeEventoEmpieza(evento.fechaHoraInicio, evento.fechaHoraFin)}
+      acciones={acciones}
+      alCerrar={alCerrar}
+    />
+  )
+}
+
+interface ConsultadoProps {
+  consulta: ConsultaRecordatorio
+  sujeto: keyof typeof TEXTOS
+  titulo: string
+  /** Ids y canal del recordatorio cuando todavía no existe. */
+  base: BaseRecordatorio
+  /** Valor de `datetime-local` con el que arranca uno nuevo. */
+  valorNuevo: string
+  /** Línea informativa bajo la descripción (por ejemplo, cuándo empieza el evento). */
+  nota?: string
+  acciones: AccionesRecordatorio
+  alCerrar: () => void
+}
+
+function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota, acciones, alCerrar }: ConsultadoProps) {
+  const { recordatorio, cargando, fallo, reintentar } = consulta
   // Sin la consulta no se sabe si hay uno: nunca se escribe a ciegas.
   const bloqueado = cargando || fallo
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <DialogTitle>Recordatorio de «{tarea.titulo}»</DialogTitle>
-        <DialogDescription>
-          {recordatorio ? 'Esta tarea ya tiene un recordatorio. Cada cambio se aplica al momento.' : 'Cada cambio se aplica al momento.'}
-        </DialogDescription>
+        <DialogTitle>Recordatorio de «{titulo}»</DialogTitle>
+        <DialogDescription>{recordatorio ? TEXTOS[sujeto].ya : 'Cada cambio se aplica al momento.'}</DialogDescription>
+        {nota && <p className="mt-1 text-sm text-mut">{nota}</p>}
       </div>
 
       {cargando && <p className="text-sm text-mut">Cargando el recordatorio…</p>}
       {fallo && (
         <div className="flex flex-col items-start gap-2">
           <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
-            No se pudo consultar el recordatorio de esta tarea.
+            {TEXTOS[sujeto].fallo}
           </p>
           <Button type="button" variant="secondary" size="sm" onClick={reintentar}>
             Reintentar
@@ -71,8 +142,8 @@ function ContenidoTarea({ tarea, acciones, alCerrar }: { tarea: Tarea; acciones:
       <Formulario
         // Al crearse, quitarse o desaparecer el recordatorio, el formulario arranca de cero con los valores que corresponden.
         key={recordatorio?.id ?? 'nuevo'}
-        base={recordatorio ?? { tareaId: tarea.id, eventoId: null, canal: 'APP' }}
-        valorInicial={recordatorio ? aValorDatetimeLocal(recordatorio.fechaHora) : valorInicialTarea(tarea, new Date())}
+        base={recordatorio ?? base}
+        valorInicial={recordatorio ? aValorDatetimeLocal(recordatorio.fechaHora) : valorNuevo}
         descripcionInicial={recordatorio?.descripcion ?? ''}
         bloqueado={bloqueado}
         etiquetaGuardar={recordatorio ? 'Guardar cambios' : 'Crear recordatorio'}
@@ -80,7 +151,7 @@ function ContenidoTarea({ tarea, acciones, alCerrar }: { tarea: Tarea; acciones:
         alGuardar={(req) => (recordatorio ? acciones.actualizar(recordatorio.id, req) : acciones.crear(req))}
         quitar={
           recordatorio
-            ? { etiqueta: `Quitar el recordatorio de «${tarea.titulo}»`, alQuitar: () => acciones.borrar(recordatorio.id) }
+            ? { etiqueta: `Quitar el recordatorio de «${titulo}»`, alQuitar: () => acciones.borrar(recordatorio.id) }
             : undefined
         }
       />
@@ -104,7 +175,7 @@ function ContenidoFila({
   acciones,
   alCerrar,
 }: {
-  destino: Exclude<DestinoRecordatorio, { tipo: 'tarea' }>
+  destino: Exclude<DestinoRecordatorio, { tipo: 'tarea' | 'evento' }>
   acciones: AccionesRecordatorio
   alCerrar: () => void
 }) {

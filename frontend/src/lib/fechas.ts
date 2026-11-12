@@ -492,3 +492,9 @@ export const mensajeEventoGuardado = (titulo: string, inicioIso: string, finIso:
 export const mensajeEventoBorrado = (titulo: string, conRecordatorio: boolean) =>
   `Evento «${titulo}» borrado${conRecordatorio ? ', con su recordatorio' : ''}`
 export const mensajeEventoYaNoExistia = (titulo: string) => `El evento «${titulo}» ya no existía`
+
+/** Línea del diálogo de recordatorio de un evento: cuándo empieza (de días completos, el lapso, porque «00:00» confunde). */
+export const mensajeEventoEmpieza = (inicioIso: string, finIso: string) =>
+  esDeDiasCompletos(inicioIso, finIso)
+    ? `El evento es ${formatearRangoEvento(inicioIso, finIso)}`
+    : `El evento empieza el ${formatearFechaHoraCorta(inicioIso)}`

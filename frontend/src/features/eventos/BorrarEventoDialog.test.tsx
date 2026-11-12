@@ -134,7 +134,8 @@ describe('BorrarEventoDialog', () => {
   })
 
   it('si la consulta falla: nota, «Reintentar» y se puede borrar igual', async () => {
-    vi.mocked(getRecordatoriosDeEvento).mockRejectedValueOnce(new ApiError(500, 'Error del servidor (500).'))
+    // Persistente: al editar, el diálogo de edición (9d) hace su propia consulta, que antes consumía un `Once`.
+    vi.mocked(getRecordatoriosDeEvento).mockRejectedValue(new ApiError(500, 'Error del servidor (500).'))
     const user = await abrirBorrado()
     expect(await confirmacion().findByText('No se pudo comprobar si tiene recordatorio: si tiene uno, también se borrará.')).toBeInTheDocument()
     expect(confirmacion().getByRole('button', { name: 'Borrar' })).toBeEnabled()

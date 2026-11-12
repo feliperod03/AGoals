@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Evento } from '@/types/evento'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
-import { armarRequest, exigeDescripcion, requestMovido, valorInicialSuelto, valorInicialTarea, yaPaso } from './recordatorioForm'
+import { armarRequest, exigeDescripcion, MINUTOS_AVISO_EVENTO, requestMovido, valorInicialEvento, valorInicialSuelto, valorInicialTarea, yaPaso } from './recordatorioForm'
 
 const AHORA = new Date('2026-11-10T12:00:00-03:00')
 
@@ -104,5 +105,33 @@ describe('requestMovido', () => {
     const r = requestMovido({ ...base, descripcion: null, canal: 'CORREO' }, '2026-11-13T09:00:00-03:00')
     expect(r.descripcion).toBe('')
     expect(r.canal).toBe('CORREO')
+  })
+})
+
+describe('valor inicial de un evento', () => {
+  const evento = (inicio: string, fin: string): Evento => ({
+    id: 9,
+    titulo: 'Dentista',
+    descripcion: null,
+    fechaHoraInicio: inicio,
+    fechaHoraFin: fin,
+    prioridad: null,
+  })
+
+  it('el aviso va 60 minutos antes del inicio', () => {
+    expect(MINUTOS_AVISO_EVENTO).toBe(60)
+    expect(valorInicialEvento(evento('2026-12-15T09:30:00-03:00', '2026-12-15T10:30:00-03:00'))).toBe('2026-12-15T08:30')
+  })
+
+  it('un evento que empieza de madrugada avisa el día anterior', () => {
+    expect(valorInicialEvento(evento('2026-12-15T00:30:00-03:00', '2026-12-15T01:30:00-03:00'))).toBe('2026-12-14T23:30')
+  })
+
+  it('de día completo: su primer día a las 09:00', () => {
+    expect(valorInicialEvento(evento('2026-12-15T00:00:00-03:00', '2026-12-16T00:00:00-03:00'))).toBe('2026-12-15T09:00')
+  })
+
+  it('de varios días completos: el primer día a las 09:00', () => {
+    expect(valorInicialEvento(evento('2026-12-15T00:00:00-03:00', '2026-12-18T00:00:00-03:00'))).toBe('2026-12-15T09:00')
   })
 })

@@ -266,6 +266,9 @@ describe('EventoDialog: editar', () => {
     expect(campo('Título').value).toBe('Dentista')
     expect(campo('Descripción').value).toBe('Llevar estudios')
     expect(campo('Prioridad').value).toBe('MEDIA')
+    // Al editar se consulta el recordatorio del evento (9d), una sola vez al abrir.
+    await waitFor(() => expect(getRecordatoriosDeEvento).toHaveBeenCalledTimes(1))
+    expect(getRecordatoriosDeEvento).toHaveBeenCalledWith(9)
     await user.clear(campo('Título'))
     await user.type(campo('Título'), 'Dentista (control)')
     await user.click(screen.getByRole('button', { name: 'Guardar' }))

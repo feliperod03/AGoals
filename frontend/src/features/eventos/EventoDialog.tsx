@@ -4,8 +4,10 @@ import { useForm, useWatch } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
+import type { ConsultaRecordatorio } from '@/features/agenda/recordatorioForm'
+import { useRecordatorioDeEvento } from '@/features/agenda/useRecordatorioDeEvento'
 import { CAMPO } from '@/features/cofre/estilos'
-import { deFechaYHoraLocal, esFechaValida } from '@/lib/fechas'
+import { deFechaYHoraLocal, esFechaValida, formatearFechaHoraCorta } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import {
   aRequestEvento,
@@ -36,7 +38,7 @@ export function EventoDialog({ acciones, alCerrarFoco }: Props) {
     <Dialog open={dialogo !== null} onOpenChange={(open) => !open && !acciones.guardando && !acciones.borrando && acciones.cerrarDialogo()}>
       <DialogContent onCloseAutoFocus={alCerrarFoco}>
         {dialogo && (
-          <Formulario
+          <Entrada
             key={dialogo.evento ? `editar-${dialogo.evento.id}` : 'crear'}
             evento={dialogo.evento}
             iniciales={dialogo.evento ? valoresIniciales(dialogo.evento) : dialogo.iniciales}
@@ -53,7 +55,30 @@ function inicioValido(v: Pick<ValoresEvento, 'todoElDia' | 'fechaInicio' | 'hora
   return v.todoElDia ? esFechaValida(v.fechaInicio) : deFechaYHoraLocal(v.fechaInicio, v.horaInicio) !== null
 }
 
-function Formulario({ evento, iniciales, acciones }: { evento: Evento | undefined; iniciales: ValoresEvento; acciones: AccionesEvento }) {
+interface FormularioProps {
+  evento: Evento | undefined
+  iniciales: ValoresEvento
+  acciones: AccionesEvento
+}
+
+/**
+ * Al editar se consulta el recordatorio del evento (9d) para rotular el botón «Recordatorio…». El hook no puede
+ * llamarse condicionalmente, así que la edición pasa por un envoltorio y la creación no hace ninguna consulta.
+ */
+function Entrada(props: FormularioProps) {
+  return props.evento ? <Edicion {...props} evento={props.evento} /> : <Formulario {...props} consulta={null} />
+}
+
+function Edicion(props: FormularioProps & { evento: Evento }) {
+  const consulta = useRecordatorioDeEvento(props.evento.id)
+  return <Formulario {...props} consulta={consulta} />
+}
+
+/** «Recordatorio…» o, si ya hay uno, «Recordatorio: <fecha y hora corta>». Mientras la consulta carga o falla, la primera. */
+const etiquetaRecordatorio = (consulta: ConsultaRecordatorio | null) =>
+  consulta?.recordatorio ? `Recordatorio: ${formatearFechaHoraCorta(consulta.recordatorio.fechaHora)}` : 'Recordatorio…'
+
+function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps & { consulta: ConsultaRecordatorio | null }) {
   const {
     register,
     handleSubmit,
@@ -168,6 +193,20 @@ function Formulario({ evento, iniciales, acciones }: { evento: Evento | undefine
         dia={register('fechaFin', { onChange: () => setErroresFecha({}) })}
         hora={register('horaFin', { onChange: () => setErroresFecha({}) })}
       />
+
+      {evento && (
+        // Se abre ENCIMA: este formulario no se desmonta y lo escrito se conserva. Tamaño por defecto (40 px; 44 px en móvil), nunca `sm`.
+        <Button
+          type="button"
+          variant="secondary"
+          className="max-w-full max-sm:h-11 max-sm:w-full sm:self-start"
+          title={etiquetaRecordatorio(consulta)}
+          onClick={() => acciones.pedirRecordatorio(evento)}
+          disabled={bloqueado}
+        >
+          <span className="min-w-0 truncate">{etiquetaRecordatorio(consulta)}</span>
+        </Button>
+      )}
 
       <ErrorDialogo mensaje={acciones.errorGuardar} />
 
