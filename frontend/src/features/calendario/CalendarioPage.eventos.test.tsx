@@ -26,7 +26,7 @@ vi.mock('@/api/recordatorios', () => ({
   borrarRecordatorio: vi.fn(),
 }))
 import { actualizarEvento, borrarEvento, crearEvento, getEventos } from '@/api/eventos'
-import { crearRecordatorio, getRecordatoriosDeEvento } from '@/api/recordatorios'
+import { actualizarRecordatorio, crearRecordatorio, getRecordatoriosDeEvento } from '@/api/recordatorios'
 import { getTareas } from '@/api/tareas'
 
 /** «Servidor» en memoria: lo que se crea, edita o borra se ve en el siguiente GET. */
@@ -303,5 +303,41 @@ describe('CalendarioPage 9d: recordatorio de un evento', () => {
     expect(await screen.findByRole('button', { name: 'Recordatorio: mar 15 dic · 08:00' })).toBeInTheDocument()
     expect(screen.getByText('Recordatorio creado para el mar 15 dic · 08:00')).toBeInTheDocument()
     expect(actualizarEvento).not.toHaveBeenCalled()
+  })
+})
+
+describe('CalendarioPage 9e: mover el recordatorio con el evento', () => {
+  it('editar → mover el inicio → «Guardar»: el evento y su recordatorio se mueven y el aviso lo dice', async () => {
+    const dentista = evento('Dentista', '2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')
+    servidor = [dentista]
+    let recordatorios: Recordatorio[] = [
+      { id: 70, tareaId: null, eventoId: dentista.id, fechaHora: '2026-12-15T08:00:00-03:00', canal: 'APP', enviado: false, descripcion: '' },
+    ]
+    vi.mocked(getRecordatoriosDeEvento).mockImplementation(async (id) => recordatorios.filter((r) => r.eventoId === id))
+    vi.mocked(actualizarRecordatorio).mockImplementation(async (id, req) => {
+      const movido = { id, enviado: false, ...req }
+      recordatorios = recordatorios.map((r) => (r.id === id ? movido : r))
+      return movido
+    })
+    const user = montar('/calendario?mes=2026-12&dia=2026-12-15')
+    await user.click(await panel().findByRole('button', { name: 'Editar evento: Dentista, 09:00–10:00' }))
+    await screen.findByRole('button', { name: 'Recordatorio: mar 15 dic · 08:00' })
+    fireEvent.change(campo('Hora de inicio'), { target: { value: '09:45' } })
+    expect(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })).toBeChecked()
+    expect(screen.getByText('Quedará el mar 15 dic · 08:45.')).toBeInTheDocument()
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(actualizarEvento).toHaveBeenCalledWith(
+      dentista.id,
+      expect.objectContaining({ fechaHoraInicio: '2026-12-15T09:45:00-03:00', fechaHoraFin: '2026-12-15T10:45:00-03:00' }),
+    )
+    expect(actualizarRecordatorio).toHaveBeenCalledWith(70, {
+      tareaId: null,
+      eventoId: dentista.id,
+      fechaHora: '2026-12-15T08:45:00-03:00',
+      canal: 'APP',
+      descripcion: '',
+    })
+    expect(screen.getByText(/recordatorio movido al mar 15 dic · 08:45/)).toBeInTheDocument()
   })
 })

@@ -10,6 +10,9 @@ import { useAccionesEvento } from './useAccionesEvento'
 
 vi.mock('@/api/eventos', () => ({ crearEvento: vi.fn(), actualizarEvento: vi.fn(), borrarEvento: vi.fn() }))
 import { actualizarEvento, borrarEvento, crearEvento } from '@/api/eventos'
+vi.mock('@/api/recordatorios', () => ({ actualizarRecordatorio: vi.fn() }))
+import { actualizarRecordatorio } from '@/api/recordatorios'
+import type { Recordatorio } from '@/types/recordatorio'
 
 const EVENTO: Evento = {
   id: 9,
@@ -250,5 +253,119 @@ describe('useAccionesEvento: recordatorio (9d)', () => {
     const { result, alMensaje } = preparar()
     result.current.alMensaje('hola')
     expect(alMensaje).toHaveBeenCalledWith('hola')
+  })
+})
+
+describe('useAccionesEvento: mover el recordatorio (9e)', () => {
+  // El evento empieza a las 09:00 y el recordatorio está 60 min antes.
+  const RECORDATORIO: Recordatorio = {
+    id: 5,
+    tareaId: null,
+    eventoId: 9,
+    fechaHora: '2026-12-15T08:00:00-03:00',
+    canal: 'APP',
+    enviado: false,
+    descripcion: null,
+  }
+  const MOVIDO = { ...REQUEST, fechaHoraInicio: '2026-12-15T09:30:00-03:00', fechaHoraFin: '2026-12-15T10:30:00-03:00' }
+  const EVENTO_MOVIDO: Evento = { ...EVENTO, fechaHoraInicio: MOVIDO.fechaHoraInicio, fechaHoraFin: MOVIDO.fechaHoraFin }
+
+  beforeEach(() => {
+    vi.mocked(actualizarEvento).mockResolvedValue(EVENTO_MOVIDO)
+    vi.mocked(actualizarRecordatorio).mockImplementation(async (_, r) => ({ ...RECORDATORIO, fechaHora: r.fechaHora }))
+  })
+
+  it('con recordatorio: PUT del evento y DESPUÉS PUT del recordatorio con los 5 campos y la misma distancia al inicio', async () => {
+    const orden: string[] = []
+    vi.mocked(actualizarEvento).mockImplementation(async () => (orden.push('evento'), EVENTO_MOVIDO))
+    vi.mocked(actualizarRecordatorio).mockImplementation(async (_, r) => (orden.push('recordatorio'), { ...RECORDATORIO, fechaHora: r.fechaHora }))
+    const { result, alMensaje, claves } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar(MOVIDO, RECORDATORIO))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(orden).toEqual(['evento', 'recordatorio'])
+    expect(actualizarRecordatorio).toHaveBeenCalledWith(5, {
+      tareaId: null,
+      eventoId: 9,
+      fechaHora: '2026-12-15T08:30:00-03:00',
+      canal: 'APP',
+      descripcion: '',
+    })
+    expect(alMensaje).toHaveBeenCalledWith(
+      'Evento «Dentista» guardado (mar 15 dic, 09:30–10:30); recordatorio movido al mar 15 dic · 08:30',
+    )
+    expect(result.current.dialogo).toBeNull()
+    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]'])
+  })
+
+  it('sin recordatorio: solo el PUT del evento y no invalida recordatorios', async () => {
+    const { result, alMensaje, claves } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar(MOVIDO))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledWith('Evento «Dentista» guardado (mar 15 dic, 09:30–10:30)'))
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+    expect(claves()).toEqual(['["eventos"]'])
+  })
+
+  it('no lo mueve si ya fue enviado ni si el inicio no cambió (solo el fin)', async () => {
+    const { result, alMensaje } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar(MOVIDO, { ...RECORDATORIO, enviado: true }))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledTimes(1))
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar({ ...REQUEST, fechaHoraFin: '2026-12-15T11:00:00-03:00' }, RECORDATORIO))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledTimes(2))
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it('crear no mueve nada aunque se pase un recordatorio', async () => {
+    const { result, alMensaje } = preparar()
+    act(() => result.current.abrirCrear(valoresParaHueco('2026-12-15', 540)))
+    act(() => result.current.guardar(MOVIDO, RECORDATORIO))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [404, 'No existe el recordatorio con id 5'],
+    [409, 'El recordatorio ya fue enviado'],
+    [500, 'Error del servidor (500).'],
+  ])('fallo %i del PUT del recordatorio: evento guardado, diálogo cerrado, aviso con el mensaje y sin reintento', async (status, mensaje) => {
+    vi.mocked(actualizarRecordatorio).mockRejectedValue(new ApiError(status, mensaje))
+    const { result, alMensaje, claves } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar(MOVIDO, RECORDATORIO))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(alMensaje).toHaveBeenCalledWith(
+      `Evento «Dentista» guardado (mar 15 dic, 09:30–10:30), pero no se pudo mover el recordatorio (${mensaje}). Revísalo en «Recordatorio…»`,
+    )
+    expect(result.current.dialogo).toBeNull()
+    expect(result.current.errorGuardar).toBeNull()
+    expect(actualizarEvento).toHaveBeenCalledTimes(1)
+    expect(actualizarRecordatorio).toHaveBeenCalledTimes(1)
+    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]'])
+  })
+
+  it('si falla el PUT del evento no se intenta el del recordatorio', async () => {
+    vi.mocked(actualizarEvento).mockRejectedValue(new ApiError(400, 'Datos inválidos'))
+    const { result, claves } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => result.current.guardar(MOVIDO, RECORDATORIO))
+    await waitFor(() => expect(result.current.errorGuardar).toBe('Datos inválidos'))
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+    expect(result.current.dialogo).not.toBeNull()
+    expect(claves()).toEqual([])
+  })
+
+  it('doble llamada seguida: un solo PUT de cada uno', async () => {
+    const { result, alMensaje } = preparar()
+    act(() => result.current.abrirEditar(EVENTO))
+    act(() => {
+      result.current.guardar(MOVIDO, RECORDATORIO)
+      result.current.guardar(MOVIDO, RECORDATORIO)
+    })
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(actualizarEvento).toHaveBeenCalledTimes(1)
+    expect(actualizarRecordatorio).toHaveBeenCalledTimes(1)
   })
 })

@@ -493,6 +493,17 @@ export const mensajeEventoBorrado = (titulo: string, conRecordatorio: boolean) =
   `Evento «${titulo}» borrado${conRecordatorio ? ', con su recordatorio' : ''}`
 export const mensajeEventoYaNoExistia = (titulo: string) => `El evento «${titulo}» ya no existía`
 
+/** Guardar el evento con otro inicio y el recordatorio acompañándolo (9e). */
+export const mensajeEventoGuardadoConRecordatorio = (titulo: string, inicioIso: string, finIso: string, recordatorioIso: string) =>
+  `${mensajeEventoGuardado(titulo, inicioIso, finIso)}; recordatorio movido al ${formatearFechaHoraCorta(recordatorioIso)}`
+
+/** El evento se guardó pero el recordatorio no se pudo mover; `motivo` es el mensaje del servidor. */
+export const mensajeEventoRecordatorioNoMovido = (titulo: string, inicioIso: string, finIso: string, motivo: string) =>
+  `${mensajeEventoGuardado(titulo, inicioIso, finIso)}, pero no se pudo mover el recordatorio (${motivo}). Revísalo en «Recordatorio…»`
+
+/** Nota del diálogo de edición cuando no se pudo consultar el recordatorio y el inicio cambió. */
+export const notaRecordatorioEventoNoConsultado = () => 'No se pudo consultar el recordatorio de este evento: si tiene uno, no se moverá.'
+
 /** Línea del diálogo de recordatorio de un evento: cuándo empieza (de días completos, el lapso, porque «00:00» confunde). */
 export const mensajeEventoEmpieza = (inicioIso: string, finIso: string) =>
   esDeDiasCompletos(inicioIso, finIso)

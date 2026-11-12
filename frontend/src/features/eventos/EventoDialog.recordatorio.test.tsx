@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,7 +19,7 @@ vi.mock('@/api/recordatorios', () => ({
   borrarRecordatorio: vi.fn(),
 }))
 import { actualizarEvento } from '@/api/eventos'
-import { borrarRecordatorio, crearRecordatorio, getRecordatoriosDeEvento } from '@/api/recordatorios'
+import { actualizarRecordatorio, borrarRecordatorio, crearRecordatorio, getRecordatoriosDeEvento } from '@/api/recordatorios'
 
 // Botón «Recordatorio…» del diálogo de edición de eventos (9d).
 
@@ -38,9 +38,10 @@ function recordatorio(parcial: Partial<Recordatorio> = {}): Recordatorio {
 
 /** Lo que "tiene" el servidor: los mocks de escritura lo modifican, así el refresco muestra lo nuevo. */
 let servidor: Recordatorio[]
+const alMensaje = vi.fn()
 
 function Pagina({ editar }: { editar: boolean }) {
-  const acciones = useAccionesEvento({ alMensaje: vi.fn() })
+  const acciones = useAccionesEvento({ alMensaje })
   const nuevo = useRef<HTMLButtonElement>(null)
   return (
     <>
@@ -81,6 +82,11 @@ beforeEach(() => {
   vi.mocked(crearRecordatorio).mockImplementation(async (req) => {
     const nuevo = recordatorio({ id: 77, ...req })
     servidor = [...servidor, nuevo]
+    return nuevo
+  })
+  vi.mocked(actualizarRecordatorio).mockImplementation(async (id, req) => {
+    const nuevo = recordatorio({ id, ...req })
+    servidor = servidor.map((r) => (r.id === id ? nuevo : r))
     return nuevo
   })
   vi.mocked(borrarRecordatorio).mockImplementation(async (id) => {
@@ -197,5 +203,166 @@ describe('EventoDialog: recordatorio encima de la edición', () => {
     await waitFor(() => expect(borrarRecordatorio).toHaveBeenCalledWith(50))
     await user.click(await within(d).findByRole('button', { name: 'Listo' }))
     expect(await screen.findByRole('button', { name: 'Recordatorio…' })).toBeInTheDocument()
+  })
+})
+
+describe('EventoDialog: mover el recordatorio con el inicio (9e)', () => {
+  const campo = (nombre: string) => screen.getByLabelText(nombre) as HTMLInputElement
+  const cambiar = (nombre: string, valor: string) => fireEvent.change(campo(nombre), { target: { value: valor } })
+  const casilla = () => screen.queryByRole('checkbox', { name: /Mover también el recordatorio/ })
+  const guardar = () => screen.getByRole('button', { name: 'Guardar' })
+  /** Espera a que la consulta termine (el botón del recordatorio ya rotula lo que hay). */
+  const consultado = (etiqueta: string) => screen.findByRole('button', { name: etiqueta })
+
+  it('cambiar el inicio con recordatorio pendiente muestra la casilla marcada y el instante resultante', async () => {
+    await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    expect(casilla()).not.toBeInTheDocument()
+    cambiar('Hora de inicio', '09:30')
+    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })
+    expect(c).toBeChecked()
+    expect(screen.getByText('Quedará el mar 15 dic · 08:30.')).toBeInTheDocument()
+    expect(screen.queryByText(/Seguirá vencido/)).not.toBeInTheDocument()
+  })
+
+  it('no aparece si solo cambia el fin', async () => {
+    await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de fin', '11:00')
+    expect(casilla()).not.toBeInTheDocument()
+  })
+
+  it('no aparece sin recordatorio', async () => {
+    await montar(true)
+    await consultado('Recordatorio…')
+    cambiar('Hora de inicio', '09:30')
+    expect(casilla()).not.toBeInTheDocument()
+  })
+
+  it('no aparece si el recordatorio ya fue enviado', async () => {
+    await montar(true, [recordatorio({ enviado: true })])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    expect(casilla()).not.toBeInTheDocument()
+  })
+
+  it('«Seguirá vencido» si el instante resultante ya pasó (se mueve igual)', async () => {
+    await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Día de inicio', '2026-12-05')
+    expect(await screen.findByText('Quedará el sáb 5 dic · 08:00.')).toBeInTheDocument()
+    expect(screen.getByText('Seguirá vencido: el aviso saldrá enseguida.')).toBeInTheDocument()
+    expect(casilla()).toBeChecked()
+  })
+
+  it('«Todo el día» recalcula el instante antes de guardar', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    await user.click(screen.getByRole('checkbox', { name: 'Todo el día' }))
+    // El inicio pasa de 09:00 a 00:00: nueve horas antes.
+    expect(await screen.findByText('Quedará el lun 14 dic · 23:00.')).toBeInTheDocument()
+  })
+
+  it('guardar con la casilla marcada: PUT del evento y luego PUT del recordatorio con los 5 campos', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    await screen.findByRole('checkbox', { name: /Mover también/ })
+    await user.click(guardar())
+    await waitFor(() =>
+      expect(actualizarRecordatorio).toHaveBeenCalledWith(50, {
+        tareaId: null,
+        eventoId: 9,
+        fechaHora: '2026-12-15T08:30:00-03:00',
+        canal: 'APP',
+        descripcion: '',
+      }),
+    )
+    expect(actualizarEvento).toHaveBeenCalledTimes(1)
+    // Primero el evento, después el recordatorio (si alguno no se llamó, la comparación falla).
+    expect(vi.mocked(actualizarEvento).mock.invocationCallOrder[0] ?? Infinity).toBeLessThan(
+      vi.mocked(actualizarRecordatorio).mock.invocationCallOrder[0] ?? -Infinity,
+    )
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('recordatorio movido al mar 15 dic · 08:30')))
+  })
+
+  it('desmarcada: solo el PUT del evento y la ayuda dice que el recordatorio se queda', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    await user.click(await screen.findByRole('checkbox', { name: /Mover también/ }))
+    expect(screen.getByText('El recordatorio se queda donde está.')).toBeInTheDocument()
+    await user.click(guardar())
+    await waitFor(() => expect(actualizarEvento).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it('D2: una casilla desmarcada sigue desmarcada si se oculta y vuelve a aparecer', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    await user.click(await screen.findByRole('checkbox', { name: /Mover también/ }))
+    cambiar('Hora de inicio', '09:00')
+    expect(casilla()).not.toBeInTheDocument()
+    cambiar('Hora de inicio', '10:00')
+    expect(await screen.findByRole('checkbox', { name: /Mover también/ })).not.toBeChecked()
+  })
+
+  it('fallo del PUT del recordatorio: diálogo cerrado y aviso con el mensaje del servidor, sin reintento', async () => {
+    vi.mocked(actualizarRecordatorio).mockRejectedValue(new ApiError(409, 'El recordatorio ya fue enviado'))
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    await screen.findByRole('checkbox', { name: /Mover también/ })
+    await user.click(guardar())
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar evento' })).not.toBeInTheDocument())
+    expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('pero no se pudo mover el recordatorio (El recordatorio ya fue enviado)'))
+    expect(actualizarRecordatorio).toHaveBeenCalledTimes(1)
+  })
+
+  it('consulta fallida: nota visible y se guarda el evento sin mover nada', async () => {
+    vi.mocked(getRecordatoriosDeEvento).mockRejectedValue(new ApiError(500, 'Error interno del servidor'))
+    const user = await montar(true)
+    cambiar('Hora de inicio', '09:30')
+    expect(await screen.findByText('No se pudo consultar el recordatorio de este evento: si tiene uno, no se moverá.')).toBeInTheDocument()
+    expect(casilla()).not.toBeInTheDocument()
+    await waitFor(() => expect(guardar()).toBeEnabled())
+    await user.click(guardar())
+    await waitFor(() => expect(actualizarEvento).toHaveBeenCalledTimes(1))
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it('Guardar espera a la consulta solo si cambió el inicio', async () => {
+    vi.mocked(getRecordatoriosDeEvento).mockReturnValue(new Promise(() => {}))
+    await montar(true)
+    expect(guardar()).toBeEnabled()
+    cambiar('Hora de fin', '11:00')
+    expect(guardar()).toBeEnabled()
+    cambiar('Hora de inicio', '09:30')
+    expect(guardar()).toBeDisabled()
+    cambiar('Hora de inicio', '09:00')
+    expect(guardar()).toBeEnabled()
+  })
+
+  it('inicio nuevo sin guardar + crear el recordatorio desde el diálogo (usa el inicio guardado): la casilla sale marcada y coherente', async () => {
+    const user = await montar(true)
+    await consultado('Recordatorio…')
+    cambiar('Hora de inicio', '12:00')
+    expect(casilla()).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Recordatorio…' }))
+    const d = await dialogoRecordatorio()
+    const crear = await within(d).findByRole('button', { name: 'Crear recordatorio' })
+    await waitFor(() => expect(crear).toBeEnabled())
+    // Se propone con el inicio GUARDADO (09:00), no con el 12:00 sin guardar.
+    expect(screen.getByLabelText('Fecha y hora')).toHaveValue('2026-12-15T08:00')
+    await user.click(crear)
+    await user.click(await within(d).findByRole('button', { name: 'Listo' }))
+    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })
+    expect(c).toBeChecked()
+    expect(screen.getByText('Quedará el mar 15 dic · 11:00.')).toBeInTheDocument()
+    await waitFor(() => expect(guardar()).toBeEnabled())
+    await user.click(guardar())
+    await waitFor(() => expect(actualizarRecordatorio).toHaveBeenCalledWith(77, expect.objectContaining({ fechaHora: '2026-12-15T11:00:00-03:00' })))
   })
 })

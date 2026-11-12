@@ -1,24 +1,33 @@
+import { parseISO } from 'date-fns'
 import { useState, type ReactNode } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
-import type { ConsultaRecordatorio } from '@/features/agenda/recordatorioForm'
+import { yaPaso, type ConsultaRecordatorio } from '@/features/agenda/recordatorioForm'
 import { useRecordatorioDeEvento } from '@/features/agenda/useRecordatorioDeEvento'
 import { CAMPO } from '@/features/cofre/estilos'
-import { deFechaYHoraLocal, esFechaValida, formatearFechaHoraCorta } from '@/lib/fechas'
+import {
+  aValorDatetimeLocal,
+  deFechaYHoraLocal,
+  esFechaValida,
+  formatearFechaHoraCorta,
+  notaRecordatorioEventoNoConsultado,
+} from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import {
   aRequestEvento,
   alternarTodoElDia,
   esDeVariosDias,
+  inicioIso,
   moverFinConservandoDuracion,
   validarTitulo,
   valoresIniciales,
   type ErroresEvento,
   type ValoresEvento,
 } from './formularioEvento'
+import { instanteMovido } from './moverRecordatorio'
 import type { AccionesEvento } from './useAccionesEvento'
 
 interface Props {
@@ -88,7 +97,22 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
     reset,
     formState: { errors },
   } = useForm<ValoresEvento>({ defaultValues: iniciales })
-  const todoElDia = useWatch({ control, name: 'todoElDia' })
+  const [todoElDia, fechaInicio, horaInicio] = useWatch({ control, name: ['todoElDia', 'fechaInicio', 'horaInicio'] })
+
+  // Mover el recordatorio con el inicio (9e). Todo se deriva en el render: lo que muestra la casilla sale de la misma
+  // función y los mismos datos que lo que se manda al guardar. Solo el estado de la casilla es propio (D2: si se
+  // desmarca, se respeta aunque la casilla se oculte y vuelva a aparecer).
+  const [mover, setMover] = useState(true)
+  const inicioFormulario = inicioIso({ todoElDia, fechaInicio, horaInicio })
+  const cambioInicio =
+    evento !== undefined && inicioFormulario !== null && parseISO(inicioFormulario).getTime() !== parseISO(evento.fechaHoraInicio).getTime()
+  // Una consulta fallida pero con datos viejos NO cuenta: nunca se escribe a ciegas.
+  const pendiente = consulta && !consulta.fallo && consulta.recordatorio && !consulta.recordatorio.enviado ? consulta.recordatorio : null
+  const aMover = evento && pendiente && inicioFormulario ? instanteMovido(pendiente, evento.fechaHoraInicio, inicioFormulario) : null
+  // Si cambió el inicio y aún no se sabe si hay recordatorio, `Guardar` espera (si no cambió, nunca espera).
+  const esperando = cambioInicio && consulta?.cargando === true
+  const seguiraVencido = aMover !== null && yaPaso(aValorDatetimeLocal(aMover), new Date())
+
   // Errores de fecha y hora (dependen de varios campos): se calculan al enviar y se limpian al tocar una fecha u hora.
   const [erroresFecha, setErroresFecha] = useState<Pick<ErroresEvento, 'inicio' | 'fin'>>({})
   const bloqueado = acciones.guardando || acciones.borrando
@@ -123,7 +147,10 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         setErroresFecha({ inicio: resultado.errores.inicio, fin: resultado.errores.fin })
         return
       }
-      acciones.guardar(resultado.request)
+      if (esperando) return
+      // Se recalcula con el inicio del cuerpo que se manda; el hook lo vuelve a validar con `instanteMovido`.
+      const mueve = evento && pendiente && mover && instanteMovido(pendiente, evento.fechaHoraInicio, resultado.request.fechaHoraInicio)
+      acciones.guardar(resultado.request, mueve ? pendiente : undefined)
     },
     () => {
       const resultado = aRequestEvento(getValues())
@@ -194,6 +221,34 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         hora={register('horaFin', { onChange: () => setErroresFecha({}) })}
       />
 
+      {pendiente && aMover && (
+        <div className="flex flex-col gap-1 rounded-xl border border-input px-3 py-2">
+          <label className="flex min-h-11 items-start gap-2 py-1 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 size-4 accent-acc"
+              checked={mover}
+              disabled={bloqueado}
+              onChange={(e) => setMover(e.target.checked)}
+              aria-describedby="evento-recordatorio-ayuda"
+            />
+            <span>Mover también el recordatorio (cae el {formatearFechaHoraCorta(pendiente.fechaHora)})</span>
+          </label>
+          <div id="evento-recordatorio-ayuda" className="text-xs text-mut">
+            {mover ? (
+              <>
+                <p>Quedará el {formatearFechaHoraCorta(aMover)}.</p>
+                {seguiraVencido && <p>Seguirá vencido: el aviso saldrá enseguida.</p>}
+              </>
+            ) : (
+              <p>El recordatorio se queda donde está.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {cambioInicio && consulta?.fallo && <p className="text-xs text-mut">{notaRecordatorioEventoNoConsultado()}</p>}
+
       {evento && (
         // Se abre ENCIMA: este formulario no se desmonta y lo escrito se conserva. Tamaño por defecto (40 px; 44 px en móvil), nunca `sm`.
         <Button
@@ -222,7 +277,7 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
           <Button type="button" variant="secondary" onClick={acciones.cerrarDialogo} disabled={bloqueado}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={bloqueado}>
+          <Button type="submit" disabled={bloqueado || esperando}>
             {acciones.guardando ? 'Guardando…' : 'Guardar'}
           </Button>
         </div>

@@ -6,6 +6,7 @@ import {
   alternarTodoElDia,
   esDeVariosDias,
   esTodoElDia,
+  inicioIso,
   moverFinConservandoDuracion,
   valoresIniciales,
   valoresParaHueco,
@@ -220,6 +221,31 @@ describe('moverFinConservandoDuracion', () => {
     expect(moverFinConservandoDuracion(valores({ horaFin: '' }), valores({ horaInicio: '11:00', horaFin: '' }))).toBeNull()
     expect(moverFinConservandoDuracion(valores({ horaFin: '08:00' }), valores({ horaInicio: '11:00' }))).toBeNull()
     expect(moverFinConservandoDuracion(valores(), valores({ fechaInicio: '' }))).toBeNull()
+  })
+})
+
+describe('inicioIso', () => {
+  it('con hora: día y hora de inicio', () => {
+    expect(inicioIso(valores({ horaInicio: '15:30' }))).toBe('2026-12-15T15:30:00-03:00')
+  })
+
+  it('todo el día: 00:00 del primer día (la hora oculta no cuenta)', () => {
+    expect(inicioIso(valores({ todoElDia: true, horaInicio: '15:30' }))).toBe('2026-12-15T00:00:00-03:00')
+  })
+
+  it.each([
+    ['sin hora', { horaInicio: '' }],
+    ['sin día', { fechaInicio: '' }],
+    ['todo el día sin día', { todoElDia: true, fechaInicio: '' }],
+  ])('%s → null', (_, extra) => {
+    expect(inicioIso(valores(extra))).toBeNull()
+  })
+
+  it('coincide con el inicio del cuerpo del PUT', () => {
+    for (const v of [valores(), valores({ todoElDia: true, fechaFin: '2026-12-17' })]) {
+      const r = aRequestEvento(v)
+      expect(r.ok && r.request.fechaHoraInicio).toBe(inicioIso(v))
+    }
   })
 })
 

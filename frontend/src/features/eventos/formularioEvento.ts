@@ -170,17 +170,26 @@ export function validarTitulo(titulo: string): string | undefined {
 /** Los dos instantes que se mandarían (ISO con desfase), o los errores de fecha y hora. */
 type Lapso = { ok: true; inicio: string; fin: string } | { ok: false; errores: ErroresEvento }
 
+/**
+ * Inicio que se mandaría (ISO con desfase), o `null` si falta o es inválido. Con «Todo el día», las 00:00 del primer
+ * día. Única definición del inicio: la usan el cuerpo del PUT y la casilla de mover el recordatorio (9e), así lo que
+ * se muestra es lo que se manda.
+ */
+export function inicioIso(v: Pick<ValoresEvento, 'todoElDia' | 'fechaInicio' | 'horaInicio'>): string | null {
+  if (v.todoElDia) return esFechaValida(v.fechaInicio) ? deFechaYHoraLocal(v.fechaInicio, '00:00') : null
+  return deFechaYHoraLocal(v.fechaInicio, v.horaInicio)
+}
+
 function lapsoDe(v: ValoresEvento): Lapso {
   const errores: ErroresEvento = {}
+  const inicio = inicioIso(v)
   if (v.todoElDia) {
-    const inicio = esFechaValida(v.fechaInicio) ? deFechaYHoraLocal(v.fechaInicio, '00:00') : null
     const fin = esFechaValida(v.fechaFin) ? deFechaYHoraLocal(sumarDias(v.fechaFin, 1), '00:00') : null
     if (!inicio) errores.inicio = 'Indica el primer día'
     if (!fin) errores.fin = 'Indica el último día'
     else if (inicio && v.fechaFin < v.fechaInicio) errores.fin = 'El último día no puede ser anterior al primero'
     return inicio && fin && !errores.fin ? { ok: true, inicio, fin } : { ok: false, errores }
   }
-  const inicio = deFechaYHoraLocal(v.fechaInicio, v.horaInicio)
   const fin = deFechaYHoraLocal(v.fechaFin, v.horaFin)
   if (!inicio) errores.inicio = 'Indica el día y la hora de inicio'
   if (!fin) errores.fin = 'Indica el día y la hora de fin'

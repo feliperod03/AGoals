@@ -8,7 +8,10 @@ import {
   mensajeEventoCreado,
   mensajeEventoEmpieza,
   mensajeEventoGuardado,
+  mensajeEventoGuardadoConRecordatorio,
+  mensajeEventoRecordatorioNoMovido,
   mensajeEventoYaNoExistia,
+  notaRecordatorioEventoNoConsultado,
   minutosEntre,
   partesLocales,
   sumarMinutos,
@@ -780,5 +783,16 @@ describe('formatearRangoEvento y mensajes de eventos', () => {
     expect(mensajeEventoYaNoExistia('Dentista')).toBe('El evento «Dentista» ya no existía')
     expect(mensajeEventoEmpieza('2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')).toBe('El evento empieza el mar 15 dic · 09:00')
     expect(mensajeEventoEmpieza('2026-12-15T00:00:00-03:00', '2026-12-16T00:00:00-03:00')).toBe('El evento es mar 15 dic, todo el día')
+  })
+
+  it('mensajes de mover el recordatorio con el evento (9e)', () => {
+    const [inicio, fin] = ['2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00']
+    expect(mensajeEventoGuardadoConRecordatorio('Dentista', inicio, fin, '2026-12-15T08:00:00-03:00')).toBe(
+      'Evento «Dentista» guardado (mar 15 dic, 09:00–10:00); recordatorio movido al mar 15 dic · 08:00',
+    )
+    expect(mensajeEventoRecordatorioNoMovido('Dentista', inicio, fin, 'No existe el recordatorio')).toBe(
+      'Evento «Dentista» guardado (mar 15 dic, 09:00–10:00), pero no se pudo mover el recordatorio (No existe el recordatorio). Revísalo en «Recordatorio…»',
+    )
+    expect(notaRecordatorioEventoNoConsultado()).toBe('No se pudo consultar el recordatorio de este evento: si tiene uno, no se moverá.')
   })
 })

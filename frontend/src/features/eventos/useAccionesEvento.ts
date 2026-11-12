@@ -3,9 +3,20 @@ import { useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import { actualizarEvento, borrarEvento, crearEvento } from '@/api/eventos'
-import { mensajeEventoBorrado, mensajeEventoCreado, mensajeEventoGuardado, mensajeEventoYaNoExistia } from '@/lib/fechas'
+import { actualizarRecordatorio } from '@/api/recordatorios'
+import { requestMovido } from '@/features/agenda/recordatorioForm'
+import {
+  mensajeEventoBorrado,
+  mensajeEventoCreado,
+  mensajeEventoGuardado,
+  mensajeEventoGuardadoConRecordatorio,
+  mensajeEventoRecordatorioNoMovido,
+  mensajeEventoYaNoExistia,
+} from '@/lib/fechas'
 import type { Evento, EventoRequest } from '@/types/evento'
+import type { Recordatorio } from '@/types/recordatorio'
 import type { ValoresEvento } from './formularioEvento'
+import { instanteMovido } from './moverRecordatorio'
 
 /** `{ iniciales }` = diálogo para crear con esos valores; `{ evento }` = para editar ese evento entero. */
 export type EstadoEventoDialog = { evento: Evento; iniciales?: undefined } | { evento?: undefined; iniciales: ValoresEvento }
@@ -15,8 +26,12 @@ export interface AccionesEvento {
   abrirCrear: (iniciales: ValoresEvento) => void
   abrirEditar: (evento: Evento) => void
   cerrarDialogo: () => void
-  /** Crea (diálogo de creación) o reemplaza (diálogo de edición) con el cuerpo completo. */
-  guardar: (request: EventoRequest) => void
+  /**
+   * Crea (diálogo de creación) o reemplaza (diálogo de edición) con el cuerpo completo.
+   * `recordatorio` (solo al editar): el del evento, para moverlo con el inicio (9e). Se mueve únicamente si no fue
+   * enviado y el instante de inicio cambió; si no, se ignora. Primero va el PUT del evento y después el del recordatorio.
+   */
+  guardar: (request: EventoRequest, recordatorio?: Recordatorio) => void
   guardando: boolean
   /** Mensaje del servidor tal cual; el diálogo queda abierto con él. */
   errorGuardar: string | null
@@ -54,6 +69,35 @@ interface Opciones {
 
 const esStatus = (e: unknown, status: number) => e instanceof ApiError && e.status === status
 
+/** Qué pasó con el recordatorio al guardar: `null` = no se intentó moverlo. */
+type Movido = { ok: true; fechaHora: string } | { ok: false; motivo: string } | null
+
+interface Variables {
+  id?: number
+  request: EventoRequest
+  /** Inicio del evento abierto al llamar a `guardar` (el que tenía antes de este PUT). */
+  inicioViejo?: string
+  recordatorio?: Recordatorio
+}
+
+/**
+ * PUT del evento y, si hay un recordatorio pendiente y el inicio cambió, PUT del recordatorio con los cinco campos y
+ * la misma distancia al inicio. Si el segundo falla el evento ya quedó guardado: no se relanza ni se reintenta, el
+ * mensaje del servidor llega al aviso.
+ */
+async function guardarEvento({ id, request, inicioViejo, recordatorio }: Variables): Promise<{ evento: Evento; movido: Movido }> {
+  if (id === undefined) return { evento: await crearEvento(request), movido: null }
+  const evento = await actualizarEvento(id, request)
+  const nuevo = recordatorio && inicioViejo ? instanteMovido(recordatorio, inicioViejo, request.fechaHoraInicio) : null
+  if (!recordatorio || !nuevo) return { evento, movido: null }
+  try {
+    const r = await actualizarRecordatorio(recordatorio.id, requestMovido(recordatorio, nuevo))
+    return { evento, movido: { ok: true, fechaHora: r.fechaHora } }
+  } catch (e) {
+    return { evento, movido: { ok: false, motivo: e instanceof Error ? e.message : 'error desconocido' } }
+  }
+}
+
 /**
  * Crear, editar y borrar eventos (9c), y abrir el recordatorio del evento (9d; la mutación es la de `RecordatorioDialog`). Una sola mutación a la vez: el guard es un `useRef` (no `isPending`, que se
  * actualiza en el siguiente render y dejaría pasar un doble clic) y se libera en `onSettled`.
@@ -83,15 +127,21 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
   }
 
   const guardarMutacion = useMutation({
-    mutationFn: ({ id, request }: { id?: number; request: EventoRequest }) => (id === undefined ? crearEvento(request) : actualizarEvento(id, request)),
-    onSuccess: async (evento, { id }) => {
-      await invalidarEventos()
+    mutationFn: guardarEvento,
+    onSuccess: async ({ evento, movido }, { id }) => {
+      // `['recordatorios']` solo si se intentó mover (haya salido bien o no): banner, Próximos y la consulta por evento.
+      await Promise.all([invalidarEventos(), movido ? queryClient.invalidateQueries({ queryKey: ['recordatorios'] }) : null])
       setDialogo(null)
+      const { titulo, fechaHoraInicio: inicio, fechaHoraFin: fin } = evento
       if (id === undefined) {
-        alMensaje(mensajeEventoCreado(evento.titulo, evento.fechaHoraInicio, evento.fechaHoraFin))
+        alMensaje(mensajeEventoCreado(titulo, inicio, fin))
         alCrear?.(evento)
+      } else if (movido?.ok) {
+        alMensaje(mensajeEventoGuardadoConRecordatorio(titulo, inicio, fin, movido.fechaHora))
+      } else if (movido) {
+        alMensaje(mensajeEventoRecordatorioNoMovido(titulo, inicio, fin, movido.motivo))
       } else {
-        alMensaje(mensajeEventoGuardado(evento.titulo, evento.fechaHoraInicio, evento.fechaHoraFin))
+        alMensaje(mensajeEventoGuardado(titulo, inicio, fin))
       }
     },
     onError: async (e) => {
@@ -142,7 +192,10 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
     abrirCrear: (iniciales) => abrir({ iniciales }),
     abrirEditar: (evento) => abrir({ evento }),
     cerrarDialogo: () => setDialogo(null),
-    guardar: (request) => lanzar(() => guardarMutacion.mutate({ id: dialogo?.evento?.id, request })),
+    guardar: (request, recordatorio) =>
+      lanzar(() =>
+        guardarMutacion.mutate({ id: dialogo?.evento?.id, request, inicioViejo: dialogo?.evento?.fechaHoraInicio, recordatorio }),
+      ),
     guardando: guardarMutacion.isPending,
     errorGuardar: guardarMutacion.error?.message ?? null,
     borrado: aBorrar,
