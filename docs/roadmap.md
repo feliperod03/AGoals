@@ -28,4 +28,4 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
    - **9b Vista semanal en lectura** (hecha, `7f10dce`): `?vista=semana&dia=`, selector «Mes | Semana», eje de horas con siete columnas, franja «Sin hora» y lista por día en pantallas angostas.
    - **9c CRUD de eventos** (hecha, `ffa1562`): crear, editar y borrar desde el calendario (botón «Nuevo evento», «Agregar evento» del panel del día, clic en un hueco de la semana y en los chips/bloques de evento).
    - **9d Recordatorios de evento** (hecha, `1da4b2e`): botón «Recordatorio…» en la edición del evento, que abre el diálogo de recordatorio de 8.5b (aviso 60 min antes del inicio por defecto; 09:00 si es de días completos).
-   - **9e Mover el recordatorio al mover el evento** (próxima): al guardar un evento con otro inicio, su recordatorio sin enviar acompaña (conserva la distancia al inicio).
+   - **9e Mover el recordatorio al mover el evento** (hecha, `d949a6b`): al guardar un evento con otro inicio, su recordatorio sin enviar acompaña (casilla marcada por defecto; conserva la distancia al inicio; fallo parcial sin reintento).

@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 12/11/2026 (hecho hasta 9d; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 12/11/2026 (hecho hasta 9e; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -147,7 +147,7 @@ Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns (d
 - **Aspecto:** una sola tarjeta, números en Fraunces, hoy en círculo `acc`, seleccionado con anillo; evento = rectángulo, tarea = píldora con el círculo de estado.
 - **Responsive (container queries sobre la cuadrícula, medido con Playwright):** < 640 px marcas sin texto; 640–980 chips solo con título; ≥ 980 chips con hora. Un evento de varios días lleva flecha + título (su hora va en el `title` y en el panel). El panel va al lado solo con ≥ 1224 px de contenido (~1560 px de ventana); debajo ocupa todo el ancho, en dos columnas con ≥ 600 px. Felipe usa ventanas de ≤ 1280 px: cuadrícula de 945 px y chips de solo título.
 - **Capas:** `calendario/` importa de `agenda/` (`horario`, `useAhora`, `useTodasLasTareas`, `EstadoIcono`); ningún archivo de `agenda/`, `jerarquia/`, `cofre/` ni `ideas/` importa de `calendario/`. Solo `useEventosEnRango` toca `@/api`.
-- **Fuera de alcance:** vista anual y barras continuas para eventos largos (los recordatorios de evento se hicieron en 9d). Pendientes: Pulido 2 (abajo).
+- **Fuera de alcance:** vista anual y barras continuas para eventos largos (los recordatorios de evento se hicieron en 9d y 9e). Pendientes: Pulido 2 (abajo).
 
 ## Calendario semanal (9b; commit `7f10dce`)
 Solo frontend, sin dependencias nuevas ni backend. Mismo `/calendario`. `lib/fechas.ts` suma `diasDeLaSemana`, `formatearRangoSemana`, `duracionEnMinutos` y `formatearDiaCorto`; en `agenda/horario.ts` solo cambia el tipo de `distribuirSolapes` (genérica; Hoy no cambia).
@@ -165,7 +165,7 @@ Solo frontend, sin dependencias nuevas ni backend. Carpeta nueva `features/event
 - **Borrar:** la confirmación se abre encima de la edición, consulta el recordatorio del evento (si la consulta falla igual deja borrar, P5), foco inicial en Cancelar. Un 404 al borrar cierra con «El evento «X» ya no existía» (P6); al guardar muestra el mensaje real del servidor.
 - **Mutaciones:** un `useRef` anti doble envío liberado en `onSettled`; el diálogo se cierra DESPUÉS de `await invalidateQueries` (`['eventos']`; borrar también `['recordatorios']`). Tras crear, el calendario va al día del evento (replace si ya es visible, push si no); editar no navega (P8).
 - **Foco al cerrar (hallazgo):** como los diálogos de la app son controlados (sin `DialogTrigger`), Radix no devuelve el foco: se hace a mano (disparador, o «Nuevo evento» por ref, vía `onCloseAutoFocus`). Pasa en toda la app; pendiente en los demás diálogos.
-- **Decisiones:** P3 «Hoy» solo refresca; P4 las tareas no son clicables; P7 (mover el recordatorio al mover el evento): se hace en 9e (decidido en 9d: sí, conservando la distancia al inicio).
+- **Decisiones:** P3 «Hoy» solo refresca; P4 las tareas no son clicables; P7 (mover el recordatorio al mover el evento): hecho en 9e `d949a6b` (conserva la distancia al inicio).
 - **Pruebas manuales:** 21 casos OK (`.playwright-mcp/informe-9c.md`; hover sin cambios de tamaño).
 
 ## Recordatorios de evento (9d; commit `1da4b2e`)
@@ -174,8 +174,18 @@ Solo frontend, sin dependencias nuevas ni backend. Reusa el `RecordatorioDialog`
 - **Componente compartido:** `ContenidoTarea` y `ContenidoEvento` son envoltorios de ~8 líneas (cada uno llama a su hook) sobre `ContenidoConsultado`; los textos que cambian están en la tabla `TEXTOS`, y `ConsultaRecordatorio` (en `recordatorioForm.ts`) es el tipo común de los dos hooks. El diálogo acepta `alCerrarFoco`: el foco vuelve a mano al botón «Recordatorio…» (`disparadorRecordatorio`). El estado de apertura está en `useAccionesEvento` (`recordatorioDe`, `pedirRecordatorio`, `cerrarRecordatorio`; expone `alMensaje`) y el diálogo se monta en `DialogosEvento`. Escape cierra solo el de arriba.
 - **Hora por defecto** (`valorInicialEvento`): con hora, `MINUTOS_AVISO_EVENTO` = 60 minutos antes del inicio (puede caer el día anterior); de días completos, su primer día a las 09:00. La constante vive solo en `recordatorioForm.ts`. Bajo la descripción, `mensajeEventoEmpieza`: «El evento empieza el <fecha y hora corta>» o, de días completos, «El evento es <lapso>» (porque «00:00» confunde).
 - **Capas:** `eventos/` importa de `agenda/`; ningún archivo de `agenda/` importa de `eventos/` ni de `calendario/` (`RecordatorioDialog` solo usa el tipo `Evento`).
-- **Sin P7 todavía:** guardar el evento con otro inicio NO mueve su recordatorio (9e). Hasta entonces, no usar recordatorios de evento en serio.
+- **Mover el recordatorio al mover el evento:** ver 9e (abajo).
 - **Pruebas manuales:** 12 casos OK (`.playwright-mcp/informe-9d.md`): hora por defecto, día completo, quitar, 409, 404, consulta fallida, doble clic, lo escrito sobrevive, foco con teclado, 390 px y borrado con cascada.
+
+## Mover el recordatorio al mover el evento (9e; commit `d949a6b`)
+Solo frontend, sin dependencias nuevas ni backend. Modelo: 8.5c (`PosponerDialog`).
+- **Cuándo se ofrece:** al guardar un evento en edición cuyo INICIO cambió (se comparan instantes con `getTime()`, no textos; si solo cambia el fin, no) y que tiene un recordatorio con `enviado = false`. Con uno ya enviado no hay casilla (se edita a mano desde «Recordatorio…»).
+- **Casilla** «Mover también el recordatorio (cae el <actual>)», marcada por defecto, entre «Fin» y «Recordatorio…». Ayuda: «Quedará el <instante>.» (+ «Seguirá vencido: el aviso saldrá enseguida.» si ya pasó; se mueve igual) o, desmarcada, «El recordatorio se queda donde está.». Si se desmarca, se respeta aunque la casilla se oculte y vuelva a aparecer (D2). Con «Todo el día» el instante se recalcula antes de guardar.
+- **Qué se conserva:** la DISTANCIA al inicio. `instanteMovido(recordatorio, inicioViejo, inicioNuevo)` (`eventos/moverRecordatorio.ts`) = recordatorio + (inicio nuevo − inicio viejo) en minutos; `null` si ya fue enviado, el instante no cambió o hay datos inválidos. Los segundos del recordatorio se descartan (desde la UI son `:00`). `inicioIso(valores)` (`formularioEvento.ts`) es la única definición del inicio: lo que muestra la casilla es lo que se manda.
+- **Guardar:** `guardar(request, recordatorio?)` en `useAccionesEvento`: PUT del evento y DESPUÉS PUT del recordatorio con los cinco campos (`requestMovido`, el mismo de 8.5c); si el segundo falla, el evento queda guardado, el diálogo se cierra y el aviso lleva el mensaje del servidor, sin reintento. El guard `enCurso` cubre las dos llamadas (doble clic = un PUT de cada uno). Invalida `['eventos']` siempre y `['recordatorios']` solo si intentó mover. Mensajes en `lib/fechas.ts`: `mensajeEventoGuardadoConRecordatorio` y `mensajeEventoRecordatorioNoMovido`.
+- **Consulta del recordatorio** (la misma de «Recordatorio…»): `Guardar` espera solo si el inicio cambió y la consulta está cargando. Si falla (incluso con datos viejos), se guarda el evento sin mover y el diálogo lo avisa antes con `notaRecordatorioEventoNoConsultado` (D1); nunca se escribe a ciegas.
+- **Recordatorio creado desde el diálogo con un inicio escrito sin guardar:** se crea con el inicio GUARDADO; al volver, la casilla aparece marcada con el instante coherente respecto del inicio nuevo.
+- **Pruebas manuales:** casos 9–13 y el extra OK, más consulta fallida, `Guardar` en espera, doble clic y 390 px (`.playwright-mcp/informe-9e.md`). Tests: 1296 de frontend al cerrar 9e (85 archivos); lint y build limpios.
 
 ## Orden de rebanadas
 - 8.0 Esqueleto: hecha (commit `07c1c25`).
@@ -207,7 +217,7 @@ Solo frontend, sin dependencias nuevas ni backend. Reusa el `RecordatorioDialog`
 - 9b Vista semanal en lectura: hecha (commit `7f10dce`). 1046 tests.
 - 9c CRUD de eventos: hecha (commit `ffa1562`). 1221 tests al terminar la implementación (más los de H1 y H2).
 - 9d Recordatorios de evento (botón «Recordatorio…» en la edición del evento; aviso 60 min antes por defecto): hecha (commit `1da4b2e`).
-- 9e Mover el recordatorio al mover el evento (P7): ← próxima (conserva la distancia al inicio; casilla marcada por defecto; fallo parcial sin reintento).
+- 9e Mover el recordatorio al mover el evento (P7; casilla marcada por defecto, conserva la distancia al inicio, fallo parcial sin reintento): hecha (commit `d949a6b`). Con ella queda completa la fase 9.
 - 5c (backend) + 8.3c: tareas futuras en la recomendación, tras usar el cofre.
 - Pulido 2 al final.
 
@@ -260,3 +270,4 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Calendario (9b): Hoy escribe «22:00–24:00» y el calendario nunca «24:00» (unificar); entre 768 y 894 px de ventana el contenido baja de 560 px y la semana pasa a lista, y por debajo de 768 vuelve la grilla (salto no monótono); la columna seleccionada en oscuro (`bg-side`) se ve como un hueco (revisar mes y semana juntos); un evento nocturno lleva la semana a 00–24 (plegar horas vacías, como en Hoy); `EstadoIcono` deja un espacio antes de la coma en el texto del lector.
   - Calendario (9c): H3, tras borrar un evento sobra un `GET /api/recordatorios?eventoId=N` (cerrar la confirmación antes de esperar `['recordatorios']`); H5, «Agregar evento» y «Nuevo recordatorio» miden 32 px (táctil 44 px; revisar con los botones `sm`); con rango 08–21 el último hueco es 20:30 (diseñado, con test); vista de DÍA para cualquier fecha, accesible desde el calendario (como Hoy, con tareas y horas); `Campo` duplicado por tercera vez; los avisos del diálogo de eventos no llegan a lectores de pantalla; devolver el foco al cerrar los demás diálogos; comentario viejo en `EventoService.eliminar`.
   - Calendario (9d): crear un evento con su recordatorio en un solo paso (hoy se crea el evento y luego se edita); campana en el calendario (chips, bloques y panel) para los eventos con recordatorio; hora del aviso parametrizable por usuario, por evento o por recordatorio (hoy 60 min antes, o 09:00 en eventos de días completos; la constante está en `recordatorioForm.ts`); los botones de `RecordatorioDialog` miden 40 px (solo «Recordatorio…» llega a 44 px en móvil; unificar con H5).
+  - Calendario (9e): el aviso del fallo parcial (evento guardado, recordatorio no movido) dura 6 s como el de 8.5c (hacerlo persistente); con un recordatorio ya enviado no se ofrece la casilla y el diálogo no dice por qué.
