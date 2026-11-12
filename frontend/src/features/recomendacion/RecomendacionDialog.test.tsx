@@ -290,3 +290,143 @@ describe('RecomendacionDialog: agendar', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('La fecha no puede ser anterior a hoy')
   })
 })
+
+describe('RecomendacionDialog: próximos días', () => {
+  const FUTURA = rec({ id: 7, titulo: 'Sacar turno', fecha: '2026-11-13', prioridad: 'MEDIA' })
+  const interruptor = () => screen.getByRole('switch', { name: 'Incluir próximos N días' })
+  const ultimosParams = () => vi.mocked(getRecomendacion).mock.lastCall![0]
+
+  it('apagado no manda hasta', async () => {
+    renderizar()
+    await screen.findByText('Armar la casa')
+    expect(interruptor()).not.toBeChecked()
+    expect(ultimosParams().hasta).toBeUndefined()
+    expect(screen.queryByRole('combobox', { name: 'Cantidad de días' })).not.toBeInTheDocument()
+  })
+
+  it('el interruptor se opera con el teclado y el selector solo aparece encendido', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    interruptor().focus()
+    await user.keyboard(' ')
+    expect(interruptor()).toBeChecked()
+    expect(screen.getByRole('combobox', { name: 'Cantidad de días' })).toHaveValue('7')
+    await waitFor(() => expect(ultimosParams().hasta).toBe('2026-11-17'))
+    await user.keyboard(' ')
+    expect(screen.queryByRole('combobox', { name: 'Cantidad de días' })).not.toBeInTheDocument()
+    await waitFor(() => expect(ultimosParams().hasta).toBeUndefined())
+  })
+
+  it('cambiar a 14 y a 30 pide hasta = hoy + N', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    await user.click(interruptor())
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Cantidad de días' }), '14')
+    await waitFor(() => expect(ultimosParams().hasta).toBe('2026-11-24'))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Cantidad de días' }), '30')
+    await waitFor(() => expect(ultimosParams().hasta).toBe('2026-12-10'))
+  })
+
+  it('mientras cambia el horizonte muestra «Cargando…» y no la lista anterior', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    vi.mocked(getRecomendacion).mockReturnValue(new Promise(() => {}))
+    await user.click(interruptor())
+    expect(await screen.findByText('Cargando recomendaciones…')).toBeInTheDocument()
+    expect(screen.queryByText('Armar la casa')).not.toBeInTheDocument()
+  })
+
+  it('una fila futura dice «Para el viernes 13»; la atrasada y la sin fecha conservan su texto', async () => {
+    vi.mocked(getRecomendacion).mockResolvedValue([...LISTA, FUTURA])
+    renderizar()
+    const fila = (await screen.findByText('Sacar turno')).closest('li')!
+    expect(within(fila).getByText('Para el viernes 13')).toBeInTheDocument()
+    expect(screen.getAllByText('Sin fecha').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Atrasada desde 3 de noviembre').length).toBeGreaterThan(0)
+  })
+
+  it('agendar una futura hace el PATCH correcto y la fila se va tras el refresco', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecomendacion).mockResolvedValue([FUTURA])
+    vi.mocked(agendarTarea).mockResolvedValue([tarea({ id: 7, fecha: HOY })])
+    renderizar()
+    await screen.findByText('Sacar turno')
+    vi.mocked(getRecomendacion).mockResolvedValue([])
+    await user.click(screen.getByRole('button', { name: 'Agendar «Sacar turno» para hoy' }))
+    expect(agendarTarea).toHaveBeenCalledWith(7, { fecha: HOY, hoy: HOY, incluirSubtareas: false })
+    await waitFor(() => expect(screen.queryByText('Sacar turno')).not.toBeInTheDocument())
+  })
+
+  it('una madre futura con una hija sin fecha muestra «Incluir 1 subtarea» y agendar manda incluirSubtareas=true', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecomendacion).mockResolvedValue([rec({ id: 8, titulo: 'Madre futura', fecha: '2026-11-15' }, [rec({ id: 9, titulo: 'Hija suelta', padreId: 8 })])])
+    vi.mocked(agendarTarea).mockResolvedValue([tarea({ id: 8, fecha: HOY }), tarea({ id: 9, fecha: HOY })])
+    renderizar()
+    await screen.findByText('Madre futura')
+    expect(screen.getByRole('checkbox', { name: /Incluir 1 subtarea/ })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Agendar «Madre futura» para hoy' }))
+    expect(agendarTarea).toHaveBeenCalledWith(8, { fecha: HOY, hoy: HOY, incluirSubtareas: true })
+  })
+
+  it('vacío: sin horizonte el texto de siempre; con horizonte menciona los días', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecomendacion).mockResolvedValue([])
+    renderizar()
+    expect(await screen.findByText('No hay tareas para recomendar')).toBeInTheDocument()
+    await user.click(interruptor())
+    expect(await screen.findByText('No hay tareas para recomendar ni para los próximos 7 días.')).toBeInTheDocument()
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Cantidad de días' }), '30')
+    expect(await screen.findByText('No hay tareas para recomendar ni para los próximos 30 días.')).toBeInTheDocument()
+  })
+
+  it('la descripción menciona el horizonte cuando está encendido', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    await user.click(interruptor())
+    expect(screen.getByText(/o con fecha en los próximos 7 días/)).toBeInTheDocument()
+  })
+
+  it('convive con el filtro por proyecto: se mandan proyectoId y hasta juntos', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    await user.click(interruptor())
+    await user.click(screen.getByRole('button', { name: 'Proyecto' }))
+    await user.click(await screen.findByRole('button', { name: 'Mudanza' }))
+    await waitFor(() => expect(getRecomendacion).toHaveBeenLastCalledWith(expect.objectContaining({ proyectoId: 10, hasta: '2026-11-17' })))
+    // Mover el horizonte no suelta el filtro.
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Cantidad de días' }), '14')
+    await waitFor(() => expect(getRecomendacion).toHaveBeenLastCalledWith(expect.objectContaining({ proyectoId: 10, hasta: '2026-11-24' })))
+  })
+
+  it('reabrir el diálogo lo deja apagado', async () => {
+    const user = userEvent.setup()
+    const { rerender, queryClient, alCerrar } = renderizar()
+    await screen.findByText('Armar la casa')
+    await user.click(interruptor())
+    const con = (abierto: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <RecomendacionDialog abierto={abierto} alCerrar={alCerrar} hoy={HOY} aviso="" alAvisar={() => {}} />
+      </QueryClientProvider>
+    )
+    rerender(con(false))
+    rerender(con(true))
+    await waitFor(() => expect(interruptor()).not.toBeChecked())
+  })
+
+  it('el interruptor y el selector se deshabilitan mientras se agenda', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agendarTarea).mockReturnValue(new Promise(() => {}))
+    renderizar()
+    await screen.findByText('Armar la casa')
+    await user.click(interruptor())
+    await screen.findByText('Armar la casa')
+    await user.click(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' }))
+    expect(interruptor()).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: 'Cantidad de días' })).toBeDisabled()
+  })
+})

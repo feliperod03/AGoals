@@ -61,6 +61,58 @@ describe('useRecomendacion', () => {
   })
 })
 
+describe('useRecomendacion: horizonte', () => {
+  const ultimo = () => vi.mocked(getRecomendacion).mock.lastCall![0]
+
+  it('empieza con el horizonte apagado y sin hasta', async () => {
+    const { Envoltorio } = envoltorio()
+    const { result } = renderHook(() => useRecomendacion('2026-11-10'), { wrapper: Envoltorio })
+    await waitFor(() => expect(result.current.recomendacion.isSuccess).toBe(true))
+    expect(result.current.horizonte).toBeNull()
+    expect(ultimo().hasta).toBeUndefined()
+  })
+
+  it('encender manda hasta = hoy + 7; elegir 14 y 30 recalcula; apagar vuelve a pedir sin hasta', async () => {
+    const { Envoltorio } = envoltorio()
+    const { result } = renderHook(() => useRecomendacion('2026-11-10'), { wrapper: Envoltorio })
+    await waitFor(() => expect(result.current.recomendacion.isSuccess).toBe(true))
+
+    act(() => result.current.setIncluirFuturas(true))
+    await waitFor(() => expect(ultimo().hasta).toBe('2026-11-17'))
+    act(() => result.current.setHorizonte(14))
+    await waitFor(() => expect(ultimo().hasta).toBe('2026-11-24'))
+    act(() => result.current.setHorizonte(30))
+    await waitFor(() => expect(ultimo().hasta).toBe('2026-12-10'))
+    act(() => result.current.setIncluirFuturas(false))
+    await waitFor(() => expect(ultimo().hasta).toBeUndefined())
+    expect(result.current.horizonte).toBeNull()
+  })
+
+  it('al volver a encender arranca otra vez en 7', () => {
+    const { Envoltorio } = envoltorio()
+    const { result } = renderHook(() => useRecomendacion('2026-11-10'), { wrapper: Envoltorio })
+    act(() => result.current.setIncluirFuturas(true))
+    act(() => result.current.setHorizonte(30))
+    act(() => result.current.setIncluirFuturas(false))
+    act(() => result.current.setIncluirFuturas(true))
+    expect(result.current.horizonte).toBe(7)
+  })
+
+  it('la clave incluye hasta y sigue empezando por "tareas"; convive con orden, sentido y filtro', async () => {
+    const { Envoltorio, queryClient } = envoltorio()
+    const { result } = renderHook(() => useRecomendacion('2026-11-10'), { wrapper: Envoltorio })
+    await waitFor(() => expect(result.current.recomendacion.isSuccess).toBe(true))
+    act(() => result.current.setIncluirFuturas(true))
+    act(() => result.current.setOrden('antiguedad'))
+    act(() => result.current.setFiltro({ tipo: 'proyecto', id: 3 }))
+    await waitFor(() =>
+      expect(getRecomendacion).toHaveBeenLastCalledWith({ fecha: '2026-11-10', orden: 'antiguedad', sentido: 'desc', proyectoId: 3, objetivoId: undefined, hasta: '2026-11-17' }),
+    )
+    const claves = queryClient.getQueryCache().findAll({ queryKey: ['tareas'] })
+    expect(claves.some((q) => JSON.stringify(q.queryKey).includes('2026-11-17'))).toBe(true)
+  })
+})
+
 describe('contarSubtareas', () => {
   const nodo = (subtareas: TareaRecomendada[] = []) => ({ tarea: {} as TareaRecomendada['tarea'], subtareas })
   it('cuenta descendientes de todos los niveles', () => {

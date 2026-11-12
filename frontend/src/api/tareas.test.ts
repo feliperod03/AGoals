@@ -14,6 +14,11 @@ afterEach(() => {
 })
 
 describe('getRecomendacion', () => {
+  it('manda hasta junto con los demás parámetros', async () => {
+    await getRecomendacion({ fecha: '2026-11-10', orden: 'prioridad', sentido: 'desc', proyectoId: 4, hasta: '2026-11-17' })
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('/api/tareas/recomendacion?fecha=2026-11-10&orden=prioridad&sentido=desc&proyectoId=4&hasta=2026-11-17')
+  })
+
   it('manda solo los parámetros con valor', async () => {
     await getRecomendacion({ fecha: '2026-11-10', orden: 'antiguedad', sentido: 'asc', proyectoId: 4 })
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]

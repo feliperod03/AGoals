@@ -1,8 +1,8 @@
-import { CalendarOff, TriangleAlert } from 'lucide-react'
+import { CalendarClock, CalendarOff, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { esAtrasada, formatearDiaMes } from '@/lib/fechas'
+import { esAtrasada, esFutura, formatearDiaCorto, formatearDiaMes } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import type { Tarea, TareaRecomendada } from '@/types/tarea'
 import { PrioridadChip } from '@/components/PrioridadChip'
@@ -113,7 +113,7 @@ function Datos({ tarea, hoy, proyectos, objetivos }: { tarea: Tarea; hoy: string
   )
 }
 
-/** "Sin fecha" o "Atrasada desde …": texto más ícono, nunca solo color. */
+/** "Sin fecha", "Atrasada desde …" o "Para el <día>": texto más ícono, nunca solo color. */
 function MarcaFecha({ fecha, hoy }: { fecha: string | null; hoy: string }) {
   if (fecha === null) {
     return (
@@ -128,6 +128,14 @@ function MarcaFecha({ fecha, hoy }: { fecha: string | null; hoy: string }) {
       <span className="inline-flex items-center gap-1 font-medium text-tx">
         <TriangleAlert className="size-3.5" aria-hidden="true" />
         Atrasada desde {formatearDiaMes(fecha)}
+      </span>
+    )
+  }
+  if (esFutura(fecha, hoy)) {
+    return (
+      <span className="inline-flex items-center gap-1 font-medium">
+        <CalendarClock className="size-3.5" aria-hidden="true" />
+        Para el {formatearDiaCorto(fecha)}
       </span>
     )
   }

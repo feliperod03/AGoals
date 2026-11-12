@@ -58,6 +58,8 @@ export interface ParamsRecomendacion {
   /** Solo el vínculo directo de la tarea. */
   proyectoId?: number
   objetivoId?: number
+  /** YYYY-MM-DD: suma las tareas con fecha > `fecha` y <= `hasta`, en un bloque al final. Sin él, la respuesta de siempre. */
+  hasta?: string
 }
 
 /** Tareas abiertas sin fecha o atrasadas, con sus subtareas anidadas. Los params sin valor no se envían. */

@@ -8,6 +8,7 @@ import type { OrdenRecomendacion, SentidoOrden } from '@/types/tarea'
 import { ErrorEnLinea, TextoVacio } from '@/components/Tarjeta'
 import { useAgendarTarea } from '@/features/agenda/useAgendarTarea'
 import { FiltroVinculo } from './FiltroVinculo'
+import { HorizonteFuturas } from './HorizonteFuturas'
 import { ListaRecomendada } from './ListaRecomendada'
 import { useRecomendacion } from './useRecomendacion'
 
@@ -56,7 +57,9 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
     <div className="flex flex-col gap-4">
       <div>
         <DialogTitle>Recomendación</DialogTitle>
-        <DialogDescription>Tareas abiertas sin fecha o atrasadas, para armar tu día.</DialogDescription>
+        <DialogDescription>
+          Tareas abiertas sin fecha o atrasadas{r.horizonte !== null && `, o con fecha en los próximos ${r.horizonte} días`}, para armar tu día.
+        </DialogDescription>
       </div>
 
       {/* Región viva propia: la de la página queda oculta a los lectores de pantalla mientras el diálogo está abierto. */}
@@ -82,6 +85,7 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
             {ETIQUETA_SENTIDO[r.orden][r.sentido]}
           </Button>
         </div>
+        <HorizonteFuturas horizonte={r.horizonte} alEncender={r.setIncluirFuturas} alElegir={r.setHorizonte} deshabilitado={agendar.isPending} />
         <FiltroVinculo
           filtro={r.filtro}
           alCambiar={r.setFiltro}
@@ -96,7 +100,9 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
 
       {r.recomendacion.isPending && <TextoVacio>Cargando recomendaciones…</TextoVacio>}
       {r.recomendacion.error && <ErrorEnLinea mensaje={r.recomendacion.error.message} />}
-      {r.recomendacion.data && r.recomendacion.data.length === 0 && <TextoVacio>No hay tareas para recomendar</TextoVacio>}
+      {r.recomendacion.data && r.recomendacion.data.length === 0 && <TextoVacio>
+          {r.horizonte === null ? 'No hay tareas para recomendar' : `No hay tareas para recomendar ni para los próximos ${r.horizonte} días.`}
+        </TextoVacio>}
       {r.recomendacion.data && r.recomendacion.data.length > 0 && (
         <ListaRecomendada
           tareas={r.recomendacion.data}

@@ -28,6 +28,7 @@ import {
   moverInstanteDias,
   aIsoConDesfase,
   esAtrasada,
+  esFutura,
   ahora,
   formatearDesfase,
   formatearDiaMes,
@@ -273,6 +274,15 @@ describe('mensajePospuesta', () => {
 describe('formatearDiaMes', () => {
   it('escribe día y mes en español', () => {
     expect(formatearDiaMes('2026-11-03')).toBe('3 de noviembre')
+  })
+})
+
+describe('esFutura', () => {
+  it('fecha posterior a hoy es futura; hoy, atrasada y null no', () => {
+    expect(esFutura('2026-11-11', '2026-11-10')).toBe(true)
+    expect(esFutura('2026-11-10', '2026-11-10')).toBe(false)
+    expect(esFutura('2026-11-09', '2026-11-10')).toBe(false)
+    expect(esFutura(null, '2026-11-10')).toBe(false)
   })
 })
 

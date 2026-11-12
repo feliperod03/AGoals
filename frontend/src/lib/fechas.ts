@@ -176,6 +176,11 @@ export function esAtrasada(fecha: string | null, hoy: string): boolean {
   return fecha !== null && fecha < hoy
 }
 
+/** Una tarea con fecha posterior a `hoy` es futura (se comparan como texto, igual que `esAtrasada`). */
+export function esFutura(fecha: string | null, hoy: string): boolean {
+  return fecha !== null && fecha > hoy
+}
+
 /** Confirmación al agendar para hoy: `subtareas` = subtareas que también se agendaron. */
 export function mensajeAgendada(titulo: string, subtareas: number): string {
   const base = `«${titulo}» agendada para hoy`
