@@ -26,5 +26,5 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
 9. **Calendario**, en cuatro partes (grilla propia con date-fns, sin librería; las tareas con fecha también se ven, diferenciadas de los eventos):
    - **9a Vista mensual en lectura** (hecha, `26c36bd`): `/calendario` con cuadrícula lunes a domingo, panel con el detalle del día y estado en la URL (`?mes=&dia=`).
    - **9b Vista semanal en lectura** (hecha, `7f10dce`): `?vista=semana&dia=`, selector «Mes | Semana», eje de horas con siete columnas, franja «Sin hora» y lista por día en pantallas angostas.
-   - **9c CRUD de eventos** (crear, editar y borrar).
-   - **9d Recordatorios de evento** (el backend ya los soporta con `eventoId`).
+   - **9c CRUD de eventos** (hecha, `ffa1562`): crear, editar y borrar desde el calendario (botón «Nuevo evento», «Agregar evento» del panel del día, clic en un hueco de la semana y en los chips/bloques de evento).
+   - **9d Recordatorios de evento** (próxima; el backend ya los soporta con `eventoId`).
