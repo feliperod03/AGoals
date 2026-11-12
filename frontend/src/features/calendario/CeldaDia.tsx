@@ -15,6 +15,8 @@ interface Props {
   alElegir: (fecha: string) => void
   /** Atajo de mouse (9c): abre la edición del evento cuyo chip recibió el clic. */
   alAbrirEvento?: (evento: Evento) => void
+  /** Se llama tras un clic de mouse que solo seleccionó el día (no con teclado ni si se abrió un evento). */
+  alClicDia?: (fecha: string) => void
   alTeclear: (evento: KeyboardEvent<HTMLButtonElement>) => void
   botonRef: Ref<HTMLButtonElement>
 }
@@ -30,7 +32,7 @@ interface Props {
  * espacio vacío, en una tarea, en «+N más» o en las marcas angostas solo selecciona. Con el teclado, Enter tiene como
  * destino el botón entero, así que también solo selecciona: teclado y lector usan el panel «Detalle del día».
  */
-export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir, alAbrirEvento, alTeclear, botonRef }: Props) {
+export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir, alAbrirEvento, alClicDia, alTeclear, botonRef }: Props) {
   const esHoy = fecha === hoy
   const { visibles, ocultos } = recortarParaCelda(elementos)
   const numero = Number(fecha.slice(8, 10))
@@ -38,7 +40,11 @@ export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir
   function alClic(e: MouseEvent<HTMLButtonElement>) {
     alElegir(fecha)
     const id = alAbrirEvento ? eventoDelClic(e.target, e.currentTarget) : null
-    if (id === null) return
+    // Enter y Espacio también disparan `click`, pero con `detail === 0`: solo el mouse (detail > 0) mueve la pantalla.
+    if (id === null) {
+      if (e.detail > 0) alClicDia?.(fecha)
+      return
+    }
     // El evento completo (también desde el día 2 de uno largo); si ya no está en la celda (dato viejo), solo se selecciona.
     const elemento = elementos.find((x) => x.tipo === 'evento' && x.evento.id === id)
     if (elemento?.tipo === 'evento') alAbrirEvento?.(elemento.evento)
@@ -48,7 +54,7 @@ export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir
     <div
       role="gridcell"
       aria-selected={seleccionada}
-      className={cn('flex min-h-16 border-r border-b border-line @min-[640px]:min-h-28', seleccionada ? 'bg-side' : delMes ? 'bg-card' : 'bg-bg/60')}
+      className={cn('flex min-h-16 border-r border-b border-line @min-[640px]:min-h-28', seleccionada ? 'bg-sel' : delMes ? 'bg-card' : 'bg-bg/60')}
     >
       <button
         ref={botonRef}

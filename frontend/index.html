@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AGoals</title>
+    <script>
+      // Tema antes del primer pintado (sin parpadeo). Misma lógica que src/app/tema.ts: un test las compara.
+      try {
+        var t = localStorage.getItem('agoals:tema')
+        var oscuro = t === 'oscuro' || (t !== 'claro' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', oscuro)
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

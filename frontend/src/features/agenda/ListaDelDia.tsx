@@ -46,17 +46,20 @@ function Fila({ tarea, alEditar, acciones }: { tarea: Tarea; alEditar: (tarea: T
   const cerrada = tarea.estado === 'HECHO' || tarea.estado === 'CANCELADO'
 
   return (
-    <li className="flex items-center gap-1 border-b border-line last:border-b-0">
-      <BotonEstado tarea={tarea} acciones={acciones} />
-      <button
-        type="button"
-        onClick={() => alEditar(tarea)}
-        className={cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2.5 text-left hover:bg-muted', FOCO)}
-      >
-        <span className={cn('min-w-0 flex-1 truncate', cerrada && 'text-mut line-through')}>{tarea.titulo}</span>
-        {tarea.prioridad && <PrioridadChip prioridad={tarea.prioridad} />}
-      </button>
-      <MenuAcciones tarea={tarea} acciones={acciones} />
+    <li className="border-b border-line last:border-b-0">
+      {/* El sombreado cubre la fila entera (círculo, título y menú); -mx-2 compensa px-2 para que nada se mueva. */}
+      <div className="-mx-2 flex items-center gap-1 rounded-lg px-2 hover:bg-muted">
+        <BotonEstado tarea={tarea} acciones={acciones} />
+        <button
+          type="button"
+          onClick={() => alEditar(tarea)}
+          className={cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2.5 text-left', FOCO)}
+        >
+          <span className={cn('min-w-0 flex-1 truncate', cerrada && 'text-mut line-through')}>{tarea.titulo}</span>
+          {tarea.prioridad && <PrioridadChip prioridad={tarea.prioridad} />}
+        </button>
+        <MenuAcciones tarea={tarea} acciones={acciones} />
+      </div>
     </li>
   )
 }

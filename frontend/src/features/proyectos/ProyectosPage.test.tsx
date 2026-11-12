@@ -41,6 +41,13 @@ describe('ProyectosPage: estados', () => {
     expect(screen.getByRole('heading', { name: 'Proyectos', level: 1 })).toBeInTheDocument()
   })
 
+  it('el título aparece una sola vez (h1): la tarjeta no repite el h2 y sigue teniendo nombre', async () => {
+    renderizar()
+    await screen.findByText('Aún no tienes proyectos.')
+    expect(screen.queryByRole('heading', { name: 'Proyectos', level: 2 })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Proyectos' })).toBeInTheDocument()
+  })
+
   it('muestra el mensaje del servidor si la lista falla', async () => {
     vi.mocked(getProyectos).mockRejectedValue(new ApiError(500, 'Error del servidor'))
     renderizar()

@@ -3,6 +3,7 @@ import {
   deFechaYHoraLocal,
   esDeDiasCompletos,
   esHoraValida,
+  formatearHoraDelDia,
   formatearRangoEvento,
   mensajeEventoBorrado,
   mensajeEventoCreado,
@@ -155,6 +156,12 @@ describe('minutos del día', () => {
     expect(minutosDeHora('00:00')).toBe(0)
     expect(formatearMinutos(570)).toBe('09:30')
     expect(formatearMinutos(1440)).toBe('24:00')
+  })
+
+  it('formatearHoraDelDia escribe la medianoche final como 00:00, nunca 24:00', () => {
+    expect(formatearHoraDelDia(570)).toBe('09:30')
+    expect(formatearHoraDelDia(1425)).toBe('23:45')
+    expect(formatearHoraDelDia(1440)).toBe('00:00')
   })
 
   it('aFechaLocal usa el día local, no el de UTC', () => {

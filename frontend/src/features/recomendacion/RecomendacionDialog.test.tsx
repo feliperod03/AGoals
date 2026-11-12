@@ -113,6 +113,12 @@ describe('RecomendacionDialog: lista', () => {
     expect(screen.getAllByRole('button', { name: /^Agendar/ })).toHaveLength(2)
   })
 
+  it('los botones «Agendar» llegan a 44 px en móvil (H5)', async () => {
+    renderizar()
+    await screen.findByRole('checkbox', { name: /Incluir 2 subtareas/ })
+    for (const boton of screen.getAllByRole('button', { name: /^Agendar/ })) expect(boton).toHaveClass('max-sm:h-11')
+  })
+
   it('muestra el estado de carga y luego el vacío', async () => {
     vi.mocked(getRecomendacion).mockResolvedValue([])
     renderizar()

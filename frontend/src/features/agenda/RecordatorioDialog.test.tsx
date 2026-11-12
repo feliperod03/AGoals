@@ -66,6 +66,14 @@ beforeEach(() => {
   })
 })
 
+describe('Recordatorio: objetivos táctiles (H5)', () => {
+  it('«Crear recordatorio» llega a 44 px en móvil', async () => {
+    renderizar(deTarea())
+    const d = await dialogoTarea()
+    expect(await within(d).findByRole('button', { name: 'Crear recordatorio' })).toHaveClass('max-sm:h-11')
+  })
+})
+
 describe('Recordatorio de una tarea', () => {
   it('sin recordatorio crea uno (POST con tareaId y canal APP), la descripción vacía es válida y avisa en su región status', async () => {
     const user = userEvent.setup()

@@ -4,7 +4,7 @@ import {
   duracionEnMinutos,
   esFechaValida,
   formatearDiaSemana,
-  formatearMinutos,
+  formatearHoraDelDia,
   limitesDeSemana,
   mesDe,
   minutosDeHora,
@@ -120,8 +120,6 @@ export function recortarParaCelda(elementos: ElementoDia[], max: number = MAX_PO
   return { visibles: elementos.slice(0, max - 1), ocultos: elementos.length - (max - 1) }
 }
 
-/** `1440` -> `00:00` (nunca `24:00`). */
-const horaDeMinutos = (minutos: number) => formatearMinutos(minutos % 1440)
 
 /**
  * Texto de la hora de un elemento: `09:30–10:00`; `desde 22:00` (primer día de un evento que sigue al día
@@ -130,12 +128,12 @@ const horaDeMinutos = (minutos: number) => formatearMinutos(minutos % 1440)
  */
 export function textoHora(e: ElementoDia): string | null {
   if (e.inicioMin === null || e.finMin === null) return null
-  if (e.tipo === 'tarea') return `${horaDeMinutos(e.inicioMin)}–${horaDeMinutos(e.finMin)}`
+  if (e.tipo === 'tarea') return `${formatearHoraDelDia(e.inicioMin)}–${formatearHoraDelDia(e.finMin)}`
   // Ocupa el día entero: intermedio de uno largo, o de 00:00 a 00:00 del día siguiente (nunca «00:00–00:00»).
   if ((e.empiezaAntes && e.terminaDespues) || (e.inicioMin === 0 && e.finMin === 1440)) return 'Todo el día'
-  if (e.empiezaAntes) return `hasta ${horaDeMinutos(e.finMin)}`
-  if (e.terminaDespues) return `desde ${horaDeMinutos(e.inicioMin)}`
-  return `${horaDeMinutos(e.inicioMin)}–${horaDeMinutos(e.finMin)}`
+  if (e.empiezaAntes) return `hasta ${formatearHoraDelDia(e.finMin)}`
+  if (e.terminaDespues) return `desde ${formatearHoraDelDia(e.inicioMin)}`
+  return `${formatearHoraDelDia(e.inicioMin)}–${formatearHoraDelDia(e.finMin)}`
 }
 
 /**
@@ -146,7 +144,7 @@ export function textoHora(e: ElementoDia): string | null {
 export function textoHoraCelda(e: ElementoDia): string | null {
   if (e.inicioMin === null) return null
   if (e.tipo === 'evento' && e.empiezaAntes) return null
-  return horaDeMinutos(e.inicioMin)
+  return formatearHoraDelDia(e.inicioMin)
 }
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
@@ -302,9 +300,9 @@ export const ALTO_BLOQUE_CON_DOS_LINEAS = 40
 
 /** Hora corta de un bloque: `09:30`, `desde 22:00` o `hasta 06:00` (un evento cortado por la medianoche). */
 export function textoHoraBloque(e: ElementoConHora): string {
-  if (e.tipo === 'evento' && e.empiezaAntes) return `hasta ${horaDeMinutos(e.finMin)}`
-  if (e.tipo === 'evento' && e.terminaDespues) return `desde ${horaDeMinutos(e.inicioMin)}`
-  return horaDeMinutos(e.inicioMin)
+  if (e.tipo === 'evento' && e.empiezaAntes) return `hasta ${formatearHoraDelDia(e.finMin)}`
+  if (e.tipo === 'evento' && e.terminaDespues) return `desde ${formatearHoraDelDia(e.inicioMin)}`
+  return formatearHoraDelDia(e.inicioMin)
 }
 
 // --- Edición y atajos de mouse (9c) ---

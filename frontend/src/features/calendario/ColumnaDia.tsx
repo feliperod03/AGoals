@@ -96,10 +96,10 @@ export function ColumnaDia({
     <div
       role="group"
       aria-label={etiquetaDia(fecha, elementos, hoy)}
-      className={cn('min-w-0 border-l border-line', seleccionada && 'bg-side')}
+      className={cn('min-w-0 border-l border-line', seleccionada && 'bg-sel')}
     >
       <div
-        className={cn('sticky top-0 z-20 flex items-center justify-center border-b border-line', seleccionada ? 'bg-side' : 'bg-card')}
+        className={cn('sticky top-0 z-20 flex items-center justify-center border-b border-line', seleccionada ? 'bg-sel' : 'bg-card')}
         style={{ height: ALTO_ENCABEZADO_DIA }}
       >
         <button

@@ -266,6 +266,49 @@ describe('CalendarioPage: selección de día', () => {
   })
 })
 
+describe('CalendarioPage: scroll al panel (solo con clic)', () => {
+  const scrollIntoView = vi.fn()
+
+  beforeEach(() => {
+    scrollIntoView.mockReset()
+    Element.prototype.scrollIntoView = scrollIntoView
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+  })
+
+  it('un clic en un día lleva la vista al panel con scroll suave y block «nearest»', async () => {
+    montar()
+    await userEvent.click(celda(/sábado 14 de noviembre/))
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' })
+    expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByRole('complementary', { name: 'Detalle del día' }))
+  })
+
+  it('un clic en el día que ya estaba seleccionado también lleva al panel', async () => {
+    montar()
+    await userEvent.click(celda(/martes 10 de noviembre/))
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('con prefers-reduced-motion el salto es inmediato', async () => {
+    vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta.includes('reduce') }))
+    montar()
+    await userEvent.click(celda(/sábado 14 de noviembre/))
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'auto' })
+  })
+
+  it('Enter, Espacio y las flechas no mueven la pantalla', async () => {
+    montar()
+    celda(/martes 10 de noviembre/).focus()
+    await userEvent.keyboard('{ArrowRight}{ArrowDown}')
+    await userEvent.keyboard('{Enter}')
+    await userEvent.keyboard(' ')
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
 describe('CalendarioPage: URL', () => {
   it('?mes=2027-02 abre febrero de 2027', () => {
     montar(['/calendario?mes=2027-02'])

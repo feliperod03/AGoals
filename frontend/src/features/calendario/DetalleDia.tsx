@@ -42,7 +42,7 @@ export function DetalleDia({ fecha, hoy, elementos, alAbrirEvento, alAgregarEven
           type="button"
           variant="secondary"
           size="sm"
-          className="mt-4"
+          className="mt-4 max-sm:h-11"
           aria-label={`Agregar evento el ${formatearDiaSemana(fecha)}`}
           onClick={() => alAgregarEvento(fecha)}
         >

@@ -1,8 +1,11 @@
-import { Archive, CalendarDays, FolderKanban, Lightbulb, Sun, Target, type LucideIcon } from 'lucide-react'
+import { Archive, CalendarDays, FolderKanban, Lightbulb, Monitor, Moon, Sun, Target, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { AvisoVencidos } from '@/features/agenda/AvisoVencidos'
 import { cn } from '@/lib/utils'
+import type { Preferencia } from './tema'
+import { siguientePreferencia } from './tema'
+import { useTema } from './useTema'
 
 const SECCIONES: { ruta: string; texto: string; icono: LucideIcon }[] = [
   { ruta: '/', texto: 'Hoy', icono: Sun },
@@ -12,6 +15,29 @@ const SECCIONES: { ruta: string; texto: string; icono: LucideIcon }[] = [
   { ruta: '/objetivos', texto: 'Objetivos', icono: Target },
   { ruta: '/ideas', texto: 'Ideas', icono: Lightbulb },
 ]
+
+const TEMAS: Record<Preferencia, { texto: string; icono: LucideIcon }> = {
+  sistema: { texto: 'Sistema', icono: Monitor },
+  claro: { texto: 'Claro', icono: Sun },
+  oscuro: { texto: 'Oscuro', icono: Moon },
+}
+
+/** Botón que cicla Sistema → Claro → Oscuro; el texto visible es el estado actual. */
+function BotonTema() {
+  const { preferencia, ciclar } = useTema()
+  const { texto, icono: Icono } = TEMAS[preferencia]
+  return (
+    <button
+      type="button"
+      onClick={ciclar}
+      aria-label={`Tema: ${texto}. Cambiar a ${TEMAS[siguientePreferencia(preferencia)].texto}`}
+      className="ml-auto flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-mut transition-colors hover:bg-line/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-11"
+    >
+      <Icono className="size-4" aria-hidden="true" />
+      {texto}
+    </button>
+  )
+}
 
 /**
  * Marco de la app. Responsive solo con CSS: en pantallas anchas (md+) la barra es
@@ -24,6 +50,7 @@ export function Layout() {
       <aside className="border-b border-line bg-side md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="flex items-center gap-3 px-5 pt-4 md:pt-6">
           <span className="font-serif text-2xl font-semibold text-tx">AGoals</span>
+          <BotonTema />
         </div>
         <nav aria-label="Secciones" className="flex gap-1 overflow-x-auto p-3 [scrollbar-width:none] md:flex-col md:p-4">
           {SECCIONES.map(({ ruta, texto, icono: Icono }) => (

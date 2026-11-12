@@ -27,3 +27,14 @@ describe('PlanificacionPorHoras: línea de "ahora"', () => {
     expect(screen.getByTestId('linea-ahora').style.top).toBe('224px')
   })
 })
+
+describe('PlanificacionPorHoras: medianoche', () => {
+  it('un bloque que termina a las 24:00 se escribe 22:00–00:00 y el eje no rotula las 24:00', () => {
+    const bloque = { clave: 'e1', tipo: 'evento' as const, titulo: 'Guardia', inicioMin: 1320, finMin: 1440, prioridad: null }
+    render(<PlanificacionPorHoras bloques={[bloque]} fecha="2026-11-10" ahora={AHORA} cargando={false} errores={[]} alEditar={() => {}} />)
+    expect(screen.getByText('EVENTO · 22:00–00:00')).toBeInTheDocument()
+    expect(screen.queryByText('24:00')).not.toBeInTheDocument()
+    expect(screen.queryByText(/24:00/)).not.toBeInTheDocument()
+    expect(screen.getByText('23:00')).toBeInTheDocument()
+  })
+})

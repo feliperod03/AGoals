@@ -40,10 +40,11 @@ function Fila<T extends ItemJerarquico>({ nodo, ...resto }: Omit<Props<T>, 'nodo
 
   return (
     <li className="border-b border-line last:border-b-0">
-      <div className="flex items-center gap-3 py-2">
+      {/* Si no cabe, el estado y el menú pasan a una segunda línea (el nombre pide al menos `basis-56`, si no se trunca en tres letras). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
         {/* Decorativo: el icono viene de las tareas (su texto oculto diría «Hecha»); aquí el estado se escribe en masculino. */}
         <EstadoIcono estado={item.estado} decorativo />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
           <span className="flex w-full min-w-0 items-center gap-3">
             <Link
               to={`${rutaBase}/${item.id}`}
@@ -66,7 +67,9 @@ function Fila<T extends ItemJerarquico>({ nodo, ...resto }: Omit<Props<T>, 'nodo
           </span>
         </div>
         <SelectorEstado item={item} acciones={acciones} />
-        <MenuAccionesItem item={item} acciones={acciones} />
+        <div className="ml-auto">
+          <MenuAccionesItem item={item} acciones={acciones} />
+        </div>
       </div>
 
       {(hijos.length > 0 || ocultos > 0) && (

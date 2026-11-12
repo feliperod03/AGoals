@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 
 import { Aviso } from '@/components/Aviso'
 import { ErrorEnLinea } from '@/components/Tarjeta'
@@ -35,6 +35,7 @@ export function CalendarioPage() {
   const idTitulo = useId()
   const confirmacion = useMensajeTemporal()
   const botonNuevo = useRef<HTMLButtonElement>(null)
+  const panelDetalle = useRef<HTMLElement>(null)
 
   const dias = useMemo(() => (vista === 'semana' ? diasDeLaSemana(lunes) : diasDeLaCuadricula(mes)), [vista, lunes, mes])
   const rango = rangoDeFechas(dias[0] as string, dias[dias.length - 1] as string)
@@ -48,6 +49,27 @@ export function CalendarioPage() {
     if (dias.includes(inicio)) estado.seleccionarDia(inicio)
     else estado.saltarADia(inicio)
   }
+
+  /*
+    Con el panel debajo de la cuadrícula, un clic en un día no mostraría nada sin hacer scroll. `nearest` mueve lo
+    justo para que se vea el panel (la cuadrícula sigue asomando) y no hace nada si ya se ve, p. ej. con el panel al
+    lado. Respeta `prefers-reduced-motion`. Solo lo pide el clic de mouse, no el teclado. Si el día cambia, el scroll se
+    hace DESPUÉS de que el panel muestre el día nuevo (su alto puede cambiar y el destino con él).
+  */
+  const scrollPendiente = useRef(false)
+  function scrollAlPanel() {
+    const sinMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    panelDetalle.current?.scrollIntoView?.({ block: 'nearest', behavior: sinMovimiento ? 'auto' : 'smooth' })
+  }
+  function alClicDia(fecha: string) {
+    if (fecha === dia) scrollAlPanel()
+    else scrollPendiente.current = true
+  }
+  useEffect(() => {
+    if (!scrollPendiente.current) return
+    scrollPendiente.current = false
+    scrollAlPanel()
+  }, [dia])
 
   const acciones = useAccionesEvento({ alMensaje: confirmacion.mostrar, alCrear: irAlDiaDe })
   const crearEnDia = (fecha: string) => acciones.abrirCrear(valoresParaNuevo(fecha, hoy, ahora))
@@ -114,9 +136,10 @@ export function CalendarioPage() {
                 alSeleccionar={estado.seleccionarDia}
                 alSaltar={estado.saltarADia}
                 alAbrirEvento={acciones.abrirEditar}
+                alClicDia={alClicDia}
               />
             </div>
-            <aside aria-label="Detalle del día" className="min-w-0 @min-[1224px]:max-w-[380px] @min-[1224px]:flex-[1_1_300px]">
+            <aside ref={panelDetalle} aria-label="Detalle del día" className="scroll-mb-4 min-w-0 @min-[1224px]:max-w-[380px] @min-[1224px]:flex-[1_1_300px]">
               <DetalleDia
                 fecha={dia}
                 hoy={hoy}

@@ -12,6 +12,8 @@
   --bg: #f3ecdd;
   --side: #ece2ce;
   --card: #fbf7ee;
+  /* Fondo del día seleccionado en el calendario (mes y semana). Opaco: el encabezado de la semana es sticky. */
+  --sel: #ece2ce;
   --line: #ddd0b5;
   --tx: #2b2418;
   --mut: #655942;
@@ -41,6 +43,8 @@
   --bg: #101826;
   --side: #0c121d;
   --card: #172236;
+  /* Apenas más oscuro que la tarjeta (no un «hueco» como --side) y con la píldora de tarea aún distinguible (1,33:1). */
+  --sel: #141d30;
   --line: #26334b;
   --tx: #ede3d0;
   --mut: #a9a08c;
@@ -67,6 +71,7 @@
   --color-bg: var(--bg);
   --color-side: var(--side);
   --color-card: var(--card);
+  --color-sel: var(--sel);
   --color-line: var(--line);
   --color-tx: var(--tx);
   --color-mut: var(--mut);

@@ -133,7 +133,7 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
           <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
             {TEXTOS[sujeto].fallo}
           </p>
-          <Button type="button" variant="secondary" size="sm" onClick={reintentar}>
+          <Button className="max-sm:h-11" type="button" variant="secondary" size="sm" onClick={reintentar}>
             Reintentar
           </Button>
         </div>
@@ -162,7 +162,7 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
       <ErrorDialogo mensaje={acciones.error} />
 
       <div className="flex justify-end">
-        <Button type="button" variant="secondary" disabled={acciones.pendiente} onClick={alCerrar}>
+        <Button className="max-sm:h-11" type="button" variant="secondary" disabled={acciones.pendiente} onClick={alCerrar}>
           Listo
         </Button>
       </div>
@@ -197,10 +197,10 @@ function ContenidoFila({
         </div>
         <ErrorDialogo mensaje={acciones.error} />
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" disabled={acciones.pendiente} onClick={() => setConfirmando(false)}>
+          <Button className="max-sm:h-11" type="button" variant="secondary" disabled={acciones.pendiente} onClick={() => setConfirmando(false)}>
             Conservar
           </Button>
-          <Button type="button" disabled={acciones.pendiente} onClick={() => acciones.borrar(existente.id, alCerrar)}>
+          <Button className="max-sm:h-11" type="button" disabled={acciones.pendiente} onClick={() => acciones.borrar(existente.id, alCerrar)}>
             {acciones.pendiente ? 'Borrando…' : 'Borrar recordatorio'}
           </Button>
         </div>
@@ -235,7 +235,7 @@ function ContenidoFila({
       <ErrorDialogo mensaje={acciones.error} />
 
       <div className="flex justify-end">
-        <Button type="button" variant="ghost" disabled={acciones.pendiente} onClick={alCerrar}>
+        <Button className="max-sm:h-11" type="button" variant="ghost" disabled={acciones.pendiente} onClick={alCerrar}>
           Cancelar
         </Button>
       </div>
@@ -312,11 +312,11 @@ function Formulario({ base, valorInicial, descripcionInicial, bloqueado, etiquet
 
       <div className="flex flex-wrap justify-end gap-2">
         {quitar && (
-          <Button type="button" variant="ghost" aria-label={quitar.etiqueta} disabled={deshabilitado} onClick={quitar.alQuitar}>
+          <Button className="max-sm:h-11" type="button" variant="ghost" aria-label={quitar.etiqueta} disabled={deshabilitado} onClick={quitar.alQuitar}>
             {quitar.texto ?? 'Quitar recordatorio'}
           </Button>
         )}
-        <Button type="submit" disabled={deshabilitado}>
+        <Button className="max-sm:h-11" type="submit" disabled={deshabilitado}>
           {acciones.pendiente ? 'Guardando…' : etiquetaGuardar}
         </Button>
       </div>

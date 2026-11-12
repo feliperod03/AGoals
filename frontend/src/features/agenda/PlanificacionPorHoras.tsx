@@ -1,4 +1,4 @@
-import { aFechaLocal, formatearMinutos, minutosDelDia } from '@/lib/fechas'
+import { aFechaLocal, formatearHoraDelDia, formatearMinutos, minutosDelDia } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
 import type { Tarea } from '@/types/tarea'
 import { PX_POR_HORA, calcularRango, distribuirSolapes, posicionBloque, type Bloque, type BloqueColocado, type Rango } from './horario'
@@ -18,7 +18,8 @@ interface Props {
 export function PlanificacionPorHoras({ bloques, fecha, ahora, cargando, errores, alEditar }: Props) {
   const rango = calcularRango(bloques)
   const colocados = distribuirSolapes(bloques)
-  const horas = Array.from({ length: rango.finHora - rango.inicioHora + 1 }, (_, i) => rango.inicioHora + i)
+  // Rótulos del eje: cada hora del rango, borde inferior incluido, salvo las 24 (como el calendario, nunca «24:00»).
+  const horas = Array.from({ length: rango.finHora - rango.inicioHora + 1 }, (_, i) => rango.inicioHora + i).filter((h) => h < 24)
   const alto = (rango.finHora - rango.inicioHora) * PX_POR_HORA
 
   // La línea de "ahora" solo existe si se mira el día de hoy y la hora cae dentro del rango.
@@ -78,7 +79,7 @@ function BloqueVista({ bloque, rango, alEditar }: { bloque: BloqueColocado; rang
   const { top, height } = posicionBloque(bloque.inicioMin, bloque.finMin, rango)
   const esEvento = bloque.tipo === 'evento'
   const cerrada = bloque.estado === 'HECHO' || bloque.estado === 'CANCELADO'
-  const etiqueta = (esEvento ? 'EVENTO' : 'TAREA') + ' · ' + formatearMinutos(bloque.inicioMin) + '–' + formatearMinutos(bloque.finMin)
+  const etiqueta = (esEvento ? 'EVENTO' : 'TAREA') + ' · ' + formatearHoraDelDia(bloque.inicioMin) + '–' + formatearHoraDelDia(bloque.finMin)
   const corto = height < 48
 
   const tarea = bloque.tarea

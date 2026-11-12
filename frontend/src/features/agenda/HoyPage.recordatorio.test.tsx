@@ -109,6 +109,11 @@ describe('Hoy: «Recordatorio…»', () => {
 })
 
 describe('Hoy: tarjeta «Próximos recordatorios»', () => {
+  it('«Nuevo recordatorio» llega a 44 px en móvil (H5)', async () => {
+    renderizar()
+    expect(await screen.findByRole('button', { name: 'Nuevo recordatorio' })).toHaveClass('max-sm:h-11')
+  })
+
   it('«Nuevo recordatorio» crea uno suelto, aparece en la tarjeta y cierra el diálogo', async () => {
     const user = userEvent.setup()
     renderizar()

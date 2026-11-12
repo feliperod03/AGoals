@@ -72,7 +72,8 @@ export function PaginaLista<T extends ItemJerarquico, R>({ config, extra, nota, 
         alReanudar={confirmacion.reanudar}
       />
 
-      <Tarjeta titulo={config.titulo}>
+      {/* Sin h2 propio: el h1 de la página ya lleva el título. */}
+      <Tarjeta ariaLabel={config.titulo}>
         <div className="mb-4">
           <FiltrosLista filtros={filtros} alCambiar={setFiltros} alVolverALaVistaPorDefecto={volverALaVistaPorDefecto} />
         </div>

@@ -75,6 +75,7 @@ beforeEach(() => simularPreferenciaDelSistema(false))
 afterEach(() => {
   vi.unstubAllGlobals()
   document.documentElement.classList.remove('dark')
+  localStorage.clear()
 })
 
 describe('App', () => {
@@ -170,5 +171,33 @@ describe('modo oscuro', () => {
     expect(document.documentElement).toHaveClass('dark')
     sistema.cambiarA(false)
     expect(document.documentElement).not.toHaveClass('dark')
+  })
+
+  it('el botón de tema cicla Sistema → Claro → Oscuro y lo recuerda', async () => {
+    const user = userEvent.setup()
+    simularPreferenciaDelSistema(true)
+    renderizar()
+    const boton = () => screen.getByRole('button', { name: /^Tema:/ })
+    expect(boton()).toHaveAccessibleName('Tema: Sistema. Cambiar a Claro')
+    expect(document.documentElement).toHaveClass('dark')
+
+    await user.click(boton())
+    expect(boton()).toHaveAccessibleName('Tema: Claro. Cambiar a Oscuro')
+    expect(document.documentElement).not.toHaveClass('dark')
+    expect(localStorage.getItem('agoals:tema')).toBe('claro')
+
+    await user.click(boton())
+    expect(boton()).toHaveAccessibleName('Tema: Oscuro. Cambiar a Sistema')
+    expect(document.documentElement).toHaveClass('dark')
+
+    await user.click(boton())
+    expect(localStorage.getItem('agoals:tema')).toBeNull()
+  })
+
+  it('parte de la preferencia guardada al montar', () => {
+    localStorage.setItem('agoals:tema', 'oscuro')
+    renderizar()
+    expect(document.documentElement).toHaveClass('dark')
+    expect(screen.getByRole('button', { name: 'Tema: Oscuro. Cambiar a Sistema' })).toBeInTheDocument()
   })
 })

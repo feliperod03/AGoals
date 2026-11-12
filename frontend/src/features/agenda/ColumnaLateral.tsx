@@ -33,7 +33,7 @@ export function ProximosRecordatorios({ datos, cargando, error, alMensaje }: Con
           ))}
         </ul>
       )}
-      <Button type="button" variant="secondary" size="sm" className="mt-4" onClick={() => setDestino({ tipo: 'suelto' })}>
+      <Button type="button" variant="secondary" size="sm" className="mt-4 max-sm:h-11" onClick={() => setDestino({ tipo: 'suelto' })}>
         Nuevo recordatorio
       </Button>
       {destino && <RecordatorioDialog destino={destino} alCerrar={() => setDestino(null)} alMensaje={alMensaje} />}
@@ -49,7 +49,7 @@ function FilaRecordatorio({ recordatorio, alEditar }: { recordatorio: Recordator
         <p className="truncate">{titulo}</p>
         <p className="text-xs text-mut">{formatearFechaHoraCorta(recordatorio.fechaHora)}</p>
       </div>
-      <Button type="button" variant="ghost" size="sm" aria-label={`Editar recordatorio: ${titulo}`} onClick={alEditar}>
+      <Button type="button" variant="ghost" size="sm" className="max-sm:h-11" aria-label={`Editar recordatorio: ${titulo}`} onClick={alEditar}>
         Editar
       </Button>
     </li>

@@ -76,6 +76,11 @@ describe('DetalleDia (9c)', () => {
     expect(alAgregarEvento).toHaveBeenCalledWith(DIA)
   })
 
+  it('«Agregar evento» llega a 44 px en móvil (H5)', () => {
+    montar()
+    expect(screen.getByRole('button', { name: 'Agregar evento el martes 15 de diciembre' })).toHaveClass('max-sm:h-11')
+  })
+
   it('sin acciones queda como en 9a: sin botones y con todo legible', () => {
     montar(false)
     expect(screen.queryAllByRole('button')).toHaveLength(0)

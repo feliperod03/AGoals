@@ -72,6 +72,11 @@ export function formatearMinutos(minutos: number): string {
   return `${horas}:${resto}`
 }
 
+/** Como `formatearMinutos`, pero la medianoche final (1440) se escribe `00:00`, nunca `24:00`. */
+export function formatearHoraDelDia(minutos: number): string {
+  return formatearMinutos(minutos % 1440)
+}
+
 /** Minutos desde las 00:00 del día local de `fecha` hasta el instante `instante`. */
 export function minutosDelDia(instante: Date, fecha: string): number {
   return differenceInMinutes(instante, startOfDay(parseISO(fecha)))

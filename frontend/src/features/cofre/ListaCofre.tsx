@@ -44,12 +44,13 @@ function Fila({ nodo, ...resto }: Omit<Props, 'nodos'> & { nodo: NodoCofre }) {
 
   return (
     <li className="border-b border-line last:border-b-0">
-      <div className="flex items-center gap-1">
+      {/* El sombreado cubre la fila entera (círculo, título y menú); -mx-2 compensa px-2 para que nada se mueva. */}
+      <div className="-mx-2 flex items-center gap-1 rounded-lg px-2 hover:bg-muted">
         <BotonEstado tarea={tarea} acciones={acciones} />
         <button
           type="button"
           onClick={() => alEditar(tarea)}
-          className={cn('flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg py-2 text-left hover:bg-muted', FOCO)}
+          className={cn('flex min-w-0 flex-1 flex-col items-start gap-0.5 rounded-lg py-2 text-left', FOCO)}
         >
           <span className="flex w-full min-w-0 items-center gap-3">
             <span className={cn('min-w-0 flex-1 truncate', cerrada && 'text-mut line-through')}>{tarea.titulo}</span>

@@ -10,11 +10,8 @@ import { ProyectoPage } from '@/features/proyectos/ProyectoPage'
 import { ProyectosPage } from '@/features/proyectos/ProyectosPage'
 import { Layout } from './Layout'
 import { Proximamente } from './Proximamente'
-import { useTema } from './useTema'
 
 export function App() {
-  useTema()
-
   return (
     <Routes>
       <Route element={<Layout />}>
