@@ -1,5 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  deFechaYHoraLocal,
+  esDeDiasCompletos,
+  esHoraValida,
+  formatearRangoEvento,
+  mensajeEventoBorrado,
+  mensajeEventoCreado,
+  mensajeEventoGuardado,
+  mensajeEventoYaNoExistia,
+  minutosEntre,
+  partesLocales,
+  sumarMinutos,
   aFechaLocal,
   aValorDatetimeLocal,
   deValorDatetimeLocal,
@@ -695,5 +706,76 @@ describe('formatearRangoSemana / formatearDiaCorto', () => {
   it('nombre corto del día', () => {
     expect(formatearDiaCorto('2026-11-09')).toBe('lunes 9')
     expect(formatearDiaCorto('2026-11-15')).toBe('domingo 15')
+  })
+})
+
+describe('eventos (9c): día y hora locales', () => {
+  it('esHoraValida acepta HH:mm y HH:mm:ss y rechaza lo demás', () => {
+    expect(esHoraValida('09:00')).toBe(true)
+    expect(esHoraValida('23:59:30')).toBe(true)
+    expect(esHoraValida('')).toBe(false)
+    expect(esHoraValida('24:00')).toBe(false)
+    expect(esHoraValida('9:00')).toBe(false)
+  })
+
+  it('partesLocales lleva el instante a la hora local (Buenos Aires)', () => {
+    expect(partesLocales('2026-12-15T09:00:00-03:00')).toEqual({ fecha: '2026-12-15', hora: '09:00' })
+    // 01:30 UTC del 16 = 22:30 del 15 en Buenos Aires.
+    expect(partesLocales('2026-12-16T01:30:00Z')).toEqual({ fecha: '2026-12-15', hora: '22:30' })
+  })
+
+  it('deFechaYHoraLocal arma el ISO con desfase; vacío o inválido = null', () => {
+    expect(deFechaYHoraLocal('2026-12-15', '09:00')).toBe('2026-12-15T09:00:00-03:00')
+    expect(deFechaYHoraLocal('2026-12-15', '09:00:45')).toBe('2026-12-15T09:00:00-03:00')
+    expect(deFechaYHoraLocal('', '09:00')).toBeNull()
+    expect(deFechaYHoraLocal('2026-12-15', '')).toBeNull()
+    expect(deFechaYHoraLocal('2026-02-30', '09:00')).toBeNull()
+  })
+
+  it('minutosEntre y sumarMinutos cruzan la medianoche', () => {
+    expect(minutosEntre({ fecha: '2026-12-09', hora: '22:00' }, { fecha: '2026-12-10', hora: '02:00' })).toBe(240)
+    expect(minutosEntre({ fecha: '2026-12-09', hora: '10:00' }, { fecha: '2026-12-09', hora: '09:00' })).toBe(-60)
+    expect(minutosEntre({ fecha: '', hora: '10:00' }, { fecha: '2026-12-09', hora: '09:00' })).toBeNull()
+    expect(sumarMinutos({ fecha: '2026-12-31', hora: '23:30' }, 60)).toEqual({ fecha: '2027-01-01', hora: '00:30' })
+    expect(sumarMinutos({ fecha: '2026-12-31', hora: '' }, 60)).toBeNull()
+  })
+
+  it('esDeDiasCompletos: de 00:00 a 00:00 locales, uno o varios días', () => {
+    expect(esDeDiasCompletos('2026-12-08T00:00:00-03:00', '2026-12-09T00:00:00-03:00')).toBe(true)
+    expect(esDeDiasCompletos('2026-12-02T00:00:00-03:00', '2026-12-05T00:00:00-03:00')).toBe(true)
+    expect(esDeDiasCompletos('2026-12-08T00:00:00-03:00', '2026-12-08T12:00:00-03:00')).toBe(false)
+    expect(esDeDiasCompletos('2026-12-02T09:00:00-03:00', '2026-12-04T18:00:00-03:00')).toBe(false)
+    // Mismo instante escrito en UTC: 03:00Z = 00:00 en Buenos Aires.
+    expect(esDeDiasCompletos('2026-12-08T03:00:00Z', '2026-12-09T03:00:00Z')).toBe(true)
+    // 00:00 en UTC no es 00:00 local.
+    expect(esDeDiasCompletos('2026-12-08T00:00:00Z', '2026-12-09T00:00:00Z')).toBe(false)
+  })
+})
+
+describe('formatearRangoEvento y mensajes de eventos', () => {
+  it.each([
+    ['2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00', 'mar 15 dic, 09:00–10:00'],
+    ['2026-12-15T22:00:00-03:00', '2026-12-16T00:00:00-03:00', 'mar 15 dic, 22:00–00:00'],
+    ['2026-12-08T00:00:00-03:00', '2026-12-09T00:00:00-03:00', 'mar 8 dic, todo el día'],
+    ['2026-12-02T00:00:00-03:00', '2026-12-05T00:00:00-03:00', 'del mié 2 dic al vie 4 dic'],
+    ['2026-12-09T22:00:00-03:00', '2026-12-10T02:00:00-03:00', 'del mié 9 dic, 22:00 al jue 10 dic, 02:00'],
+  ])('%s → %s = «%s»', (inicio, fin, texto) => {
+    expect(formatearRangoEvento(inicio, fin)).toBe(texto)
+  })
+
+  it('nunca escribe «24:00»', () => {
+    expect(formatearRangoEvento('2026-12-15T23:00:00-03:00', '2026-12-16T00:00:00-03:00')).not.toContain('24:00')
+  })
+
+  it('mensajes', () => {
+    expect(mensajeEventoCreado('Dentista', '2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')).toBe(
+      'Evento «Dentista» creado (mar 15 dic, 09:00–10:00)',
+    )
+    expect(mensajeEventoGuardado('Feriado', '2026-12-08T00:00:00-03:00', '2026-12-09T00:00:00-03:00')).toBe(
+      'Evento «Feriado» guardado (mar 8 dic, todo el día)',
+    )
+    expect(mensajeEventoBorrado('Dentista', false)).toBe('Evento «Dentista» borrado')
+    expect(mensajeEventoBorrado('Dentista', true)).toBe('Evento «Dentista» borrado, con su recordatorio')
+    expect(mensajeEventoYaNoExistia('Dentista')).toBe('El evento «Dentista» ya no existía')
   })
 })

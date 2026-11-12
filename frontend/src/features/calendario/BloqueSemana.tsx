@@ -3,8 +3,12 @@ import { ArrowRight } from 'lucide-react'
 import { EstadoIcono } from '@/features/agenda/EstadoIcono'
 import { posicionBloque, type Colocacion, type Rango } from '@/features/agenda/horario'
 import { cn } from '@/lib/utils'
+import type { Evento } from '@/types/evento'
 import {
   ALTO_BLOQUE_CON_DOS_LINEAS,
+  ATRIBUTO_BLOQUE,
+  ATRIBUTO_EVENTO,
+  etiquetaEditarEvento,
   PX_POR_HORA_SEMANA,
   lineasDeTitulo,
   textoHoraBloque,
@@ -34,6 +38,32 @@ interface Props {
   rango: Rango
   /** Alto total de la línea de tiempo: ningún bloque se dibuja más abajo (uno de 23:50 a 24:00 mide 30 min). */
   altoTotal: number
+  /** Abre la edición del evento (9c). Sin ella, el bloque es solo lectura. */
+  alAbrirEvento?: (evento: Evento) => void
+}
+
+/**
+ * Botón vacío que cubre un evento entero y abre su edición. Va como HERMANO del dibujo (nunca un `div` dentro de un
+ * `button`): el dibujo sigue `aria-hidden`, con su `title` y su container query, y el botón lleva el nombre accesible
+ * («Editar evento: Reunión, 09:00–10:00»). Lo usan los bloques y los chips de la franja «Sin hora».
+ */
+export function BotonEditarEvento({
+  elemento,
+  alAbrirEvento,
+  className,
+}: {
+  elemento: Extract<ElementoDia, { tipo: 'evento' }>
+  alAbrirEvento: (evento: Evento) => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={etiquetaEditarEvento(elemento)}
+      onClick={() => alAbrirEvento(elemento.evento)}
+      className={cn('absolute inset-0 z-10 cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
+    />
+  )
 }
 
 /**
@@ -44,7 +74,7 @@ interface Props {
  * - corto: una línea; la hora delante del título solo desde 100 px (ancho interior, sin el relleno).
  * Evento = rectángulo (radio chico, recto donde lo corta la medianoche); tarea = radio grande y círculo de estado.
  */
-export function BloqueSemana({ elemento, rango, altoTotal }: Props) {
+export function BloqueSemana({ elemento, rango, altoTotal, alAbrirEvento }: Props) {
   const posicion = posicionBloque(elemento.inicioMin, elemento.finMin, rango, PX_POR_HORA_SEMANA)
   const alto = Math.min(posicion.height, altoTotal - posicion.top)
   const dosLineas = alto >= ALTO_BLOQUE_CON_DOS_LINEAS
@@ -62,10 +92,13 @@ export function BloqueSemana({ elemento, rango, altoTotal }: Props) {
       <ArrowRight className="size-3 shrink-0" aria-hidden="true" />
     ) : null
   const hora = textoHoraBloque(elemento)
+  const marcas = { [ATRIBUTO_BLOQUE]: '', ...(elemento.tipo === 'evento' ? { [ATRIBUTO_EVENTO]: elemento.evento.id } : {}) }
 
   return (
     <li
-      className="absolute"
+      {...marcas}
+      // Con el foco dentro, el bloque pasa por delante de sus vecinos para que el anillo se vea entero.
+      className="absolute focus-within:z-10"
       style={{
         top: posicion.top,
         height: Math.max(alto - 1, 0),
@@ -73,7 +106,15 @@ export function BloqueSemana({ elemento, rango, altoTotal }: Props) {
         width: `calc(${100 / elemento.totalColumnas}% - 2px)`,
       }}
     >
-      <TextoParaLector elemento={elemento} />
+      {elemento.tipo === 'evento' && alAbrirEvento ? (
+        <BotonEditarEvento
+          elemento={elemento}
+          alAbrirEvento={alAbrirEvento}
+          className={cn('rounded-md', elemento.empiezaAntes && 'rounded-t-none', elemento.terminaDespues && 'rounded-b-none')}
+        />
+      ) : (
+        <TextoParaLector elemento={elemento} />
+      )}
       <div
         aria-hidden="true"
         data-testid="bloque-semana"

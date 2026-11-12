@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import type { Ref } from 'react'
 
 import { Button } from '@/components/ui/button'
 import type { Vista } from './calendario'
@@ -15,6 +16,10 @@ interface Props {
   alAnterior: () => void
   alSiguiente: () => void
   alHoy: () => void
+  /** «Nuevo evento» (9c): crea uno en el día seleccionado. */
+  alNuevoEvento: () => void
+  /** Para devolverle el foco cuando el elemento que abrió un diálogo de evento ya no existe. */
+  botonNuevoRef?: Ref<HTMLButtonElement>
 }
 
 const ETIQUETAS: Record<Vista, { anterior: string; siguiente: string }> = {
@@ -23,10 +28,21 @@ const ETIQUETAS: Record<Vista, { anterior: string; siguiente: string }> = {
 }
 
 /**
- * Título (Fraunces), selector «Mes | Semana», ‹ › y «Hoy», compartido por las dos vistas. El aviso de carga queda
- * siempre en el DOM para que sea una región `status` estable.
+ * Título (Fraunces), selector «Mes | Semana», ‹ › , «Hoy» y «Nuevo evento», compartido por las dos vistas. El aviso de
+ * carga queda siempre en el DOM para que sea una región `status` estable.
  */
-export function EncabezadoCalendario({ titulo, idTitulo, vista, cargando, alCambiarVista, alAnterior, alSiguiente, alHoy }: Props) {
+export function EncabezadoCalendario({
+  titulo,
+  idTitulo,
+  vista,
+  cargando,
+  alCambiarVista,
+  alAnterior,
+  alSiguiente,
+  alHoy,
+  alNuevoEvento,
+  botonNuevoRef,
+}: Props) {
   const etiquetas = ETIQUETAS[vista]
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -48,6 +64,10 @@ export function EncabezadoCalendario({ titulo, idTitulo, vista, cargando, alCamb
         </Button>
         <Button type="button" variant="secondary" onClick={alHoy}>
           Hoy
+        </Button>
+        <Button ref={botonNuevoRef} type="button" onClick={alNuevoEvento}>
+          <Plus aria-hidden="true" />
+          Nuevo evento
         </Button>
       </div>
     </header>

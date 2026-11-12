@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 
 import { formatearMinutos, nombresDiasSemana } from '@/lib/fechas'
+import type { Evento } from '@/types/evento'
 import { PX_POR_HORA_SEMANA, diaDestinoSemana, rangoDeLaSemana, repartirDia, type ElementoDia } from './calendario'
 import { ALTO_ENCABEZADO_DIA, ColumnaDia } from './ColumnaDia'
 import { ListaSemana } from './ListaSemana'
@@ -25,15 +26,19 @@ interface Props {
   alSeleccionar: (fecha: string) => void
   /** Una tecla que lleva a un día de otra semana. */
   alSaltar: (fecha: string) => void
+  /** Abre la edición de un evento (9c). */
+  alAbrirEvento?: (evento: Evento) => void
+  /** Clic de mouse en un hueco (9c): `minutos` del día, o `null` desde la franja «Sin hora» (evento de todo el día). */
+  alCrearEnHueco?: (fecha: string, minutos: number | null) => void
 }
 
 /**
- * Semana en solo lectura (9b). Con 560 px o más de ancho: eje de horas y siete columnas que comparten rango
+ * Semana (9b; en 9c, los eventos abren su edición). Con 560 px o más de ancho: eje de horas y siete columnas que comparten rango
  * (`rangoDeLaSemana`) y alto de franja; por debajo, la lista por día. Las dos variantes están en el DOM y una se
  * oculta con un container query (`display: none` la saca también del árbol de accesibilidad), sin JS.
  * Teclado en los encabezados: ← → ±1 día, Inicio/Fin lunes/domingo, RePág/AvPág ±1 semana.
  */
-export function VistaSemana({ dias, dia, hoy, ahora, elementosPorDia, etiquetadaPor, alSeleccionar, alSaltar }: Props) {
+export function VistaSemana({ dias, dia, hoy, ahora, elementosPorDia, etiquetadaPor, alSeleccionar, alSaltar, alAbrirEvento, alCrearEnHueco }: Props) {
   const botones = useRef(new Map<string, HTMLButtonElement>())
   // Solo se mueve el foco cuando el cambio de día vino del teclado (un clic ya deja el foco en su botón).
   const enfocarAlCambiar = useRef(false)
@@ -105,6 +110,8 @@ export function VistaSemana({ dias, dia, hoy, ahora, elementosPorDia, etiquetada
               altoTotal={altoTotal}
               alElegir={alSeleccionar}
               alTeclear={alTeclear}
+              alAbrirEvento={alAbrirEvento}
+              alCrearEnHueco={alCrearEnHueco}
               botonRef={(boton) => {
                 if (boton) botones.current.set(fecha, boton)
                 else botones.current.delete(fecha)
@@ -115,7 +122,7 @@ export function VistaSemana({ dias, dia, hoy, ahora, elementosPorDia, etiquetada
       </div>
 
       <div data-testid="semana-en-lista" className="@min-[560px]:hidden">
-        <ListaSemana dias={dias} hoy={hoy} elementosPorDia={elementosPorDia} />
+        <ListaSemana dias={dias} hoy={hoy} elementosPorDia={elementosPorDia} alAbrirEvento={alAbrirEvento} />
       </div>
     </section>
   )

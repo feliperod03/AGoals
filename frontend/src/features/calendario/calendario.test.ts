@@ -4,6 +4,11 @@ import type { Evento } from '@/types/evento'
 import type { Estado, Prioridad, Tarea } from '@/types/tarea'
 import {
   diaDestino,
+  esClicEnHueco,
+  etiquetaEditarEvento,
+  eventoDelClic,
+  horaDesdePosicion,
+  PX_POR_HORA_SEMANA,
   diaDestinoSemana,
   diasDeLaCuadricula,
   esDeFranja,
@@ -546,5 +551,109 @@ describe('textos de los bloques de la semana', () => {
     expect(lineasDeTitulo(48, true)).toBe(1)
     expect(lineasDeTitulo(48, false)).toBe(2)
     expect(lineasDeTitulo(96, true)).toBe(4)
+  })
+})
+
+describe('etiquetaEditarEvento (9c)', () => {
+  const tramo = (inicio: string, fin: string, dia: string) => {
+    const e = elementosPorDia([dia], [evento(inicio, fin, { titulo: 'Reunión' })], []).get(dia)?.[0]
+    if (!e || e.tipo !== 'evento') throw new Error('sin tramo')
+    return e
+  }
+
+  it.each([
+    ['2026-11-10T09:00:00-03:00', '2026-11-10T10:00:00-03:00', '2026-11-10', 'Editar evento: Reunión, 09:00–10:00'],
+    ['2026-11-10T00:00:00-03:00', '2026-11-11T00:00:00-03:00', '2026-11-10', 'Editar evento: Reunión, Todo el día'],
+    ['2026-11-10T22:00:00-03:00', '2026-11-11T06:00:00-03:00', '2026-11-10', 'Editar evento: Reunión, desde 22:00'],
+    ['2026-11-10T22:00:00-03:00', '2026-11-11T06:00:00-03:00', '2026-11-11', 'Editar evento: Reunión, hasta 06:00'],
+  ])('%s → %s en el día %s', (inicio, fin, dia, texto) => {
+    expect(etiquetaEditarEvento(tramo(inicio, fin, dia))).toBe(texto)
+  })
+})
+
+describe('eventoDelClic y esClicEnHueco (9c)', () => {
+  function armar() {
+    const raiz = document.createElement('button')
+    raiz.innerHTML = `
+      <span data-testid="numero">15</span>
+      <span data-evento-id="42"><svg data-testid="flecha"></svg><span data-testid="titulo">Reunión</span></span>
+      <span data-bloque data-testid="tarea">Pagar</span>
+      <span data-testid="mas">+2 más</span>`
+    document.body.append(raiz)
+    const q = (id: string) => raiz.querySelector(`[data-testid="${id}"]`) as Element
+    return { raiz, q }
+  }
+
+  it('el chip de un evento (o un hijo suyo) da su id', () => {
+    const { raiz, q } = armar()
+    expect(eventoDelClic(raiz.querySelector('[data-evento-id]'), raiz)).toBe(42)
+    expect(eventoDelClic(q('titulo'), raiz)).toBe(42)
+    expect(eventoDelClic(q('flecha'), raiz)).toBe(42)
+    raiz.remove()
+  })
+
+  it('el número, una tarea, «+N más», el botón mismo o nada: null', () => {
+    const { raiz, q } = armar()
+    expect(eventoDelClic(q('numero'), raiz)).toBeNull()
+    expect(eventoDelClic(q('tarea'), raiz)).toBeNull()
+    expect(eventoDelClic(q('mas'), raiz)).toBeNull()
+    expect(eventoDelClic(raiz, raiz)).toBeNull()
+    expect(eventoDelClic(null, raiz)).toBeNull()
+    raiz.remove()
+  })
+
+  it('un chip fuera de la raíz no cuenta', () => {
+    const { raiz } = armar()
+    const otro = document.createElement('span')
+    otro.setAttribute('data-evento-id', '7')
+    document.body.append(otro)
+    expect(eventoDelClic(otro, raiz)).toBeNull()
+    raiz.remove()
+    otro.remove()
+  })
+
+  it('esClicEnHueco: el fondo sí; botones, bloques y eventos no', () => {
+    const fondo = document.createElement('div')
+    fondo.innerHTML = `<div data-bloque><span data-testid="t">Tarea</span></div><button>Editar</button><span data-evento-id="3"><i data-testid="e"></i></span>`
+    document.body.append(fondo)
+    expect(esClicEnHueco(fondo)).toBe(true)
+    expect(esClicEnHueco(fondo.querySelector('[data-testid="t"]'))).toBe(false)
+    expect(esClicEnHueco(fondo.querySelector('button'))).toBe(false)
+    expect(esClicEnHueco(fondo.querySelector('[data-testid="e"]'))).toBe(false)
+    expect(esClicEnHueco(null)).toBe(false)
+    fondo.remove()
+  })
+})
+
+describe('horaDesdePosicion (9c)', () => {
+  const rango = { inicioHora: 8, finHora: 21 }
+
+  it.each([
+    [0, 8 * 60],
+    [23.9, 8 * 60],
+    [24, 8 * 60 + 30],
+    [47.9, 8 * 60 + 30],
+    [48, 9 * 60],
+    [96, 10 * 60],
+  ])('y = %f px → %i min (redondea hacia abajo a 30 min)', (y, minutos) => {
+    expect(horaDesdePosicion(y, rango, PX_POR_HORA_SEMANA)).toBe(minutos)
+  })
+
+  it('la última franja del rango es la última hora menos 30 min, también por debajo del borde', () => {
+    const alto = (rango.finHora - rango.inicioHora) * PX_POR_HORA_SEMANA
+    expect(horaDesdePosicion(alto - 1, rango, PX_POR_HORA_SEMANA)).toBe(20 * 60 + 30)
+    expect(horaDesdePosicion(alto, rango, PX_POR_HORA_SEMANA)).toBe(20 * 60 + 30)
+    expect(horaDesdePosicion(alto + 100, rango, PX_POR_HORA_SEMANA)).toBe(20 * 60 + 30)
+  })
+
+  it('por encima del borde superior: la primera hora', () => {
+    expect(horaDesdePosicion(-5, rango, PX_POR_HORA_SEMANA)).toBe(8 * 60)
+  })
+
+  it('rango extendido a 00–24: de 00:00 a 23:30, nunca 24:00', () => {
+    const completo = { inicioHora: 0, finHora: 24 }
+    expect(horaDesdePosicion(0, completo, PX_POR_HORA_SEMANA)).toBe(0)
+    expect(horaDesdePosicion(1151, completo, PX_POR_HORA_SEMANA)).toBe(23 * 60 + 30)
+    expect(horaDesdePosicion(1152, completo, PX_POR_HORA_SEMANA)).toBe(23 * 60 + 30)
   })
 })

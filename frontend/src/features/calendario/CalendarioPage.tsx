@@ -1,9 +1,15 @@
-import { useId, useMemo } from 'react'
+import { useId, useMemo, useRef } from 'react'
 
+import { Aviso } from '@/components/Aviso'
 import { ErrorEnLinea } from '@/components/Tarjeta'
 import { useAhora } from '@/features/agenda/useAhora'
+import { useMensajeTemporal } from '@/features/agenda/useMensajeTemporal'
 import { useTodasLasTareas } from '@/features/agenda/useTodasLasTareas'
-import { diasDeLaSemana, formatearMes, formatearRangoSemana, rangoDeFechas, sumarDias, sumarMeses } from '@/lib/fechas'
+import { DialogosEvento } from '@/features/eventos/DialogosEvento'
+import { valoresParaHueco, valoresParaNuevo, valoresTodoElDia } from '@/features/eventos/formularioEvento'
+import { useAccionesEvento } from '@/features/eventos/useAccionesEvento'
+import { diasDeLaSemana, formatearMes, formatearRangoSemana, partesLocales, rangoDeFechas, sumarDias, sumarMeses } from '@/lib/fechas'
+import type { Evento } from '@/types/evento'
 import { diasDeLaCuadricula, elementosPorDia } from './calendario'
 import { CuadriculaMes } from './CuadriculaMes'
 import { DetalleDia } from './DetalleDia'
@@ -13,16 +19,22 @@ import { useEventosEnRango } from './useEventosEnRango'
 import { VistaSemana } from './VistaSemana'
 
 /**
- * Calendario en solo lectura: vista mensual (9a: cuadrícula lunes a domingo con panel de detalle) y semanal (9b:
- * eje de horas y siete columnas), con la vista y el día en la URL. Eventos y tareas se piden por separado: si una
- * fuente falla, la otra se sigue viendo y el error sale en línea. Un solo `useEventosEnRango` para las dos vistas,
- * así `keepPreviousData` también evita el parpadeo al cambiar de vista.
+ * Calendario: vista mensual (9a: cuadrícula lunes a domingo con panel de detalle) y semanal (9b: eje de horas y siete
+ * columnas), con la vista y el día en la URL. Eventos y tareas se piden por separado: si una fuente falla, la otra se
+ * sigue viendo y el error sale en línea. Un solo `useEventosEnRango` para las dos vistas, así `keepPreviousData`
+ * también evita el parpadeo al cambiar de vista.
+ *
+ * 9c: crear, editar y borrar eventos. «Nuevo evento» crea en el día seleccionado; las filas del panel, los bloques y
+ * los chips de la semana abren la edición. Tras crear, el calendario va al día de inicio del evento (replace si ya se
+ * ve, push si no); editar no navega. Crear no depende de que la lista de eventos haya cargado.
  */
 export function CalendarioPage() {
   const { ahora, hoy } = useAhora()
   const estado = useEstadoCalendario(hoy)
   const { vista, mes, dia, lunes } = estado
   const idTitulo = useId()
+  const confirmacion = useMensajeTemporal()
+  const botonNuevo = useRef<HTMLButtonElement>(null)
 
   const dias = useMemo(() => (vista === 'semana' ? diasDeLaSemana(lunes) : diasDeLaCuadricula(mes)), [vista, lunes, mes])
   const rango = rangoDeFechas(dias[0] as string, dias[dias.length - 1] as string)
@@ -30,6 +42,17 @@ export function CalendarioPage() {
   const tareas = useTodasLasTareas()
 
   const porDia = useMemo(() => elementosPorDia(dias, eventos.data ?? [], tareas.data ?? []), [dias, eventos.data, tareas.data])
+
+  function irAlDiaDe(evento: Evento) {
+    const inicio = partesLocales(evento.fechaHoraInicio).fecha
+    if (dias.includes(inicio)) estado.seleccionarDia(inicio)
+    else estado.saltarADia(inicio)
+  }
+
+  const acciones = useAccionesEvento({ alMensaje: confirmacion.mostrar, alCrear: irAlDiaDe })
+  const crearEnDia = (fecha: string) => acciones.abrirCrear(valoresParaNuevo(fecha, hoy, ahora))
+  const crearEnHueco = (fecha: string, minutos: number | null) =>
+    acciones.abrirCrear(minutos === null ? valoresTodoElDia(fecha) : valoresParaHueco(fecha, minutos))
 
   return (
     <div>
@@ -42,6 +65,15 @@ export function CalendarioPage() {
         alAnterior={() => (vista === 'semana' ? estado.irASemana(sumarDias(dia, -7)) : estado.irAMes(sumarMeses(mes, -1)))}
         alSiguiente={() => (vista === 'semana' ? estado.irASemana(sumarDias(dia, 7)) : estado.irAMes(sumarMeses(mes, 1)))}
         alHoy={estado.irAHoy}
+        alNuevoEvento={() => crearEnDia(dia)}
+        botonNuevoRef={botonNuevo}
+      />
+      <Aviso
+        mensaje={confirmacion.mensaje}
+        saliendo={confirmacion.saliendo}
+        alCerrar={confirmacion.cerrar}
+        alPausar={confirmacion.pausar}
+        alReanudar={confirmacion.reanudar}
       />
 
       {(eventos.error || tareas.error) && (
@@ -61,6 +93,8 @@ export function CalendarioPage() {
           etiquetadaPor={idTitulo}
           alSeleccionar={estado.seleccionarDia}
           alSaltar={estado.saltarADia}
+          alAbrirEvento={acciones.abrirEditar}
+          alCrearEnHueco={crearEnHueco}
         />
       ) : (
         /*
@@ -79,14 +113,23 @@ export function CalendarioPage() {
                 etiquetadaPor={idTitulo}
                 alSeleccionar={estado.seleccionarDia}
                 alSaltar={estado.saltarADia}
+                alAbrirEvento={acciones.abrirEditar}
               />
             </div>
             <aside aria-label="Detalle del día" className="min-w-0 @min-[1224px]:max-w-[380px] @min-[1224px]:flex-[1_1_300px]">
-              <DetalleDia fecha={dia} hoy={hoy} elementos={porDia.get(dia) ?? []} />
+              <DetalleDia
+                fecha={dia}
+                hoy={hoy}
+                elementos={porDia.get(dia) ?? []}
+                alAbrirEvento={acciones.abrirEditar}
+                alAgregarEvento={crearEnDia}
+              />
             </aside>
           </div>
         </div>
       )}
+
+      <DialogosEvento acciones={acciones} focoAlternativo={botonNuevo} />
     </div>
   )
 }

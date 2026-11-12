@@ -2,7 +2,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { EstadoIcono } from '@/features/agenda/EstadoIcono'
 import { cn } from '@/lib/utils'
-import { textoHora, textoHoraCelda, type ElementoDia } from './calendario'
+import { ATRIBUTO_EVENTO, textoHora, textoHoraCelda, type ElementoDia } from './calendario'
 
 /**
  * La hora del chip solo se ve con la cuadrícula ancha. Umbrales de las container queries (literales de Tailwind,
@@ -17,6 +17,9 @@ const CLASES_HORA = 'hidden shrink-0 font-semibold @min-[980px]:inline'
  * accesible completa, así que aquí el estado se dibuja como decoración. Es un solo chip para todos los anchos: lo
  * que cambia es si se muestra la hora. El día de continuación de un evento largo lleva flecha y título; su
  * «hasta 10:00» / «Todo el día» va en el `title`, junto al título.
+ *
+ * El chip de un evento lleva `data-evento-id` (9c): en la celda del mes, un clic de mouse sobre él abre el evento
+ * (`eventoDelClic`). Las marcas de la variante angosta no son este componente, así que allí el clic solo selecciona.
  */
 export function ElementoCelda({ elemento }: { elemento: ElementoDia }) {
   const hora = textoHoraCelda(elemento)
@@ -26,7 +29,10 @@ export function ElementoCelda({ elemento }: { elemento: ElementoDia }) {
 
   if (elemento.tipo === 'evento') {
     return (
-      <span title={titulo} className="flex min-w-0 items-center gap-1 overflow-hidden rounded-md bg-evento px-1.5 py-0.5 text-xs text-evento-tx">
+      <span
+        {...{ [ATRIBUTO_EVENTO]: elemento.evento.id }}
+        title={titulo}
+        className="flex min-w-0 items-center gap-1 overflow-hidden rounded-md bg-evento px-1.5 py-0.5 text-xs text-evento-tx">
         {continuacion && <ArrowRight className="size-3 shrink-0" aria-hidden="true" />}
         {hora && <span className={CLASES_HORA}>{hora}</span>}
         <span className="min-w-0 truncate">{elemento.titulo}</span>

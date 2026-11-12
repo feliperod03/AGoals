@@ -224,6 +224,19 @@ describe('VistaSemana: línea de tiempo', () => {
     expect(screen.getAllByTestId('linea-ahora')).toHaveLength(1)
   })
 
+  it('la línea de ahora no es un control y conserva su posición y su tamaño (sin pointer-events-none)', () => {
+    montar()
+    const linea = dia(/^martes 8/).getByTestId('linea-ahora')
+    expect(linea).toHaveAttribute('role', 'img')
+    expect(linea).not.toHaveAttribute('tabindex')
+    expect(linea.querySelector('button, a, input')).toBeNull()
+    // Posición: 10:30 con el rango 08–21 y 48 px por hora = 2,5 h × 48 = 120 px; tamaño: las mismas clases de antes.
+    expect(linea).toHaveStyle({ top: '120px' })
+    expect(linea).toHaveClass('absolute', '-right-px', '-left-1', 'z-10', 'flex', '-translate-y-1/2', 'items-center')
+    expect(linea).not.toHaveClass('pointer-events-none')
+    expect(linea).toHaveAttribute('data-bloque')
+  })
+
   it('sin hoy en la semana, o con la hora fuera del rango, no hay línea de ahora', () => {
     montar({ hoy: '2026-11-10', ahora: new Date('2026-11-10T10:30:00-03:00') })
     expect(screen.queryByTestId('linea-ahora')).not.toBeInTheDocument()

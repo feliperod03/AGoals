@@ -306,3 +306,50 @@ export function textoHoraBloque(e: ElementoConHora): string {
   if (e.tipo === 'evento' && e.terminaDespues) return `desde ${horaDeMinutos(e.inicioMin)}`
   return horaDeMinutos(e.inicioMin)
 }
+
+// --- Edición y atajos de mouse (9c) ---
+
+/** Nombre del botón que abre la edición de un evento: «Editar evento: Reunión, 09:00–10:00» (o «…, Todo el día»). */
+export function etiquetaEditarEvento(e: Extract<ElementoDia, { tipo: 'evento' }>): string {
+  const hora = textoHora(e)
+  return `Editar evento: ${e.titulo}${hora ? `, ${hora}` : ''}`
+}
+
+/** Atributo que marca lo que abre un evento con el mouse (chips del mes, bloques y chips de la semana, filas del panel). */
+export const ATRIBUTO_EVENTO = 'data-evento-id'
+
+/** Atributo de todo bloque o chip de la semana (evento o tarea): un clic encima nunca cuenta como hueco. */
+export const ATRIBUTO_BLOQUE = 'data-bloque'
+
+/**
+ * Id del evento sobre el que cayó un clic dentro de `raiz` (el botón de un día del mes), o `null`. Solo los chips de
+ * evento de la variante ancha llevan `data-evento-id`: las marcas de menos de 640 px, el «+N más» y las tareas no, así
+ * que un clic ahí solo selecciona el día.
+ */
+export function eventoDelClic(target: EventTarget | null, raiz: Element): number | null {
+  if (!(target instanceof Element)) return null
+  const marcado = target.closest(`[${ATRIBUTO_EVENTO}]`)
+  if (!marcado || !raiz.contains(marcado)) return null
+  const id = Number(marcado.getAttribute(ATRIBUTO_EVENTO))
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+/** Un clic en la línea de tiempo (o en la franja) cuenta como hueco si no cayó sobre un botón, un bloque o un evento. */
+export function esClicEnHueco(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return target.closest(`button, [${ATRIBUTO_BLOQUE}], [${ATRIBUTO_EVENTO}]`) === null
+}
+
+/** Franja de la semana a la que se redondea un clic en un hueco. */
+export const MINUTOS_FRANJA_HUECO = 30
+
+/**
+ * Minutos desde las 00:00 que corresponden a la posición vertical `y` (px desde el borde superior de la línea de
+ * tiempo), redondeados hacia abajo a la franja de 30 min y dentro del rango visible: nunca antes de `inicioHora` ni
+ * después de la última franja (`finHora` − 30 min), así un clic en el borde inferior no da la hora final.
+ */
+export function horaDesdePosicion(y: number, rango: Rango, pxPorHora: number): number {
+  const franjas = Math.floor((y / pxPorHora) * (60 / MINUTOS_FRANJA_HUECO))
+  const minutos = rango.inicioHora * 60 + franjas * MINUTOS_FRANJA_HUECO
+  return Math.min(Math.max(minutos, rango.inicioHora * 60), rango.finHora * 60 - MINUTOS_FRANJA_HUECO)
+}

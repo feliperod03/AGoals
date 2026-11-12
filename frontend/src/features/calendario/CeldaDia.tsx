@@ -1,7 +1,8 @@
-import type { KeyboardEvent, Ref } from 'react'
+import type { KeyboardEvent, MouseEvent, Ref } from 'react'
 
 import { cn } from '@/lib/utils'
-import { etiquetaDia, recortarParaCelda, type ElementoDia } from './calendario'
+import type { Evento } from '@/types/evento'
+import { etiquetaDia, eventoDelClic, recortarParaCelda, type ElementoDia } from './calendario'
 import { ElementoCelda } from './ElementoCelda'
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   delMes: boolean
   seleccionada: boolean
   alElegir: (fecha: string) => void
+  /** Atajo de mouse (9c): abre la edición del evento cuyo chip recibió el clic. */
+  alAbrirEvento?: (evento: Evento) => void
   alTeclear: (evento: KeyboardEvent<HTMLButtonElement>) => void
   botonRef: Ref<HTMLButtonElement>
 }
@@ -21,11 +24,25 @@ interface Props {
  * accesible completa; lo que se dibuja dentro es visual. Con ancho suficiente (640 px de cuadrícula) muestra
  * líneas (`ElementoCelda`; con 980 px, también la hora); en angosto, marcas sin texto (`aria-hidden`). El «+N más»
  * es un único elemento compartido por los niveles: la palabra «más» solo se ve desde 640 px.
+ *
+ * Atajo de mouse (9c): el botón sigue siendo UNO por celda. Si el clic cayó sobre el chip de un evento (solo los de la
+ * variante ancha llevan `data-evento-id`), además de seleccionar el día se abre ese evento. Un clic en el número, en el
+ * espacio vacío, en una tarea, en «+N más» o en las marcas angostas solo selecciona. Con el teclado, Enter tiene como
+ * destino el botón entero, así que también solo selecciona: teclado y lector usan el panel «Detalle del día».
  */
-export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir, alTeclear, botonRef }: Props) {
+export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir, alAbrirEvento, alTeclear, botonRef }: Props) {
   const esHoy = fecha === hoy
   const { visibles, ocultos } = recortarParaCelda(elementos)
   const numero = Number(fecha.slice(8, 10))
+
+  function alClic(e: MouseEvent<HTMLButtonElement>) {
+    alElegir(fecha)
+    const id = alAbrirEvento ? eventoDelClic(e.target, e.currentTarget) : null
+    if (id === null) return
+    // El evento completo (también desde el día 2 de uno largo); si ya no está en la celda (dato viejo), solo se selecciona.
+    const elemento = elementos.find((x) => x.tipo === 'evento' && x.evento.id === id)
+    if (elemento?.tipo === 'evento') alAbrirEvento?.(elemento.evento)
+  }
 
   return (
     <div
@@ -39,7 +56,7 @@ export function CeldaDia({ fecha, hoy, elementos, delMes, seleccionada, alElegir
         tabIndex={seleccionada ? 0 : -1}
         aria-label={etiquetaDia(fecha, elementos, hoy)}
         aria-current={esHoy ? 'date' : undefined}
-        onClick={() => alElegir(fecha)}
+        onClick={alClic}
         onKeyDown={alTeclear}
         className={cn(
           'flex w-full flex-col items-stretch gap-1 p-1.5 text-left @min-[640px]:p-2',

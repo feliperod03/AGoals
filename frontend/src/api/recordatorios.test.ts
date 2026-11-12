@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { actualizarRecordatorio, crearRecordatorio, getRecordatoriosVencidos, marcarRecordatorioEnviado } from './recordatorios'
+import {
+  actualizarRecordatorio,
+  crearRecordatorio,
+  getRecordatoriosDeEvento,
+  getRecordatoriosVencidos,
+  marcarRecordatorioEnviado,
+} from './recordatorios'
 
 const fetchMock = vi.fn()
 
@@ -30,6 +36,13 @@ describe('api/recordatorios', () => {
     expect(url).toBe('/api/recordatorios/7/marcar-enviado')
     expect(init.method).toBe('PATCH')
     expect(init.body).toBeUndefined()
+  })
+
+  it('getRecordatoriosDeEvento filtra con ?eventoId=', async () => {
+    await getRecordatoriosDeEvento(12)
+    const [url, init] = llamada()
+    expect(url).toBe('/api/recordatorios?eventoId=12')
+    expect(init.method).toBe('GET')
   })
 })
 

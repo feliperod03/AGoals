@@ -67,7 +67,10 @@ function montar(entradas: string[] = ['/calendario']) {
   )
 }
 
-const celda = (etiqueta: RegExp | string) => screen.getByRole('button', { name: etiqueta })
+// Dentro de la cuadrícula si la hay: fuera también está «Agregar evento el martes 10 de noviembre» (9c).
+const celda = (etiqueta: RegExp | string) => within(screen.queryByRole('grid') ?? document.body).getByRole('button', { name: etiqueta })
+// La región de «Cargando…» del encabezado (la otra región status es la del aviso flotante).
+const estadoCarga = () => within(screen.getByRole('banner')).getByRole('status')
 const detalle = () => within(screen.getByRole('complementary', { name: 'Detalle del día' }))
 const titulo = () => screen.getByRole('heading', { level: 1 })
 const detalleTitulo = () => screen.getByRole('heading', { level: 2 })
@@ -130,12 +133,12 @@ describe('CalendarioPage: datos', () => {
     vi.mocked(getEventos).mockReturnValue(new Promise(() => {}))
     montar()
     expect(screen.getByRole('grid')).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Cargando…')
+    expect(estadoCarga()).toHaveTextContent('Cargando…')
   })
 
   it('al terminar de cargar desaparece «Cargando…»', async () => {
     montar()
-    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())
+    await waitFor(() => expect(estadoCarga()).toBeEmptyDOMElement())
   })
 })
 
@@ -194,12 +197,12 @@ describe('CalendarioPage: navegación', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Mes siguiente' }))
     expect(titulo()).toHaveTextContent('Diciembre de 2026')
-    expect(screen.getByRole('status')).toHaveTextContent('Cargando…')
+    expect(estadoCarga()).toHaveTextContent('Cargando…')
     expect(within(celda(/martes 1 de diciembre/)).getByText('Dentista')).toBeInTheDocument()
 
     nueva.resolver([evento('Cena', '2026-12-05T21:00:00-03:00', '2026-12-05T23:00:00-03:00')])
     expect(await within(celda(/sábado 5 de diciembre/)).findByText('Cena')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())
+    await waitFor(() => expect(estadoCarga()).toBeEmptyDOMElement())
     expect(within(celda(/martes 1 de diciembre/)).queryByText('Dentista')).not.toBeInTheDocument()
   })
 
@@ -404,7 +407,7 @@ describe('CalendarioPage: semana', () => {
     vi.mocked(getTareas).mockResolvedValue([tarea({ titulo: 'Pagar luz', fecha: '2026-11-12' })])
     montar(['/calendario?vista=semana&dia=2026-11-10'])
     const jueves = diaDeLaSemana(/^jueves 12 de noviembre/)
-    expect(await within(jueves).findByText('Evento, 10:00–11:00, Reunión')).toBeInTheDocument()
+    expect(await within(jueves).findByRole('button', { name: 'Editar evento: Reunión, 10:00–11:00' })).toBeInTheDocument()
     expect(within(jueves).getByText(/Tarea, sin hora, .*Pagar luz/)).toBeInTheDocument()
     expect(jueves).toHaveAccessibleName('jueves 12 de noviembre, 1 evento, 1 tarea')
     expect(encabezado('martes 10')).toHaveAttribute('aria-current', 'date')
@@ -493,7 +496,7 @@ describe('CalendarioPage: semana', () => {
     await waitFor(() =>
       expect(getEventos).toHaveBeenCalledWith({ desde: '2026-11-09T00:00:00+05:30', hasta: '2026-11-16T00:00:00+05:30' }),
     )
-    expect(await within(diaDeLaSemana(/^miércoles 11 de noviembre/)).findByText('Evento, 08:00–09:00, Cena tardía')).toBeInTheDocument()
+    expect(await within(diaDeLaSemana(/^miércoles 11 de noviembre/)).findByRole('button', { name: 'Editar evento: Cena tardía, 08:00–09:00' })).toBeInTheDocument()
   })
 })
 

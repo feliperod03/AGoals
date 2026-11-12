@@ -1,10 +1,20 @@
-import type { KeyboardEvent, Ref } from 'react'
+import type { KeyboardEvent, MouseEvent, Ref } from 'react'
 
 import { distribuirSolapes, type Rango } from '@/features/agenda/horario'
 import { formatearDiaCorto, formatearMinutos, minutosDelDia } from '@/lib/fechas'
 import { cn } from '@/lib/utils'
-import { BloqueSemana, TextoParaLector } from './BloqueSemana'
-import { PX_POR_HORA_SEMANA, etiquetaDia, type ElementoConHora, type ElementoDia } from './calendario'
+import type { Evento } from '@/types/evento'
+import { BloqueSemana, BotonEditarEvento, TextoParaLector } from './BloqueSemana'
+import {
+  ATRIBUTO_BLOQUE,
+  ATRIBUTO_EVENTO,
+  PX_POR_HORA_SEMANA,
+  esClicEnHueco,
+  etiquetaDia,
+  horaDesdePosicion,
+  type ElementoConHora,
+  type ElementoDia,
+} from './calendario'
 import { ElementoCelda } from './ElementoCelda'
 
 /** Alto del encabezado de un día (fijo: el eje de horas deja el mismo hueco). */
@@ -28,7 +38,14 @@ interface Props {
   alElegir: (fecha: string) => void
   alTeclear: (evento: KeyboardEvent<HTMLButtonElement>) => void
   botonRef: Ref<HTMLButtonElement>
+  /** Abre la edición de un evento (bloques y chips de la franja). */
+  alAbrirEvento?: (evento: Evento) => void
+  /** Clic en un hueco: `minutos` del día en la línea de tiempo, `null` en la franja «Sin hora». */
+  alCrearEnHueco?: (fecha: string, minutos: number | null) => void
 }
+
+/** Sombreado leve al pasar el mouse por un hueco (token `line`, sin colores nuevos; no cambia tamaños). */
+const CLASES_HUECO = 'cursor-pointer hover:bg-line/20'
 
 /**
  * Un día de la semana: grupo con la etiqueta completa («martes 10 de noviembre, hoy, 2 eventos, 1 tarea»);
@@ -50,6 +67,8 @@ export function ColumnaDia({
   alElegir,
   alTeclear,
   botonRef,
+  alAbrirEvento,
+  alCrearEnHueco,
 }: Props) {
   const esHoy = fecha === hoy
   const colocados = distribuirSolapes(conHora)
@@ -58,6 +77,20 @@ export function ColumnaDia({
   const minAhora = minutosDelDia(ahora, fecha)
   const mostrarAhora = esHoy && minAhora >= rango.inicioHora * 60 && minAhora <= rango.finHora * 60
   const topAhora = (minAhora - rango.inicioHora * 60) * (PX_POR_HORA_SEMANA / 60)
+
+  /*
+    Crear con un clic en un hueco (9c) es SOLO de mouse: la línea de tiempo y la franja no tienen role, ni tabIndex, ni
+    texto para lectores. El equivalente accesible es «Nuevo evento» del encabezado, con el día elegido. Un clic sobre un
+    botón, un bloque (evento o tarea) o un chip no cuenta como hueco (`esClicEnHueco`).
+  */
+  function alClicEnLinea(e: MouseEvent<HTMLDivElement>) {
+    if (!alCrearEnHueco || !esClicEnHueco(e.target)) return
+    const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+    alCrearEnHueco(fecha, horaDesdePosicion(y, rango, PX_POR_HORA_SEMANA))
+  }
+  function alClicEnFranja(e: MouseEvent<HTMLUListElement>) {
+    if (alCrearEnHueco && esClicEnHueco(e.target)) alCrearEnHueco(fecha, null)
+  }
 
   return (
     <div
@@ -96,10 +129,24 @@ export function ColumnaDia({
       </div>
 
       {altoFranja > 0 && (
-        <ul className="@container flex flex-col gap-1 border-b border-line px-1 py-1" style={{ height: altoFranja }}>
+        <ul
+          data-testid="franja-sin-hora"
+          className={cn('@container flex flex-col gap-1 border-b border-line px-1 py-1', alCrearEnHueco && CLASES_HUECO)}
+          style={{ height: altoFranja }}
+          onClick={alClicEnFranja}
+        >
           {sinHora.map((e) => (
-            <li key={e.clave} className="min-w-0">
-              <TextoParaLector elemento={e} />
+            <li
+              key={e.clave}
+              // Todo chip (evento o tarea) es un «bloque»: un clic encima nunca cuenta como hueco de la franja.
+              {...{ [ATRIBUTO_BLOQUE]: '', ...(e.tipo === 'evento' ? { [ATRIBUTO_EVENTO]: e.evento.id } : {}) }}
+              className="relative min-w-0 focus-within:z-10"
+            >
+              {e.tipo === 'evento' && alAbrirEvento ? (
+                <BotonEditarEvento elemento={e} alAbrirEvento={alAbrirEvento} className="rounded-md" />
+              ) : (
+                <TextoParaLector elemento={e} />
+              )}
               <span aria-hidden="true" className="flex min-w-0 *:flex-1">
                 <ElementoCelda elemento={e} />
               </span>
@@ -109,7 +156,12 @@ export function ColumnaDia({
       )}
 
       <div className="py-2">
-        <div className="relative" style={{ height: altoTotal }}>
+        <div
+          data-testid="linea-de-tiempo"
+          className={cn('relative', alCrearEnHueco && CLASES_HUECO)}
+          style={{ height: altoTotal }}
+          onClick={alClicEnLinea}
+        >
           {horas.map((hora) => (
             <div key={hora} aria-hidden="true">
               <div className="absolute inset-x-0 border-t border-line" style={{ top: (hora - rango.inicioHora) * PX_POR_HORA_SEMANA }} />
@@ -123,16 +175,19 @@ export function ColumnaDia({
 
           <ul className="absolute inset-y-0 right-0.5 left-0.5">
             {colocados.map((b) => (
-              <BloqueSemana key={b.clave} elemento={b} rango={rango} altoTotal={altoTotal} />
+              <BloqueSemana key={b.clave} elemento={b} rango={rango} altoTotal={altoTotal} alAbrirEvento={alAbrirEvento} />
             ))}
           </ul>
 
           {mostrarAhora && (
             <div
               data-testid="linea-ahora"
+              // Es un «bloque» para `esClicEnHueco` y NO lleva `pointer-events-none`: con eso el clic atravesaba la
+              // línea y creaba un evento en el hueco de abajo. Sigue sin ser un control (sin tabIndex ni role de botón).
+              {...{ [ATRIBUTO_BLOQUE]: '' }}
               role="img"
               aria-label={'Ahora, ' + formatearMinutos(minAhora)}
-              className="pointer-events-none absolute -right-px -left-1 z-10 flex -translate-y-1/2 items-center"
+              className="absolute -right-px -left-1 z-10 flex -translate-y-1/2 items-center"
               style={{ top: topAhora }}
             >
               <span className="size-2.5 shrink-0 rounded-full bg-ahora" />

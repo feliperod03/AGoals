@@ -1,5 +1,6 @@
 import {
   addDays,
+  addMinutes,
   addMonths,
   differenceInCalendarDays,
   differenceInMinutes,
@@ -401,3 +402,93 @@ export function duracionEnMinutos(inicioIso: string, finIso: string): number {
 export function formatearDiaCorto(fecha: string): string {
   return format(parseISO(fecha), 'EEEE d', { locale: es })
 }
+
+// --- Eventos (rebanada 9c) ---
+
+/** Un día (`YYYY-MM-DD`) y una hora (`HH:mm`) locales, como los dan los `<input type="date">` y `type="time"`. */
+export interface FechaYHora {
+  fecha: string
+  hora: string
+}
+
+const EXPRESION_HORA = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
+
+/** `true` para `HH:mm` (o `HH:mm:ss`, que algunos navegadores dan con `step`); `false` para vacío o inválido. */
+export function esHoraValida(valor: string): boolean {
+  return EXPRESION_HORA.test(valor)
+}
+
+/** ISO con desfase -> día y hora en la zona local (`{ fecha: '2026-12-15', hora: '09:00' }`). Sin segundos. */
+export function partesLocales(iso: string): FechaYHora {
+  const fecha = parseISO(iso)
+  return { fecha: format(fecha, FORMATO_FECHA), hora: format(fecha, 'HH:mm') }
+}
+
+/** Día y hora locales -> `Date`; `null` si alguno está vacío o es inválido. */
+function aDateLocal({ fecha, hora }: FechaYHora): Date | null {
+  if (!esFechaValida(fecha) || !esHoraValida(hora)) return null
+  return parseISO(`${fecha}T${hora.slice(0, 5)}`)
+}
+
+/** Día y hora locales -> ISO con desfase de la zona local; `null` si alguno está vacío o es inválido. */
+export function deFechaYHoraLocal(fecha: string, hora: string): string | null {
+  const instante = aDateLocal({ fecha, hora })
+  return instante ? aIsoConDesfase(instante) : null
+}
+
+/** Minutos de `inicio` a `fin` (negativo si `fin` es anterior); `null` si alguno es inválido. */
+export function minutosEntre(inicio: FechaYHora, fin: FechaYHora): number | null {
+  const a = aDateLocal(inicio)
+  const b = aDateLocal(fin)
+  return a && b ? differenceInMinutes(b, a) : null
+}
+
+/** Corre un día y hora locales `minutos` minutos (puede cambiar de día); `null` si el punto de partida es inválido. */
+export function sumarMinutos(punto: FechaYHora, minutos: number): FechaYHora | null {
+  const instante = aDateLocal(punto)
+  if (!instante) return null
+  const nuevo = addMinutes(instante, minutos)
+  return { fecha: format(nuevo, FORMATO_FECHA), hora: format(nuevo, 'HH:mm') }
+}
+
+/**
+ * Un evento que ocupa días enteros: empieza y termina a las 00:00 locales (de 00:00 a 00:00 del día siguiente, o
+ * varios días así). Es lo que el formulario guarda con «Todo el día» y lo que el calendario muestra como «Todo el día».
+ */
+export function esDeDiasCompletos(inicioIso: string, finIso: string): boolean {
+  const inicio = parseISO(inicioIso)
+  const fin = parseISO(finIso)
+  return fin.getTime() > inicio.getTime() && inicio.getTime() === startOfDay(inicio).getTime() && fin.getTime() === startOfDay(fin).getTime()
+}
+
+/**
+ * Texto corto del lapso de un evento, en hora local. Nunca escribe «24:00»: un evento que termina a la medianoche
+ * siguiente se escribe «22:00–00:00».
+ * - `mar 15 dic, 09:00–10:00` (o hasta las 00:00 del día siguiente);
+ * - `mar 15 dic, todo el día` / `del mié 2 dic al vie 4 dic` (días completos);
+ * - `del mié 9 dic, 22:00 al jue 10 dic, 02:00`.
+ */
+export function formatearRangoEvento(inicioIso: string, finIso: string): string {
+  const dia = (fecha: Date) => format(fecha, 'EEE d MMM', { locale: es })
+  const hora = (fecha: Date) => format(fecha, 'HH:mm')
+  const inicio = parseISO(inicioIso)
+  const fin = parseISO(finIso)
+  if (esDeDiasCompletos(inicioIso, finIso)) {
+    const ultimo = addDays(fin, -1)
+    return differenceInCalendarDays(ultimo, inicio) === 0 ? `${dia(inicio)}, todo el día` : `del ${dia(inicio)} al ${dia(ultimo)}`
+  }
+  const terminaALaMedianoche = fin.getTime() === addDays(startOfDay(inicio), 1).getTime()
+  if (differenceInCalendarDays(fin, inicio) === 0 || terminaALaMedianoche) {
+    return `${dia(inicio)}, ${hora(inicio)}–${hora(fin)}`
+  }
+  return `del ${dia(inicio)}, ${hora(inicio)} al ${dia(fin)}, ${hora(fin)}`
+}
+
+/** Confirmaciones de eventos (aviso de la página). */
+export const mensajeEventoCreado = (titulo: string, inicioIso: string, finIso: string) =>
+  `Evento «${titulo}» creado (${formatearRangoEvento(inicioIso, finIso)})`
+export const mensajeEventoGuardado = (titulo: string, inicioIso: string, finIso: string) =>
+  `Evento «${titulo}» guardado (${formatearRangoEvento(inicioIso, finIso)})`
+export const mensajeEventoBorrado = (titulo: string, conRecordatorio: boolean) =>
+  `Evento «${titulo}» borrado${conRecordatorio ? ', con su recordatorio' : ''}`
+export const mensajeEventoYaNoExistia = (titulo: string) => `El evento «${titulo}» ya no existía`

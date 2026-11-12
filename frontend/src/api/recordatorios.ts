@@ -21,6 +21,11 @@ export function getRecordatoriosDeTarea(tareaId: number): Promise<Recordatorio[]
   return get<Recordatorio[]>('/api/recordatorios', { tareaId })
 }
 
+/** Recordatorios de un evento (como máximo uno). Con un id que no existe responde `[]`, no 400. */
+export function getRecordatoriosDeEvento(eventoId: number): Promise<Recordatorio[]> {
+  return get<Recordatorio[]>('/api/recordatorios', { eventoId })
+}
+
 export function borrarRecordatorio(id: number): Promise<void> {
   return del(`/api/recordatorios/${id}`)
 }

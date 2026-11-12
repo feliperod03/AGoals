@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 
 import { mesDe, nombresDiasSemana, semanasDelMes } from '@/lib/fechas'
+import type { Evento } from '@/types/evento'
 import { diaDestino, type ElementoDia } from './calendario'
 import { CeldaDia } from './CeldaDia'
 
@@ -18,13 +19,15 @@ interface Props {
   alSeleccionar: (fecha: string) => void
   /** Una tecla que lleva a un día fuera de esta cuadrícula: cambia de mes. */
   alSaltar: (fecha: string) => void
+  /** Atajo de mouse (9c): un clic sobre el chip de un evento, además de seleccionar el día, abre su edición. */
+  alAbrirEvento?: (evento: Evento) => void
 }
 
 /**
  * Cuadrícula mensual (lunes a domingo) como `grid` accesible: una fila por semana y una celda por día. Teclado:
  * flechas ±1 día / ±7, Inicio y Fin = lunes y domingo, RePág y AvPág = mes anterior y siguiente.
  */
-export function CuadriculaMes({ mes, hoy, dia, elementosPorDia, etiquetadaPor, alSeleccionar, alSaltar }: Props) {
+export function CuadriculaMes({ mes, hoy, dia, elementosPorDia, etiquetadaPor, alSeleccionar, alSaltar, alAbrirEvento }: Props) {
   const semanas = semanasDelMes(mes)
   const botones = useRef(new Map<string, HTMLButtonElement>())
   // Solo se mueve el foco cuando el cambio de día vino del teclado (un clic ya deja el foco en su botón).
@@ -69,6 +72,7 @@ export function CuadriculaMes({ mes, hoy, dia, elementosPorDia, etiquetadaPor, a
               delMes={mesDe(fecha) === mes}
               seleccionada={fecha === dia}
               alElegir={alSeleccionar}
+              alAbrirEvento={alAbrirEvento}
               alTeclear={alTeclear}
               botonRef={(boton) => {
                 if (boton) botones.current.set(fecha, boton)
