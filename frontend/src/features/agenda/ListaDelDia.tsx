@@ -27,7 +27,7 @@ export function ListaDelDia({ tareas, cargando, error, alEditar, acciones }: Pro
       {error && <ErrorEnLinea mensaje={error.message} />}
       {acciones.error && (
         <div className="mb-3">
-          <ErrorEnLinea mensaje={acciones.error} />
+          <ErrorEnLinea mensaje={acciones.error} alDescartar={acciones.limpiarError} />
         </div>
       )}
       {tareas && tareas.length === 0 && <TextoVacio>No tienes tareas sin hora para hoy.</TextoVacio>}

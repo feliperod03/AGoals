@@ -310,10 +310,39 @@ describe('Editar o borrar una fila existente', () => {
   it('si el borrado falla, el mensaje del servidor queda en el diálogo de confirmación', async () => {
     const user = userEvent.setup()
     renderizar({ tipo: 'existente', recordatorio: recordatorio({ id: 21, tareaId: null }) })
+    vi.mocked(borrarRecordatorio).mockRejectedValue(new ApiError(500, 'Error del servidor (500)'))
+    await user.click(await screen.findByRole('button', { name: 'Borrar este recordatorio' }))
+    await user.click(await screen.findByRole('button', { name: 'Borrar recordatorio' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor (500)')
+    expect(screen.getByRole('button', { name: 'Borrar recordatorio' })).toBeEnabled()
+  })
+
+  it('404 al guardar una fila: panel «ya no existe» sin formulario, «Cerrar» cierra y no hay segundo PUT', async () => {
+    const user = userEvent.setup()
+    const { alCerrar } = renderizar({ tipo: 'existente', recordatorio: recordatorio({ id: 21, tareaId: null }) })
+    vi.mocked(actualizarRecordatorio).mockRejectedValue(new ApiError(404, 'Recordatorio 21 no encontrado'))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    expect(await screen.findByRole('dialog', { name: 'Este recordatorio ya no existe' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Fecha y hora')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Cerrar'))
+    expect(alCerrar).toHaveBeenCalled()
+    expect(actualizarRecordatorio).toHaveBeenCalledTimes(1)
+  })
+
+  it('404 al borrar una fila: mismo panel de salida', async () => {
+    const user = userEvent.setup()
+    renderizar({ tipo: 'existente', recordatorio: recordatorio({ id: 21, tareaId: null }) })
     vi.mocked(borrarRecordatorio).mockRejectedValue(new ApiError(404, 'Recordatorio 21 no encontrado'))
     await user.click(await screen.findByRole('button', { name: 'Borrar este recordatorio' }))
     await user.click(await screen.findByRole('button', { name: 'Borrar recordatorio' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Recordatorio 21 no encontrado')
-    expect(screen.getByRole('button', { name: 'Borrar recordatorio' })).toBeEnabled()
+    expect(await screen.findByRole('dialog', { name: 'Este recordatorio ya no existe' })).toBeInTheDocument()
+  })
+
+  it('recordatorio de tarea ya enviado: la descripción lo dice y avisa que editarlo lo reactiva', async () => {
+    renderizar(deTarea(), [recordatorio({ enviado: true })])
+    await dialogoTarea()
+    expect(await screen.findByText('Este recordatorio ya se envió. Si cambias la fecha, volverá a quedar pendiente.')).toBeInTheDocument()
   })
 })

@@ -14,6 +14,7 @@ import {
   esFechaValida,
   formatearFechaHoraCorta,
   notaRecordatorioEventoNoConsultado,
+  notaRecordatorioEventoYaEnviado,
 } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import {
@@ -108,6 +109,8 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
     evento !== undefined && inicioFormulario !== null && parseISO(inicioFormulario).getTime() !== parseISO(evento.fechaHoraInicio).getTime()
   // Una consulta fallida pero con datos viejos NO cuenta: nunca se escribe a ciegas.
   const pendiente = consulta && !consulta.fallo && consulta.recordatorio && !consulta.recordatorio.enviado ? consulta.recordatorio : null
+  // Un recordatorio ya enviado no se mueve: sin casilla, se dice por qué (solo importa si cambió el inicio).
+  const yaEnviado = consulta && !consulta.fallo && consulta.recordatorio?.enviado ? consulta.recordatorio : null
   const aMover = evento && pendiente && inicioFormulario ? instanteMovido(pendiente, evento.fechaHoraInicio, inicioFormulario) : null
   // Si cambió el inicio y aún no se sabe si hay recordatorio, `Guardar` espera (si no cambió, nunca espera).
   const esperando = cambioInicio && consulta?.cargando === true
@@ -246,6 +249,8 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
           </div>
         </div>
       )}
+
+      {cambioInicio && yaEnviado && <p className="text-xs text-mut">{notaRecordatorioEventoYaEnviado(yaEnviado.fechaHora)}</p>}
 
       {cambioInicio && consulta?.fallo && <p className="text-xs text-mut">{notaRecordatorioEventoNoConsultado()}</p>}
 

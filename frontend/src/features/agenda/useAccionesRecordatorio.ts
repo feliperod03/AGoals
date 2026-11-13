@@ -44,6 +44,8 @@ export function useAccionesRecordatorio({ alMensaje }: Opciones) {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<string | null>(null)
+  // El último intento dio 404: el recordatorio ya no existe (se borró desde otro lugar).
+  const [noExiste, setNoExiste] = useState(false)
   const enCurso = useRef(false)
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['recordatorios'] })
 
@@ -58,6 +60,7 @@ export function useAccionesRecordatorio({ alMensaje }: Opciones) {
     },
     onError: async (e) => {
       setError(e.message)
+      setNoExiste(e instanceof ApiError && e.status === 404)
       if (e instanceof ApiError && (e.status === 404 || e.status === 409)) await refrescar()
     },
     onSettled: () => {
@@ -69,6 +72,7 @@ export function useAccionesRecordatorio({ alMensaje }: Opciones) {
     if (enCurso.current) return
     enCurso.current = true
     setError(null)
+    setNoExiste(false)
     setResultado(null)
     mutacion.mutate(variables)
   }
@@ -79,6 +83,7 @@ export function useAccionesRecordatorio({ alMensaje }: Opciones) {
     borrar: (id: number, alExito?: () => void) => lanzar({ accion: 'borrar', id, alExito }),
     pendiente: mutacion.isPending,
     error,
+    noExiste,
     resultado,
   }
 }

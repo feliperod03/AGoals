@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
@@ -20,11 +21,32 @@ export function Tarjeta({ titulo, ariaLabel, children, className }: PropsTarjeta
   )
 }
 
-export function ErrorEnLinea({ mensaje }: { mensaje: string }) {
+/**
+ * Error de una acción lanzada desde la página. Con `alDescartar` se puede quitar con «×» (el botón queda fuera del
+ * `role="alert"` para que no se lea como parte del mensaje); sin ella se ve igual que siempre.
+ */
+export function ErrorEnLinea({ mensaje, alDescartar }: { mensaje: string; alDescartar?: () => void }) {
+  if (!alDescartar) {
+    return (
+      <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
+        {mensaje}
+      </p>
+    )
+  }
   return (
-    <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
-      {mensaje}
-    </p>
+    <div className="flex items-start gap-2 rounded-xl border border-alta py-1 pr-1 pl-3 text-sm text-tx">
+      <p role="alert" className="min-w-0 flex-1 py-1">
+        {mensaje}
+      </p>
+      <button
+        type="button"
+        aria-label="Descartar error"
+        onClick={alDescartar}
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-mut hover:bg-muted hover:text-tx focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:size-11"
+      >
+        <X className="size-4" aria-hidden="true" />
+      </button>
+    </div>
   )
 }
 

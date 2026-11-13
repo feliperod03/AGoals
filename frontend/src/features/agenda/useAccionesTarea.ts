@@ -19,6 +19,7 @@ import type { Recordatorio } from '@/types/recordatorio'
 import type { ModoSubtareas, Tarea } from '@/types/tarea'
 import { requestConEstado, requestConPadre, requestSinFecha } from './formularioTarea'
 import { requestMovido } from './recordatorioForm'
+import type { AlMensaje } from './useMensajeTemporal'
 import { CLAVE_TODAS_LAS_TAREAS } from './useTodasLasTareas'
 
 export type TipoAccion = 'hecha' | 'reabrir' | 'posponer' | 'sinFecha' | 'cancelar' | 'reactivar'
@@ -38,8 +39,11 @@ export interface Acciones {
   ejecutar: (tipo: TipoAccion, tarea: Tarea, fecha?: string, recordatorio?: Recordatorio) => void
   /** Abre el selector de posponer (Mañana / Elegir fecha / Dejar sin fecha) para esa tarea. */
   pedirPosponer: (tarea: Tarea) => void
-  /** Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. */
-  posponer: { tarea: Tarea; cancelar: () => void } | null
+  /**
+   * Selector abierto; se cierra solo cuando la acción sale bien y sigue abierto si falla. `error` es el de las
+   * acciones lanzadas desde el selector (posponer, dejar sin fecha): es solo suyo y `cancelar` lo limpia.
+   */
+  posponer: { tarea: Tarea; error: string | null; cancelar: () => void } | null
   /**
    * Abre la elección "Crear una nueva / Vincular una existente" para `madre` (encima del diálogo de edición,
    * si había uno; este solo se reemplaza al elegir crear).
@@ -68,8 +72,13 @@ export interface Acciones {
   pedirBorrado: (tarea: Tarea) => void
   /** Hay una acción en curso: los botones se deshabilitan. */
   pendiente: boolean
-  /** Último error legible de una acción (400/404/409); se limpia al lanzar otra. */
+  /**
+   * Último error legible de una acción rápida lanzada desde la lista o el diálogo de edición (400/404/409); se limpia
+   * al lanzar otra, al descartarlo (`limpiarError`) y al cerrar el diálogo de edición. Los del selector de posponer
+   * están en `posponer.error`.
+   */
   error: string | null
+  limpiarError: () => void
   /**
    * `confirmar()` sin argumento = borrado simple (sin `?subtareas=`). Con `eleccion`, manda el modo y usa
    * `subtareas` (total de descendientes) solo para el aviso.
@@ -92,7 +101,7 @@ export interface Acciones {
 
 interface Opciones {
   /** Confirmación para la región aria-live de la página. */
-  alMensaje: (mensaje: string) => void
+  alMensaje: AlMensaje
   /** Una acción sobre esta tarea terminó: si su diálogo de edición está abierto, hay que cerrarlo. */
   alTerminar: (tareaId: number) => void
   /** Se eligió crear una subtarea nueva de `madre`: la página abre el diálogo de creación con ese padre. */
@@ -169,6 +178,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   const queryClient = useQueryClient()
   const enCurso = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorPosponer, setErrorPosponer] = useState<string | null>(null)
   const [aPosponer, setAPosponer] = useState<Tarea | null>(null)
   const [aSubtarea, setASubtarea] = useState<Tarea | null>(null)
   const [errorSubtarea, setErrorSubtarea] = useState<string | null>(null)
@@ -195,13 +205,12 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       const fecha = actualizada.fecha ?? ''
       const conRecordatorio = pendienteDe(recordatorio) !== undefined
       if (tipo === 'posponer') {
-        alMensaje(
-          recordatorioMovido
-            ? mensajeRecordatorioMovido(fecha, recordatorioMovido.fechaHora)
-            : fallo !== null
-              ? mensajeRecordatorioNoMovido(fecha, fallo)
-              : mensajePospuesta(fecha),
-        )
+        if (fallo !== null) {
+          // Fallo parcial: la tarea sí se pospuso. El aviso no expira para que no pase desapercibido.
+          alMensaje(mensajeRecordatorioNoMovido(fecha, fallo), { persistente: true })
+        } else {
+          alMensaje(recordatorioMovido ? mensajeRecordatorioMovido(fecha, recordatorioMovido.fechaHora) : mensajePospuesta(fecha))
+        }
       } else {
         alMensaje(tipo === 'sinFecha' && conRecordatorio ? mensajeSinFechaConRecordatorio() : MENSAJES[tipo])
       }
@@ -225,7 +234,8 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
         }
       }
     },
-    onError: (e) => setError(e.message),
+    // El error es de la superficie que lanzó la acción: posponer y «dejar sin fecha» solo salen del selector.
+    onError: (e, { tipo }) => (tipo === 'posponer' || tipo === 'sinFecha' ? setErrorPosponer(e.message) : setError(e.message)),
   })
 
   const vinculo = useMutation({
@@ -271,14 +281,25 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       // Guard síncrono: dos clics antes de que React deshabilite los botones no lanzan dos PATCH/PUT.
       if (enCurso.current) return
       enCurso.current = true
-      setError(null)
+      if (tipo === 'posponer' || tipo === 'sinFecha') setErrorPosponer(null)
+      else setError(null)
       accion.mutate({ tipo, tarea, fecha, recordatorio })
     },
     pedirPosponer: (tarea) => {
       setError(null)
+      setErrorPosponer(null)
       setAPosponer(tarea)
     },
-    posponer: aPosponer ? { tarea: aPosponer, cancelar: () => setAPosponer(null) } : null,
+    posponer: aPosponer
+      ? {
+          tarea: aPosponer,
+          error: errorPosponer,
+          cancelar: () => {
+            setErrorPosponer(null)
+            setAPosponer(null)
+          },
+        }
+      : null,
     pedirSubtarea: (madre) => {
       setError(null)
       setErrorSubtarea(null)
@@ -310,6 +331,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
     },
     pendiente: accion.isPending || borrado.isPending || vinculo.isPending,
     error,
+    limpiarError: () => setError(null),
     confirmarBorrado: aBorrar
       ? {
           tarea: aBorrar,

@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { aValorDatetimeLocal, formatearFechaHoraCorta, mensajeEventoEmpieza } from '@/lib/fechas'
+import { aValorDatetimeLocal, descripcionRecordatorioYaEnviado, formatearFechaHoraCorta, mensajeEventoEmpieza } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import type { Recordatorio, RecordatorioRequest } from '@/types/recordatorio'
 import type { Tarea } from '@/types/tarea'
@@ -123,7 +123,9 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
     <div className="flex flex-col gap-4">
       <div>
         <DialogTitle>Recordatorio de «{titulo}»</DialogTitle>
-        <DialogDescription>{recordatorio ? TEXTOS[sujeto].ya : 'Cada cambio se aplica al momento.'}</DialogDescription>
+        <DialogDescription>
+          {recordatorio?.enviado ? descripcionRecordatorioYaEnviado() : recordatorio ? TEXTOS[sujeto].ya : 'Cada cambio se aplica al momento.'}
+        </DialogDescription>
         {nota && <p className="mt-1 text-sm text-mut">{nota}</p>}
       </div>
 
@@ -181,6 +183,23 @@ function ContenidoFila({
 }) {
   const [confirmando, setConfirmando] = useState(false)
   const existente: Recordatorio | null = destino.tipo === 'existente' ? destino.recordatorio : null
+
+  // 404 al editar o borrar: el recordatorio ya no existe y el hook ya refrescó las listas. Sin formulario, una sola salida.
+  if (existente && acciones.noExiste) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <DialogTitle>Este recordatorio ya no existe</DialogTitle>
+          <DialogDescription>Se borró o se envió desde otro lugar. La lista ya se actualizó.</DialogDescription>
+        </div>
+        <div className="flex justify-end">
+          <Button className="max-sm:h-11" type="button" onClick={alCerrar}>
+            Cerrar
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (existente && confirmando) {
     return (

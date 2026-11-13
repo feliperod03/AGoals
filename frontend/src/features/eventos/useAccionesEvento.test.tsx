@@ -338,6 +338,7 @@ describe('useAccionesEvento: mover el recordatorio (9e)', () => {
     await waitFor(() => expect(alMensaje).toHaveBeenCalled())
     expect(alMensaje).toHaveBeenCalledWith(
       `Evento «Dentista» guardado (mar 15 dic, 09:30–10:30), pero no se pudo mover el recordatorio (${mensaje}). Revísalo en «Recordatorio…»`,
+      { persistente: true },
     )
     expect(result.current.dialogo).toBeNull()
     expect(result.current.errorGuardar).toBeNull()

@@ -16,6 +16,7 @@ import {
 import type { Evento, EventoRequest } from '@/types/evento'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { ValoresEvento } from './formularioEvento'
+import type { AlMensaje } from '@/features/agenda/useMensajeTemporal'
 import { instanteMovido } from './moverRecordatorio'
 
 /** `{ iniciales }` = diálogo para crear con esos valores; `{ evento }` = para editar ese evento entero. */
@@ -57,12 +58,12 @@ export interface AccionesEvento {
   /** Elemento que tenía el foco al pedir el recordatorio («Recordatorio…»): ahí vuelve al cerrarlo. */
   disparadorRecordatorio: { current: HTMLElement | null }
   /** Aviso flotante de la página, para el diálogo de recordatorio. */
-  alMensaje: (mensaje: string) => void
+  alMensaje: AlMensaje
 }
 
 interface Opciones {
   /** Confirmación para el aviso flotante de la página. */
-  alMensaje: (mensaje: string) => void
+  alMensaje: AlMensaje
   /** Tras crear (con el refresco ya hecho): la página salta al día del evento. */
   alCrear?: (evento: Evento) => void
 }
@@ -139,7 +140,8 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
       } else if (movido?.ok) {
         alMensaje(mensajeEventoGuardadoConRecordatorio(titulo, inicio, fin, movido.fechaHora))
       } else if (movido) {
-        alMensaje(mensajeEventoRecordatorioNoMovido(titulo, inicio, fin, movido.motivo))
+        // Fallo parcial: el evento sí quedó guardado. El aviso no expira para que no pase desapercibido.
+        alMensaje(mensajeEventoRecordatorioNoMovido(titulo, inicio, fin, movido.motivo), { persistente: true })
       } else {
         alMensaje(mensajeEventoGuardado(titulo, inicio, fin))
       }

@@ -399,6 +399,19 @@ describe('CofrePage: agendar para hoy', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('el error de agendar sin diálogo se descarta con «×»', async () => {
+    vi.mocked(getTareas).mockResolvedValue([tarea({ id: 1, titulo: 'Idea' })])
+    vi.mocked(agendarTarea).mockRejectedValue(new ApiError(409, 'La tarea está cerrada'))
+    const user = userEvent.setup()
+    renderizar()
+    await abrirMenu(user, 'Idea')
+    await user.click(screen.getByRole('menuitem', { name: 'Agendar para hoy' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('La tarea está cerrada')
+
+    await user.click(screen.getByRole('button', { name: 'Descartar error' }))
+    expect(screen.queryByText('La tarea está cerrada')).not.toBeInTheDocument()
+  })
+
   it('con subtareas candidatas abre el diálogo con «Incluir N subtareas» marcado', async () => {
     const madre = tarea({ id: 1, titulo: 'Madre' })
     vi.mocked(getTareas).mockResolvedValue([

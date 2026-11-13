@@ -81,6 +81,8 @@ export interface AccionesJerarquia<T extends ItemJerarquico> {
     error: string | null
     pendiente: boolean
     confirmar: (opciones?: OpcionesBorrado) => void
+    /** Quita el error del DELETE fallido (al cambiar una elección ya no corresponde). */
+    limpiarError: () => void
     cancelar: () => void
   } | null
 }
@@ -164,6 +166,7 @@ export function useAccionesJerarquia<T extends ItemJerarquico, R>(
             setErrorBorrado(null)
             borrado.mutate({ item: aBorrar, opciones })
           },
+          limpiarError: () => setErrorBorrado(null),
           cancelar: () => setABorrar(null),
         }
       : null,

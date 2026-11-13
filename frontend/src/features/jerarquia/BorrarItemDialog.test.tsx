@@ -226,6 +226,20 @@ describe('BorrarItemDialog: proyecto', () => {
     await waitFor(() => expect(botonBorrar(dialogo)).toBeEnabled())
   })
 
+  it('el error de un DELETE fallido desaparece al cambiar un interruptor', async () => {
+    vi.mocked(borrarProyecto).mockRejectedValue(new ApiError(409, 'El proyecto 1 tiene tareas: decide qué hacer con ellas'))
+    const { user, dialogo } = await abrir(CONFIG_PROYECTO, casa)
+    await within(dialogo).findByRole('group', { name: 'Tareas (2)' })
+    await waitFor(() => expect(botonBorrar(dialogo)).toBeEnabled())
+
+    await user.click(botonBorrar(dialogo))
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('decide qué hacer')
+    await waitFor(() => expect(botonBorrar(dialogo)).toBeEnabled())
+
+    await user.click(within(grupo(dialogo, 'Tareas (2)')).getByRole('radio', { name: 'Borrar' }))
+    expect(within(dialogo).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('si la vista previa falla ofrece Reintentar, no deja confirmar y no manda un DELETE a ciegas', async () => {
     vi.mocked(getImpactoBorradoProyecto).mockRejectedValueOnce(new ApiError(500, 'Error del servidor (500). Inténtalo de nuevo más tarde.'))
     const { user, dialogo } = await abrir(CONFIG_PROYECTO, casa)

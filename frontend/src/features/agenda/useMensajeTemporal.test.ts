@@ -81,4 +81,57 @@ describe('useMensajeTemporal', () => {
     unmount()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  describe('persistente', () => {
+    it('no expira solo, ni tras pausar y reanudar', () => {
+      const { result } = renderHook(() => useMensajeTemporal(1000))
+      act(() => result.current.mostrar('Parcial', { persistente: true }))
+      expect(result.current.persistente).toBe(true)
+      act(() => void vi.advanceTimersByTime(60_000))
+      expect(result.current.mensaje).toBe('Parcial')
+      expect(result.current.saliendo).toBe(false)
+      act(() => result.current.pausar())
+      act(() => result.current.reanudar())
+      act(() => void vi.advanceTimersByTime(60_000))
+      expect(result.current.mensaje).toBe('Parcial')
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('cerrar (la «×») lo quita y deja de ser persistente', () => {
+      const { result } = renderHook(() => useMensajeTemporal(1000))
+      act(() => result.current.mostrar('Parcial', { persistente: true }))
+      act(() => result.current.cerrar())
+      act(() => void vi.advanceTimersByTime(SALIDA_MS))
+      expect(result.current.mensaje).toBe('')
+      expect(result.current.persistente).toBe(false)
+    })
+
+    it('un mensaje temporal no lo reemplaza', () => {
+      const { result } = renderHook(() => useMensajeTemporal(1000))
+      act(() => result.current.mostrar('Parcial', { persistente: true }))
+      act(() => result.current.mostrar('Hecha'))
+      expect(result.current.mensaje).toBe('Parcial')
+      act(() => void vi.advanceTimersByTime(60_000))
+      expect(result.current.mensaje).toBe('Parcial')
+    })
+
+    it('otro persistente sí lo reemplaza', () => {
+      const { result } = renderHook(() => useMensajeTemporal(1000))
+      act(() => result.current.mostrar('Uno', { persistente: true }))
+      act(() => result.current.mostrar('Dos', { persistente: true }))
+      expect(result.current.mensaje).toBe('Dos')
+    })
+
+    it('tras cerrar el persistente, los temporales vuelven a expirar a los 6 s (regresión)', () => {
+      const { result } = renderHook(() => useMensajeTemporal())
+      act(() => result.current.mostrar('Parcial', { persistente: true }))
+      act(() => result.current.cerrar())
+      act(() => void vi.advanceTimersByTime(SALIDA_MS))
+      act(() => result.current.mostrar('Hecha'))
+      act(() => void vi.advanceTimersByTime(5999))
+      expect(result.current.saliendo).toBe(false)
+      act(() => void vi.advanceTimersByTime(1 + SALIDA_MS))
+      expect(result.current.mensaje).toBe('')
+    })
+  })
 })

@@ -72,6 +72,7 @@ export function CofrePage() {
       <Aviso
         mensaje={confirmacion.mensaje}
         saliendo={confirmacion.saliendo}
+        persistente={confirmacion.persistente}
         alCerrar={confirmacion.cerrar}
         alPausar={confirmacion.pausar}
         alReanudar={confirmacion.reanudar}
@@ -100,12 +101,12 @@ export function CofrePage() {
         {cofre.tareas.error && <ErrorEnLinea mensaje={cofre.tareas.error.message} />}
         {acciones.error && (
           <div className="mb-3">
-            <ErrorEnLinea mensaje={acciones.error} />
+            <ErrorEnLinea mensaje={acciones.error} alDescartar={acciones.limpiarError} />
           </div>
         )}
         {agendar.error && !aAgendar && (
           <div className="mb-3">
-            <ErrorEnLinea mensaje={agendar.error.message} />
+            <ErrorEnLinea mensaje={agendar.error.message} alDescartar={agendar.reset} />
           </div>
         )}
         {cofre.arbol && cofre.arbol.filtradas.length === 0 && (
@@ -130,7 +131,16 @@ export function CofrePage() {
         )}
       </Tarjeta>
 
-      <TareaDialog abierto={dialogo} alCerrar={() => setDialogo(null)} alGuardar={confirmacion.mostrar} acciones={acciones} />
+      <TareaDialog
+        abierto={dialogo}
+        alCerrar={() => {
+          // El error de una acción lanzada desde el diálogo es del diálogo: no queda colgado en la lista.
+          acciones.limpiarError()
+          setDialogo(null)
+        }}
+        alGuardar={confirmacion.mostrar}
+        acciones={acciones}
+      />
       <AgendarDialog
         abierto={aAgendar}
         pendiente={agendar.isPending}

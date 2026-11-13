@@ -9,10 +9,12 @@ import {
   formatearDiaMes,
   formatearFechaHoraCorta,
   moverInstanteDias,
+  notaRecordatorioTareaYaEnviado,
   puedePosponerAManana,
   sumarDias,
 } from '@/lib/fechas'
 import type { Tarea } from '@/types/tarea'
+import { ErrorDialogo } from './ErrorDialogo'
 import { yaPaso } from './recordatorioForm'
 import { useRecordatorioDeTarea } from './useRecordatorioDeTarea'
 import type { Acciones } from './useAccionesTarea'
@@ -25,7 +27,7 @@ export function PosponerDialog({ acciones, hoy }: { acciones: Acciones; hoy: str
   const { posponer } = acciones
   return (
     <Dialog open={posponer !== null} onOpenChange={(open) => !open && !acciones.pendiente && posponer?.cancelar()}>
-      <DialogContent>{posponer && <Selector tarea={posponer.tarea} cancelar={posponer.cancelar} acciones={acciones} hoy={hoy} />}</DialogContent>
+      <DialogContent>{posponer && <Selector tarea={posponer.tarea} error={posponer.error} cancelar={posponer.cancelar} acciones={acciones} hoy={hoy} />}</DialogContent>
     </Dialog>
   )
 }
@@ -33,7 +35,7 @@ export function PosponerDialog({ acciones, hoy }: { acciones: Acciones; hoy: str
 const CAMPO =
   'w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-tx focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
 
-function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: () => void; acciones: Acciones; hoy: string }) {
+function Selector({ tarea, error, cancelar, acciones, hoy }: { tarea: Tarea; error: string | null; cancelar: () => void; acciones: Acciones; hoy: string }) {
   const [fecha, setFecha] = useState('')
   const minima = fechaMinimaParaPosponer(tarea.fecha, hoy)
   const manana = sumarDias(hoy, 1)
@@ -43,6 +45,8 @@ function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: 
   // Mientras carga no se sabe si hay algo que mover: los botones esperan (Cancelar no).
   const ocupado = acciones.pendiente || cargando
   const pendiente = recordatorio !== null && !recordatorio.enviado ? recordatorio : null
+  // Un recordatorio ya enviado no se mueve: sin casilla, se dice por qué.
+  const yaEnviado = recordatorio !== null && recordatorio.enviado && tarea.fecha !== null ? recordatorio : null
   const hayQueMover = pendiente !== null && tarea.fecha !== null
   const aMover = hayQueMover && mover ? pendiente : undefined
   const puedeManana = puedePosponerAManana(tarea.fecha, hoy)
@@ -83,6 +87,9 @@ function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: 
                     {d.texto}: {d.instante && formatearFechaHoraCorta(d.instante)}
                   </p>
                 ))}
+                {destinos.length === 0 && (
+                  <p>{puedeManana ? 'Elige «Mañana» o una fecha' : 'Elige una fecha'} para ver dónde quedará el recordatorio.</p>
+                )}
                 {seguiraVencido && <p>Seguirá vencido: el aviso saldrá enseguida.</p>}
               </>
             ) : (
@@ -91,6 +98,8 @@ function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: 
           </div>
         </div>
       )}
+
+      {yaEnviado && <p className="text-xs text-mut">{notaRecordatorioTareaYaEnviado(yaEnviado.fechaHora)}</p>}
 
       {fallo && <p className="text-xs text-mut">No se pudo consultar el recordatorio de esta tarea: si tiene uno, no se moverá.</p>}
 
@@ -137,11 +146,7 @@ function Selector({ tarea, cancelar, acciones, hoy }: { tarea: Tarea; cancelar: 
         </p>
       </div>
 
-      {acciones.error && (
-        <p role="alert" className="rounded-xl border border-alta px-3 py-2 text-sm text-tx">
-          {acciones.error}
-        </p>
-      )}
+      <ErrorDialogo mensaje={error} />
 
       <div className="flex justify-end">
         <Button type="button" variant="ghost" disabled={acciones.pendiente} onClick={cancelar}>

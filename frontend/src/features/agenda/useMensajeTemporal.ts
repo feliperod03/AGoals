@@ -5,6 +5,14 @@ export const SALIDA_MS = 200
 /** Al reanudar tras una pausa, el aviso queda visible al menos este tiempo. */
 const MINIMO_TRAS_PAUSA_MS = 2000
 
+export interface OpcionesAviso {
+  /** Fallo parcial: no expira, se cierra con «×» y solo lo reemplaza otro persistente. */
+  persistente?: boolean
+}
+
+/** Firma de `mostrar`: los consumidores que solo necesitan `(mensaje: string) => void` siguen siendo compatibles. */
+export type AlMensaje = (mensaje: string, opciones?: OpcionesAviso) => void
+
 /**
  * Mensaje que desaparece solo a los `ms` milisegundos, con una fase de salida (`saliendo`) de `SALIDA_MS`
  * para que la animación tenga tiempo. Un mensaje nuevo reemplaza al anterior. Se puede pausar (hover o foco).
@@ -13,12 +21,15 @@ const MINIMO_TRAS_PAUSA_MS = 2000
 export function useMensajeTemporal(ms = 6000) {
   const [mensaje, setMensaje] = useState('')
   const [saliendo, setSaliendo] = useState(false)
+  const [persistente, setPersistente] = useState(false)
   const temporizador = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Cuándo vence el temporizador de visibilidad (para calcular lo que falta al pausar).
   const vence = useRef(0)
   const restante = useRef(ms)
   // Espejo de `mensaje` para leerlo en `reanudar` sin efectos dentro de un actualizador de estado.
   const hayMensaje = useRef(false)
+  // Espejo de `persistente`: un mensaje temporal no puede reemplazar a uno persistente visible.
+  const esPersistente = useRef(false)
 
   useEffect(() => () => clearTimeout(temporizador.current), [])
 
@@ -27,6 +38,8 @@ export function useMensajeTemporal(ms = 6000) {
     setSaliendo(true)
     temporizador.current = setTimeout(() => {
       hayMensaje.current = false
+      esPersistente.current = false
+      setPersistente(false)
       setMensaje('')
       setSaliendo(false)
     }, SALIDA_MS)
@@ -43,11 +56,17 @@ export function useMensajeTemporal(ms = 6000) {
   )
 
   const mostrar = useCallback(
-    (texto: string) => {
+    (texto: string, opciones?: OpcionesAviso) => {
+      const fijo = opciones?.persistente === true
+      // Un persistente visible solo lo reemplaza otro persistente (o el usuario con «×»).
+      if (esPersistente.current && !fijo) return
       hayMensaje.current = texto !== ''
+      esPersistente.current = fijo && texto !== ''
+      setPersistente(esPersistente.current)
       setMensaje(texto)
       setSaliendo(false)
-      programar(ms)
+      if (esPersistente.current) clearTimeout(temporizador.current)
+      else programar(ms)
     },
     [ms, programar],
   )
@@ -64,8 +83,8 @@ export function useMensajeTemporal(ms = 6000) {
 
   const reanudar = useCallback(() => {
     // Sin mensaje no hay nada que reanudar (evita arrancar un temporizador de un aviso ya cerrado).
-    if (hayMensaje.current) programar(Math.max(restante.current, MINIMO_TRAS_PAUSA_MS))
+    if (hayMensaje.current && !esPersistente.current) programar(Math.max(restante.current, MINIMO_TRAS_PAUSA_MS))
   }, [programar])
 
-  return { mensaje, saliendo, mostrar, cerrar, pausar, reanudar }
+  return { mensaje, saliendo, persistente, mostrar, cerrar, pausar, reanudar }
 }

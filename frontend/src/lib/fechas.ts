@@ -511,6 +511,17 @@ export const mensajeEventoGuardadoConRecordatorio = (titulo: string, inicioIso: 
 export const mensajeEventoRecordatorioNoMovido = (titulo: string, inicioIso: string, finIso: string, motivo: string) =>
   `${mensajeEventoGuardado(titulo, inicioIso, finIso)}, pero no se pudo mover el recordatorio (${motivo}). Revísalo en «Recordatorio…»`
 
+/** Por qué no hay casilla para mover el recordatorio de una tarea: ya se envió (2b). */
+export const notaRecordatorioTareaYaEnviado = (fechaHora: string) =>
+  `El recordatorio de esta tarea ya se envió (el ${formatearFechaHoraCorta(fechaHora)}), así que no se mueve.`
+
+/** Por qué no hay casilla para mover el recordatorio de un evento: ya se envió (2b). */
+export const notaRecordatorioEventoYaEnviado = (fechaHora: string) =>
+  `El recordatorio de este evento ya se envió (el ${formatearFechaHoraCorta(fechaHora)}), así que no se moverá. Puedes cambiarlo desde «Recordatorio…».`
+
+/** Descripción del diálogo de recordatorio cuando el recordatorio ya se envió. */
+export const descripcionRecordatorioYaEnviado = () => 'Este recordatorio ya se envió. Si cambias la fecha, volverá a quedar pendiente.'
+
 /** Nota del diálogo de edición cuando no se pudo consultar el recordatorio y el inicio cambió. */
 export const notaRecordatorioEventoNoConsultado = () => 'No se pudo consultar el recordatorio de este evento: si tiene uno, no se moverá.'
 

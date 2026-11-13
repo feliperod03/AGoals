@@ -16,7 +16,8 @@ function Pagina() {
     <div>
       <button onClick={() => c.mostrar('Guardada en el cofre')}>uno</button>
       <button onClick={() => c.mostrar('Tarea cancelada')}>dos</button>
-      <Aviso mensaje={c.mensaje} saliendo={c.saliendo} alCerrar={c.cerrar} alPausar={c.pausar} alReanudar={c.reanudar} />
+      <button onClick={() => c.mostrar('Pospuesta, pero el recordatorio no se movió', { persistente: true })}>parcial</button>
+      <Aviso mensaje={c.mensaje} saliendo={c.saliendo} persistente={c.persistente} alCerrar={c.cerrar} alPausar={c.pausar} alReanudar={c.reanudar} />
     </div>
   )
 }
@@ -126,5 +127,25 @@ describe('Aviso', () => {
     render(<Pagina />)
     const contenedor = screen.getByRole('status').parentElement!.parentElement as HTMLElement
     expect(contenedor).toHaveClass('pointer-events-none', 'z-[60]')
+  })
+
+  it('un aviso persistente sigue ahí, se marca y se cierra con «×»', () => {
+    render(<Pagina />)
+    clic(screen.getByText('parcial'))
+    const burbuja = screen.getByRole('status').parentElement as HTMLElement
+    expect(burbuja).toHaveAttribute('data-persistente', 'true')
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+    avanzar(60_000)
+    expect(screen.getByRole('status')).toHaveTextContent('Pospuesta, pero')
+    clic(cerrar())
+    avanzar(SALIDA_MS)
+    expect(screen.getByRole('status')).toHaveTextContent('')
+    expect(screen.getByRole('status').parentElement).not.toHaveAttribute('data-persistente')
+  })
+
+  it('un aviso normal no lleva la marca de persistente', () => {
+    render(<Pagina />)
+    clic(screen.getByText('uno'))
+    expect(screen.getByRole('status').parentElement).not.toHaveAttribute('data-persistente')
   })
 })

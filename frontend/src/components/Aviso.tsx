@@ -7,6 +7,8 @@ interface Props {
   mensaje: string
   /** Fase de salida: la burbuja se desvanece antes de desmontarse (la controla el hook con un temporizador). */
   saliendo: boolean
+  /** Fallo parcial: no expira solo (lo controla el hook); se distingue con el borde. */
+  persistente?: boolean
   alCerrar: () => void
   alPausar: () => void
   alReanudar: () => void
@@ -21,7 +23,7 @@ interface Props {
  * El contenedor no captura clics (`pointer-events-none`); solo la burbuja, que además queda por encima del
  * overlay de los diálogos (`z-[60]` > `z-50`).
  */
-export function Aviso({ mensaje, saliendo, alCerrar, alPausar, alReanudar }: Props) {
+export function Aviso({ mensaje, saliendo, persistente = false, alCerrar, alPausar, alReanudar }: Props) {
   // Cambiar de un hijo a otro de la burbuja no es "salir": solo se reanuda al irse del todo.
   const alSalirElFoco = (e: FocusEvent<HTMLDivElement>) => {
     if (!e.currentTarget.contains(e.relatedTarget)) alReanudar()
@@ -31,11 +33,13 @@ export function Aviso({ mensaje, saliendo, alCerrar, alPausar, alReanudar }: Pro
     <div className="pointer-events-none fixed right-4 bottom-4 z-[60] max-sm:inset-x-4 max-sm:flex max-sm:justify-center">
       <div
         data-estado={saliendo ? 'saliendo' : 'visible'}
+        data-persistente={mensaje && persistente ? 'true' : undefined}
         className={cn(
           mensaje
             ? [
-                'pointer-events-auto flex max-w-sm items-start gap-3 rounded-xl border border-line bg-card py-2.5 pr-2 pl-4 text-sm text-tx shadow-card',
+                'pointer-events-auto flex max-w-sm items-start gap-3 rounded-xl border bg-card py-2.5 pr-2 pl-4 text-sm text-tx shadow-card',
                 'motion-safe:animate-in motion-safe:slide-in-from-bottom-2 fade-in duration-200',
+                persistente ? 'border-alta' : 'border-line',
                 'transition-opacity data-[estado=saliendo]:opacity-0 motion-safe:transition-[opacity,translate] motion-safe:data-[estado=saliendo]:translate-y-2',
               ]
             : 'sr-only',

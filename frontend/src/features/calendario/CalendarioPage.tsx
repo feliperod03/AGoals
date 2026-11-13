@@ -93,6 +93,7 @@ export function CalendarioPage() {
       <Aviso
         mensaje={confirmacion.mensaje}
         saliendo={confirmacion.saliendo}
+        persistente={confirmacion.persistente}
         alCerrar={confirmacion.cerrar}
         alPausar={confirmacion.pausar}
         alReanudar={confirmacion.reanudar}

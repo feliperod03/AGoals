@@ -317,8 +317,30 @@ describe('EventoDialog: mover el recordatorio con el inicio (9e)', () => {
     await screen.findByRole('checkbox', { name: /Mover también/ })
     await user.click(guardar())
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar evento' })).not.toBeInTheDocument())
-    expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('pero no se pudo mover el recordatorio (El recordatorio ya fue enviado)'))
+    // Fallo parcial: el aviso es persistente (no expira solo).
+    expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('pero no se pudo mover el recordatorio (El recordatorio ya fue enviado)'), {
+      persistente: true,
+    })
     expect(actualizarRecordatorio).toHaveBeenCalledTimes(1)
+  })
+
+  it('el aviso de un guardado completo NO es persistente', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '09:30')
+    await screen.findByRole('checkbox', { name: /Mover también/ })
+    await user.click(guardar())
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    expect(alMensaje).toHaveBeenCalledWith(expect.any(String))
+  })
+
+  it('recordatorio ya enviado: sin casilla y con la explicación (solo si cambió el inicio)', async () => {
+    await montar(true, [recordatorio({ enviado: true })])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    expect(screen.queryByText(/ya se envió \(el /)).not.toBeInTheDocument()
+    cambiar('Hora de inicio', '09:30')
+    expect(await screen.findByText(/El recordatorio de este evento ya se envió \(el .*\), así que no se moverá/)).toBeInTheDocument()
+    expect(casilla()).not.toBeInTheDocument()
   })
 
   it('consulta fallida: nota visible y se guarda el evento sin mover nada', async () => {

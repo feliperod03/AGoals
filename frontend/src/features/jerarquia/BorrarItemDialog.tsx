@@ -53,6 +53,8 @@ function ContenidoBorrado<T extends ItemJerarquico, R>({
   }
 
   function elegir(clave: CategoriaBorrado, eleccion: Eleccion) {
+    // El error de un DELETE fallido era de la elección anterior: al cambiarla deja de valer (no mientras borra).
+    if (!borrado.pendiente) borrado.limpiarError()
     setElecciones((actuales) => ({ ...actuales, [clave]: eleccion }))
   }
 

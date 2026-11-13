@@ -54,6 +54,7 @@ export function HoyPage() {
       <Aviso
         mensaje={confirmacion.mensaje}
         saliendo={confirmacion.saliendo}
+        persistente={confirmacion.persistente}
         alCerrar={confirmacion.cerrar}
         alPausar={confirmacion.pausar}
         alReanudar={confirmacion.reanudar}
@@ -83,7 +84,16 @@ export function HoyPage() {
         </aside>
       </div>
 
-      <TareaDialog abierto={dialogo} alCerrar={() => setDialogo(null)} alGuardar={confirmacion.mostrar} acciones={acciones} />
+      <TareaDialog
+        abierto={dialogo}
+        alCerrar={() => {
+          // El error de una acción lanzada desde el diálogo es del diálogo: no queda colgado en la lista.
+          acciones.limpiarError()
+          setDialogo(null)
+        }}
+        alGuardar={confirmacion.mostrar}
+        acciones={acciones}
+      />
       <RecomendacionDialog
         abierto={recomendacionAbierta}
         alCerrar={() => setRecomendacionAbierta(false)}
