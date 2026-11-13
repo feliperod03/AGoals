@@ -45,3 +45,20 @@ describe('Cofre: «Proyecto y objetivo…»', () => {
     )
   })
 })
+
+describe('Cofre: foco desde el menú «⋯»', () => {
+  it('al cerrar «Proyecto y objetivo…» con Escape, el foco vuelve al «⋯» de la fila', async () => {
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <CofrePage />
+      </QueryClientProvider>,
+    )
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Embalar»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Proyecto y objetivo…' }))
+    await screen.findByRole('dialog', { name: 'Proyecto y objetivo de «Embalar»' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Embalar»' })).toHaveFocus())
+  })
+})

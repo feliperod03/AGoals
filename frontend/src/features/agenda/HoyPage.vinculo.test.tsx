@@ -123,3 +123,25 @@ describe('Hoy: «Proyecto y objetivo…»', () => {
     expect(Object.keys(request)).not.toContain('objetivoId')
   })
 })
+
+describe('Hoy: foco desde el menú «⋯»', () => {
+  it('al cerrar «Proyecto y objetivo…» con Escape, el foco vuelve al «⋯» de la fila', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await abrirDesdeMenu(user)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Comprar pan»' })).toHaveFocus())
+  })
+
+  it.each(['Posponer', 'Agregar subtarea', 'Recordatorio…', 'Borrar'])('al cerrar «%s» con Escape, el foco vuelve al «⋯» de la fila', async (opcion) => {
+    const user = userEvent.setup()
+    renderizar()
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Comprar pan»' }))
+    await user.click(await screen.findByRole('menuitem', { name: opcion }))
+    await screen.findByRole('dialog')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Comprar pan»' })).toHaveFocus())
+  })
+})

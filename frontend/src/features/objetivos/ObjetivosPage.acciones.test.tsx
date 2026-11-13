@@ -128,3 +128,15 @@ describe('ObjetivosPage: acciones', () => {
     await waitFor(() => expect(aviso()).toHaveTextContent('«Correr 10 km» borrado'))
   })
 })
+
+describe('ObjetivosPage: foco desde el menú «⋯»', () => {
+  it('al cerrar «Editar» con Escape, el foco vuelve al «⋯» de esa fila', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Salud')
+    await abrirMenu(user, 'Salud', 'Editar')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Salud»' })).toHaveFocus())
+  })
+})

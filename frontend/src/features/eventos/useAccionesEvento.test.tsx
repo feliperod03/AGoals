@@ -162,7 +162,8 @@ describe('useAccionesEvento: borrar', () => {
     expect(borrarEvento).toHaveBeenCalledWith(9)
     expect(result.current.borrado).toBeNull()
     expect(result.current.dialogo).toBeNull()
-    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]'])
+    // `['recordatorios']` dos veces: el resto (refetch) y la consulta del evento borrado (solo obsoleta, sin refetch).
+    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]', '["recordatorios"]'])
   })
 
   it('sin recordatorio el aviso no lo menciona', async () => {
@@ -193,7 +194,8 @@ describe('useAccionesEvento: borrar', () => {
     expect(result.current.borrado).toBeNull()
     expect(result.current.dialogo).toBeNull()
     expect(result.current.errorBorrar).toBeNull()
-    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]'])
+    // `['recordatorios']` dos veces: el resto (refetch) y la consulta del evento borrado (solo obsoleta, sin refetch).
+    expect(claves()).toEqual(['["eventos"]', '["recordatorios"]', '["recordatorios"]'])
   })
 
   it('500: la confirmación queda abierta con el mensaje y no refresca', async () => {

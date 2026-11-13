@@ -32,6 +32,6 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
    - **9e Mover el recordatorio al mover el evento** (hecha, `d949a6b`): al guardar un evento con otro inicio, su recordatorio sin enviar acompaña (casilla marcada por defecto; conserva la distancia al inicio; fallo parcial sin reintento).
 10. **Pulido 2**, en tres partes más una rebanada aparte (solo frontend; lista detallada en `docs/frontend-diseno.md`):
    - **2a Aspecto y tema** (hecha, `eed9465`): toggle manual de tema (Sistema / Claro / Oscuro, sin parpadeo), hover de filas, estética de Proyectos y Objetivos, selección del calendario en oscuro, scroll al panel del día, formato de hora unificado y objetivos táctiles de 44 px.
-   - **2b Foco, avisos y errores**: foco del teclado, errores compartidos, avisos persistentes en los fallos parciales, textos que explican el porqué y avisos para lectores de pantalla.
-   - **2c Limpieza técnica**: duplicados, código muerto, nombres y una consulta compartida de proyectos y objetivos.
+   - **2b Foco, avisos y errores** (hecha, `fea13c6` y `6666020`): avisos persistentes en los fallos parciales, errores con dueño y descartables, textos que explican el porqué, foco devuelto al cerrar diálogos, foco al quitar un chip del Cofre y Escape fuera del selector. Lectores de pantalla quedó fuera (Futuro).
+   - **2c Limpieza técnica** (próxima): foco desde los menús «⋯», duplicados, código muerto, nombres y una consulta compartida de proyectos y objetivos.
    - **9f Vista de día** (opcional, después de 2c): vista de cualquier fecha con tareas y horas, como Hoy.

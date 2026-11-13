@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
+import { tomarDisparador } from './retornoFoco'
 
 // Dialog al estilo shadcn sobre Radix: Radix se ocupa del foco dentro (queda atrapado), de Escape y de
 // los roles ARIA. Devolver el foco al cerrar lo hacemos nosotros: sin un `Trigger` de Radix (los
@@ -22,8 +23,8 @@ function DialogContent(props: React.ComponentProps<typeof DialogPrimitive.Conten
 
 function ContenidoAbierto({ className, children, onCloseAutoFocus, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   // Se monta al abrir, justo antes de que Radix mueva el foco adentro: lo que tiene el foco ahora es el
-  // disparador. Se lee una sola vez.
-  const [disparador] = React.useState(() => document.activeElement)
+  // disparador (o, si lo abrió un ítem de menú, el botón del menú). Se lee una sola vez.
+  const [disparador] = React.useState(() => tomarDisparador() ?? document.activeElement)
 
   function alCerrarFoco(e: Event) {
     onCloseAutoFocus?.(e)

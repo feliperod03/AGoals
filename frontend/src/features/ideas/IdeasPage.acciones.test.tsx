@@ -574,3 +574,20 @@ describe('IdeasPage: borrar', () => {
     expect(borrarIdea).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('IdeasPage: foco desde el menú «⋯»', () => {
+  it('al cerrar «Editar» con Escape, el foco vuelve al «⋯» de esa fila', async () => {
+    const { user } = await iniciar()
+    await abrirMenu(user, 'Primera', 'Editar')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Primera»' })).toHaveFocus())
+  })
+
+  it('al cerrar «Concluir» con «Cancelar», el foco vuelve al «⋯» de esa fila', async () => {
+    const { user } = await iniciar()
+    const dialogo = await abrirMenu(user, 'Primera', 'Concluir')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Primera»' })).toHaveFocus())
+  })
+})

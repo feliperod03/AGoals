@@ -345,3 +345,24 @@ describe('ProyectosPage: borrar', () => {
     expect(nombres()).toContain('Otro')
   })
 })
+
+describe('ProyectosPage: foco desde el menú «⋯»', () => {
+  it('al cerrar «Editar» con Escape, el foco vuelve al «⋯» de esa fila', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Casa')
+    await abrirMenu(user, 'Casa', 'Editar')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Casa»' })).toHaveFocus())
+  })
+
+  it('al cancelar «Borrar», el foco vuelve al «⋯» de esa fila', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Casa')
+    const dialogo = await abrirMenu(user, 'Casa', 'Borrar')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Casa»' })).toHaveFocus())
+  })
+})

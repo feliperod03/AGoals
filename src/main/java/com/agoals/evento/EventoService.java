@@ -69,8 +69,8 @@ public class EventoService {
 	}
 
 	/**
-	 * Sin 409: hoy nada depende de un evento. Cuando exista el módulo recordatorio (7b), un evento con
-	 * recordatorio también se podrá borrar y la base borrará el recordatorio en cascada (ON DELETE CASCADE).
+	 * Sin 409: nada impide borrar un evento. Si tiene recordatorio, la base lo borra en cascada
+	 * (recordatorio.evento_id ... ON DELETE CASCADE, ver V1): este servicio no lo toca.
 	 */
 	public void eliminar(Long id) {
 		repository.delete(buscar(id));

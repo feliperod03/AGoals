@@ -161,6 +161,14 @@ describe('RecomendacionDialog: lista', () => {
     renderizar({ aviso: '«X» agendada para hoy' })
     expect(await screen.findByRole('status')).toHaveTextContent('«X» agendada para hoy')
   })
+
+  // Comportamiento conocido (Pulido 2c): el diálogo muestra el aviso de la PÁGINA, venga de la acción que venga (aquí uno
+  // que no nació en el diálogo). Hoy no lo distingue ni lo limpia al abrir: el aviso temporal de la página expira solo.
+  it('muestra el aviso de la página aunque no nazca de una acción del diálogo, y no avisa por su cuenta', async () => {
+    renderizar({ aviso: 'Tarea «Y» guardada' })
+    expect(await screen.findByRole('status')).toHaveTextContent('Tarea «Y» guardada')
+    expect(avisos).toEqual([])
+  })
 })
 
 describe('RecomendacionDialog: orden y sentido', () => {

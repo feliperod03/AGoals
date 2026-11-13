@@ -179,6 +179,16 @@ describe('BorrarEventoDialog', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo evento' })).toHaveFocus())
   })
 
+  it('tras borrar no vuelve a pedir el recordatorio del evento que ya no existe (H3)', async () => {
+    const user = await abrirBorrado()
+    await waitFor(() => expect(confirmacion().getByRole('button', { name: 'Borrar' })).toBeEnabled())
+    const antes = vi.mocked(getRecordatoriosDeEvento).mock.calls.length
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarEvento).toHaveBeenCalledWith(9)
+    expect(vi.mocked(getRecordatoriosDeEvento).mock.calls.length).toBe(antes)
+  })
+
   it('doble clic en «Borrar» = un solo DELETE; mientras borra todo queda deshabilitado', async () => {
     const respuesta = pendiente<void>()
     vi.mocked(borrarEvento).mockReturnValue(respuesta.promesa)

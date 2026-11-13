@@ -99,6 +99,12 @@ async function guardarEvento({ id, request, inicioViejo, recordatorio }: Variabl
   }
 }
 
+/** ¿Es la consulta `['recordatorios', { eventoId }]` de ese evento? */
+function esConsultaDelEvento(clave: readonly unknown[], eventoId: number): boolean {
+  const filtro = clave[1]
+  return typeof filtro === 'object' && filtro !== null && 'eventoId' in filtro && filtro.eventoId === eventoId
+}
+
 /**
  * Crear, editar y borrar eventos (9c), y abrir el recordatorio del evento (9d; la mutación es la de `RecordatorioDialog`). Una sola mutación a la vez: el guard es un `useRef` (no `isPending`, que se
  * actualiza en el siguiente render y dejaría pasar un doble clic) y se libera en `onSettled`.
@@ -122,6 +128,17 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
   const disparadorRecordatorio = useRef<HTMLElement | null>(null)
 
   const invalidarEventos = () => queryClient.invalidateQueries({ queryKey: ['eventos'] })
+  /**
+   * Tras borrar: la consulta `['recordatorios', { eventoId }]` del evento borrado sigue montada (los diálogos aún
+   * están abiertos) y refrescarla pediría los recordatorios de algo que ya no existe. Se marca obsoleta SIN refetch;
+   * el resto de `['recordatorios']` (banner de vencidos, Próximos) se refresca como siempre.
+   */
+  const invalidarTrasBorrar = (eventoId: number) =>
+    Promise.all([
+      invalidarEventos(),
+      queryClient.invalidateQueries({ queryKey: ['recordatorios'], predicate: (q) => !esConsultaDelEvento(q.queryKey, eventoId) }),
+      queryClient.invalidateQueries({ queryKey: ['recordatorios'], predicate: (q) => esConsultaDelEvento(q.queryKey, eventoId), refetchType: 'none' }),
+    ])
   const invalidarTodo = () => Promise.all([invalidarEventos(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
   const liberar = () => {
     enCurso.current = false
@@ -164,7 +181,7 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
       }
     },
     onSuccess: async (resultado, { evento, conRecordatorio }) => {
-      await invalidarTodo()
+      await invalidarTrasBorrar(evento.id)
       setABorrar(null)
       setDialogo(null)
       alMensaje(resultado === 'borrado' ? mensajeEventoBorrado(evento.titulo, conRecordatorio) : mensajeEventoYaNoExistia(evento.titulo))
