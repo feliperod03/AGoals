@@ -3,7 +3,7 @@ import { Ellipsis } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { Tarea } from '@/types/tarea'
-import { puedeAgregarSubtarea, puedePosponer } from './formularioTarea'
+import { esTareaAbierta, puedePosponer } from './formularioTarea'
 import type { Acciones } from './useAccionesTarea'
 
 const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
@@ -22,12 +22,12 @@ export function MenuAcciones({ tarea, acciones, alAgendar }: { tarea: Tarea; acc
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {alAgendar && <DropdownMenuItem onSelect={() => alAgendar(tarea)}>Agendar para hoy</DropdownMenuItem>}
-        {puedeAgregarSubtarea(tarea) && (
+        {esTareaAbierta(tarea) && (
           <DropdownMenuItem onSelect={() => acciones.pedirSubtarea(tarea)}>Agregar subtarea</DropdownMenuItem>
         )}
         {puedePosponer(tarea) && <DropdownMenuItem onSelect={() => acciones.pedirPosponer(tarea)}>Posponer</DropdownMenuItem>}
         <DropdownMenuItem onSelect={() => acciones.pedirVinculo(tarea)}>Proyecto y objetivo…</DropdownMenuItem>
-        {puedeAgregarSubtarea(tarea) && <DropdownMenuItem onSelect={() => acciones.pedirRecordatorio(tarea)}>Recordatorio…</DropdownMenuItem>}
+        {esTareaAbierta(tarea) && <DropdownMenuItem onSelect={() => acciones.pedirRecordatorio(tarea)}>Recordatorio…</DropdownMenuItem>}
         {cancelada ? (
           <DropdownMenuItem onSelect={() => acciones.ejecutar('reactivar', tarea)}>Reactivar</DropdownMenuItem>
         ) : (

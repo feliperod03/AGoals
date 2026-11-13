@@ -1,8 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { getObjetivos } from '@/api/objetivos'
-import { getProyectos } from '@/api/proyectos'
 import { PrioridadChip } from '@/components/PrioridadChip'
 import { Button } from '@/components/ui/button'
 import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
@@ -15,6 +12,8 @@ import { normalizarTexto } from '@/lib/texto'
 import { cn } from '@/lib/utils'
 import type { Tarea } from '@/types/tarea'
 import { candidatasTareaParaDestino, type TipoVinculo } from './candidatosVinculo'
+import { esAbierto } from './tipos'
+import { useObjetivos, useProyectos } from './useListasVinculo'
 import { useVincularTarea } from './useVincularTarea'
 
 interface Props {
@@ -43,10 +42,9 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
   const tipo: TipoVinculo = campo === 'proyectoId' ? 'proyecto' : 'objetivo'
   const tareas = useTodasLasTareas()
   // Mismas claves que el resto de la app (la página ya las tiene en caché); sirven para nombrar el otro proyecto/objetivo.
-  const nombres = useQuery({
-    queryKey: [tipo === 'proyecto' ? 'proyectos' : 'objetivos'],
-    queryFn: tipo === 'proyecto' ? getProyectos : getObjetivos,
-  })
+  const proyectos = useProyectos()
+  const objetivos = useObjetivos()
+  const nombres = tipo === 'proyecto' ? proyectos : objetivos
   const vinculo = useVincularTarea({ alMensaje })
   const [vinculando, setVinculando] = useState(false)
   const destino = { id, nombre }
@@ -59,7 +57,7 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
     if (!todas) return undefined
     const ligadas = todas
       .filter((t) => t[campo] === id)
-      .sort((a, b) => Number(esCerrada(a.estado)) - Number(esCerrada(b.estado)) || normalizarTexto(a.titulo).localeCompare(normalizarTexto(b.titulo), 'es') || a.id - b.id)
+      .sort((a, b) => Number(!esAbierto(a.estado)) - Number(!esAbierto(b.estado)) || normalizarTexto(a.titulo).localeCompare(normalizarTexto(b.titulo), 'es') || a.id - b.id)
     return { total: ligadas.length, nodos: armarArbol(todas, ligadas) }
   }, [tareas.data, campo, id])
 
@@ -113,8 +111,6 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
   )
 }
 
-const esCerrada = (estado: string) => estado === 'HECHO' || estado === 'CANCELADO'
-
 interface PropsFila {
   nodo: NodoCofre
   campo: Props['campo']
@@ -127,7 +123,7 @@ interface PropsFila {
 function Fila({ nodo, ...resto }: PropsFila) {
   const { campo, id, tipo, pendiente, alQuitar } = resto
   const { tarea, subtareas, madre } = nodo
-  const cerrada = esCerrada(tarea.estado)
+  const cerrada = !esAbierto(tarea.estado)
   // Las subtareas anidadas bajo su madre pueden no ser del proyecto/objetivo: solo se quita lo ligado directamente.
   const directa = tarea[campo] === id
   return (

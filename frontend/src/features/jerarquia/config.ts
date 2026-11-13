@@ -7,6 +7,7 @@ import type { Estado } from '@/types/tarea'
 import type { DefCategoria } from './borrado'
 import { aRequestObjetivo, aRequestProyecto, requestObjetivoDe, requestProyectoDe, type ValoresItem } from './formulario'
 import type { ItemJerarquico } from './tipos'
+import { CLAVE_OBJETIVOS, CLAVE_PROYECTOS } from './useListasVinculo'
 
 /**
  * Todo lo que distingue a proyectos de objetivos para las pantallas compartidas de `features/jerarquia/`:
@@ -53,7 +54,7 @@ export interface ConfigJerarquia<T extends ItemJerarquico, R> {
 }
 
 export const CONFIG_PROYECTO: ConfigJerarquia<Proyecto, ProyectoRequest> = {
-  claveLista: ['proyectos'],
+  claveLista: CLAVE_PROYECTOS,
   rutaBase: '/proyectos',
   etiqueta: 'Proyecto',
   singular: 'proyecto',
@@ -86,7 +87,7 @@ export const CONFIG_PROYECTO: ConfigJerarquia<Proyecto, ProyectoRequest> = {
 }
 
 export const CONFIG_OBJETIVO: ConfigJerarquia<Objetivo, ObjetivoRequest> = {
-  claveLista: ['objetivos'],
+  claveLista: CLAVE_OBJETIVOS,
   rutaBase: '/objetivos',
   etiqueta: 'Objetivo',
   singular: 'objetivo',

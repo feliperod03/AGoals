@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Campo } from '@/components/Campo'
 import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
 import { CAMPO } from '@/features/cofre/estilos'
 import { candidatosParaTarea, nombreDe } from '@/features/jerarquia/candidatosVinculo'
@@ -191,21 +192,5 @@ function Radio({
       <input type="radio" name="idea-ligada-a" value={valor} checked={elegido === valor} disabled={deshabilitado && elegido !== valor} onChange={() => alElegir(valor)} className="accent-acc" />
       {etiqueta}
     </label>
-  )
-}
-
-function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string; error?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
-        {etiqueta}
-      </label>
-      {children}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-tx">
-          {error}
-        </p>
-      )}
-    </div>
   )
 }

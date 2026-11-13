@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { objetivo, proyecto } from '@/features/jerarquia/fabrica'
-import { renderizarIdeas } from '@/test/renderIdeas'
+import { renderizarIdeas } from './renderIdeas'
 import type { Idea } from '@/types/idea'
 import { idea } from './fabrica'
 

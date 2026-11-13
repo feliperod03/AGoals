@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Campo } from '@/components/Campo'
 import { mensajeGuardada, mensajeMadreCambiada, mensajeSubtareaAgregada } from '@/lib/fechas'
 import type { Tarea } from '@/types/tarea'
 import { candidatasMadre } from './candidatasMadre'
@@ -11,7 +12,7 @@ import { useTodasLasTareas } from './useTodasLasTareas'
 import {
   MAX_TITULO,
   aRequest,
-  puedeAgregarSubtarea,
+  esTareaAbierta,
   puedePosponer,
   validarHoraFin,
   validarHoraInicio,
@@ -294,7 +295,7 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
           {hecha ? 'Reabrir' : 'Marcar hecha'}
         </Button>
       )}
-      {puedeAgregarSubtarea(tarea) && (
+      {esTareaAbierta(tarea) && (
         // La elección (crear / vincular) se abre encima, como Posponer y Borrar. Ojo: solo "Crear una nueva"
         // REEMPLAZA la edición por la creación, y entonces lo escrito en el formulario y sin guardar se pierde.
         <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirSubtarea(tarea)}>
@@ -305,7 +306,7 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
       <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirVinculo(tarea)}>
         Proyecto y objetivo…
       </Button>
-      {puedeAgregarSubtarea(tarea) && (
+      {esTareaAbierta(tarea) && (
         // Como «Proyecto y objetivo…»: se abre encima de la edición y no toca lo escrito en el formulario.
         <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirRecordatorio(tarea)}>
           Recordatorio…
@@ -319,22 +320,6 @@ function AccionesDeLaTarea({ tarea, acciones, bloqueado }: { tarea: Tarea; accio
       <Button type="button" variant="ghost" size="sm" disabled={deshabilitado} onClick={() => acciones.pedirBorrado(tarea)}>
         Borrar
       </Button>
-    </div>
-  )
-}
-
-function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string; error?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
-        {etiqueta}
-      </label>
-      {children}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-tx">
-          {error}
-        </p>
-      )}
     </div>
   )
 }

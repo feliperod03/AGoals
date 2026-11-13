@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { objetivo, proyecto } from '@/features/jerarquia/fabrica'
-import { renderizarIdeas } from '@/test/renderIdeas'
+import { renderizarIdeas } from './renderIdeas'
 import { idea } from './fabrica'
 
 vi.mock('@/api/ideas', () => ({ getIdeas: vi.fn(), crearIdea: vi.fn(), actualizarIdea: vi.fn(), concluirIdea: vi.fn(), reabrirIdea: vi.fn(), borrarIdea: vi.fn() }))

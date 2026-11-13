@@ -1,9 +1,10 @@
 import { parseISO } from 'date-fns'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Campo } from '@/components/Campo'
 import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
 import { yaPaso, type ConsultaRecordatorio } from '@/features/agenda/recordatorioForm'
 import { useRecordatorioDeEvento } from '@/features/agenda/useRecordatorioDeEvento'
@@ -337,22 +338,6 @@ function Lapso({
       </div>
       {error && (
         <p id={idError} role="alert" className="text-xs text-tx">
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string; error?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
-        {etiqueta}
-      </label>
-      {children}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-tx">
           {error}
         </p>
       )}

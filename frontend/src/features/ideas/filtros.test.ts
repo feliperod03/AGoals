@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { proyecto } from '@/features/jerarquia/fabrica'
 import { idea } from './fabrica'
-import { FILTROS_POR_DEFECTO, filtrarIdeas, filtrosDesdeQuery, hayFiltrosActivos, ordenarIdeas, textoVacioIdeas, todosComoCandidatos, type FiltrosIdeas } from './filtros'
+import { FILTROS_POR_DEFECTO, filtrarIdeas, filtrosDesdeQuery, hayFiltrosActivos, ordenarIdeas, textoVacioIdeas, type FiltrosIdeas } from './filtros'
 
 const f = (parcial: Partial<FiltrosIdeas>): FiltrosIdeas => ({ ...FILTROS_POR_DEFECTO, ...parcial })
 
@@ -122,16 +121,6 @@ describe('hayFiltrosActivos', () => {
     expect(hayFiltrosActivos(f({ estado: 'todas' }))).toBe(true)
     expect(hayFiltrosActivos(f({ busqueda: 'a' }))).toBe(true)
     expect(hayFiltrosActivos(f({ vinculo: { tipo: 'sueltas' } }))).toBe(true)
-  })
-})
-
-describe('todosComoCandidatos', () => {
-  it('incluye también los cerrados, ordenados por nombre, con su estado', () => {
-    const lista = [proyecto({ id: 1, nombre: 'Zeta' }), proyecto({ id: 2, nombre: 'Alfa', estado: 'HECHO' })]
-    expect(todosComoCandidatos(lista).map((c) => [c.texto, c.detalle])).toEqual([
-      ['Alfa', 'Hecho'],
-      ['Zeta', 'Pendiente'],
-    ])
   })
 })
 

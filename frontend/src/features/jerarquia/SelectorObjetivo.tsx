@@ -26,6 +26,8 @@ export function SelectorObjetivo({ proyecto, objetivos, alMensaje }: Props) {
   const nombreActual = opciones.find((o) => o.id === actual)?.texto
   // Cargando: sin la lista solo está el actual y elegir otro no tendría sentido. Si falló se deja quitar el vínculo.
   const cargando = !objetivos.lista && !objetivos.error
+  // Con la lista cargada y sin ese id (objetivo borrado o dato roto) se conserva el valor, pero la opción lo dice.
+  const noDisponible = actual !== null && objetivos.lista !== undefined && !objetivos.lista.some((o) => o.id === actual)
 
   return (
     <div className="flex flex-col gap-1">
@@ -50,7 +52,7 @@ export function SelectorObjetivo({ proyecto, objetivos, alMensaje }: Props) {
           <option value="">Sin objetivo</option>
           {opciones.map((o) => (
             <option key={o.id} value={String(o.id)}>
-              {o.texto}
+              {noDisponible && o.id === actual ? `${o.texto} (no disponible)` : o.texto}
             </option>
           ))}
         </select>

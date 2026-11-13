@@ -119,11 +119,16 @@ describe('AvisoVencidos', () => {
   })
 
   it('con error 404 muestra el mensaje y vuelve a pedir la lista', async () => {
-    vencidos.mockResolvedValueOnce([recordatorio(1)]).mockResolvedValue([])
+    // El segundo `vencidos` queda en suspenso: la fila (y su mensaje) desaparecen al refrescar, así que el
+    // mensaje solo se puede comprobar antes de resolverlo.
+    let resolverSegundo: (r: ReturnType<typeof recordatorio>[]) => void = () => {}
+    vencidos.mockResolvedValueOnce([recordatorio(1)]).mockReturnValue(new Promise((r) => (resolverSegundo = r)))
     marcar.mockRejectedValue(new ApiError(404, 'No se encontró el recordatorio'))
     renderizar()
     await userEvent.click(await screen.findByRole('button', { name: 'Entendido: Recordatorio 1' }))
+    expect(await screen.findByText('No se encontró el recordatorio')).toBeInTheDocument()
     await waitFor(() => expect(vencidos).toHaveBeenCalledTimes(2))
+    resolverSegundo([])
     await waitFor(() => expect(screen.queryByText('Recordatorio 1')).not.toBeInTheDocument())
   })
 

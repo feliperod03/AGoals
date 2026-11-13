@@ -84,10 +84,8 @@ export function requestConPadre(tarea: Tarea, padreId: number | null): TareaRequ
   return aRequest(valoresIniciales(tarea), tarea, padreId)
 }
 
-/** Una tarea abierta (ni hecha ni cancelada) admite que le agreguen subtareas. */
-export function puedeAgregarSubtarea(tarea: Tarea): boolean {
-  return tarea.estado !== 'HECHO' && tarea.estado !== 'CANCELADO'
-}
+/** Una tarea abierta (ni hecha ni cancelada) admite subtareas y recordatorios. Misma regla que `esAbierta` de las candidatas a madre. */
+export { esAbierta as esTareaAbierta } from './candidatasMadre'
 
 /** Posponer solo tiene sentido en tareas abiertas con fecha (las sin fecha se agendan desde Recomendación). */
 export function puedePosponer(tarea: Tarea): boolean {

@@ -120,7 +120,6 @@ export function recortarParaCelda(elementos: ElementoDia[], max: number = MAX_PO
   return { visibles: elementos.slice(0, max - 1), ocultos: elementos.length - (max - 1) }
 }
 
-
 /**
  * Texto de la hora de un elemento: `09:30–10:00`; `desde 22:00` (primer día de un evento que sigue al día
  * siguiente); `Todo el día` (día intermedio de uno largo, o un tramo de 00:00 a 00:00 del día siguiente); `hasta 02:00` (su último día). Un evento que termina

@@ -1,6 +1,3 @@
-import type { CandidataBuscador } from '@/components/BuscadorLista'
-import { porNombre } from '@/features/jerarquia/candidatosPadre'
-import { ETIQUETA_ESTADO, type ItemJerarquico } from '@/features/jerarquia/tipos'
 import { compararFechaHora } from '@/lib/fechas'
 import { normalizarTexto } from '@/lib/texto'
 import type { Idea } from '@/types/idea'
@@ -99,9 +96,4 @@ export function textoVacioIdeas(f: FiltrosIdeas, nombres: NombresVinculoIdea): s
   const busqueda = f.busqueda.trim()
   if (busqueda) partes.push(`Título o descripción contiene «${busqueda}»`)
   return partes.length === 0 ? 'No hay ideas.' : `No hay ideas con estos filtros: ${partes.join(', ')}.`
-}
-
-/** Candidatas del filtro de vínculo: TODOS los proyectos/objetivos (una idea puede estar ligada a uno cerrado). */
-export function todosComoCandidatos<T extends ItemJerarquico>(items: T[]): CandidataBuscador<T>[] {
-  return [...items].sort(porNombre).map((i) => ({ item: i, texto: i.nombre, detalle: ETIQUETA_ESTADO[i.estado] }))
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Tarea } from '@/types/tarea'
-import { aRequest, puedeAgendarParaHoy, puedeAgregarSubtarea, puedePosponer, requestConEstado, requestConPadre, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
+import { aRequest, puedeAgendarParaHoy, esTareaAbierta, puedePosponer, requestConEstado, requestConPadre, requestSinFecha, validarHoraFin, validarHoraInicio, valoresIniciales } from './formularioTarea'
 
 const TAREA: Tarea = {
   id: 5,
@@ -98,12 +98,12 @@ describe('aRequest', () => {
   })
 })
 
-describe('puedeAgregarSubtarea', () => {
+describe('esTareaAbierta', () => {
   it('solo las tareas abiertas admiten subtareas', () => {
-    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'PENDIENTE' })).toBe(true)
-    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'EN_PAUSA' })).toBe(true)
-    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'HECHO' })).toBe(false)
-    expect(puedeAgregarSubtarea({ ...TAREA, estado: 'CANCELADO' })).toBe(false)
+    expect(esTareaAbierta({ ...TAREA, estado: 'PENDIENTE' })).toBe(true)
+    expect(esTareaAbierta({ ...TAREA, estado: 'EN_PAUSA' })).toBe(true)
+    expect(esTareaAbierta({ ...TAREA, estado: 'HECHO' })).toBe(false)
+    expect(esTareaAbierta({ ...TAREA, estado: 'CANCELADO' })).toBe(false)
   })
 })
 

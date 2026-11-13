@@ -1,8 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { getObjetivos } from '@/api/objetivos'
-import { getProyectos } from '@/api/proyectos'
 
 import { BuscadorLista } from '@/components/BuscadorLista'
 import { Button } from '@/components/ui/button'
@@ -12,6 +9,7 @@ import { useTodasLasTareas } from '@/features/agenda/useTodasLasTareas'
 import type { Tarea } from '@/types/tarea'
 import { CAMPO_DE, candidatosParaTarea, nombreDe, type TipoVinculo } from './candidatosVinculo'
 import type { ItemJerarquico } from './tipos'
+import { useObjetivos, useProyectos } from './useListasVinculo'
 import { useVincularTarea } from './useVincularTarea'
 
 interface Props {
@@ -44,8 +42,8 @@ function Contenido({ tarea, vinculo, alCerrar }: { tarea: Tarea; vinculo: Return
   const todas = useTodasLasTareas()
   // Las mismas claves y funciones que `useListaJerarquia`; se piden directo para no arrastrar `config.ts` (y todos los
   // endpoints de proyectos/objetivos) a Hoy y al Cofre.
-  const proyectos = useQuery({ queryKey: ['proyectos'], queryFn: getProyectos })
-  const objetivos = useQuery({ queryKey: ['objetivos'], queryFn: getObjetivos })
+  const proyectos = useProyectos()
+  const objetivos = useObjetivos()
   // Un solo buscador abierto a la vez.
   const [abierto, setAbierto] = useState<TipoVinculo | null>(null)
   // Tras cada cambio se refresca `['tareas','todas']` y el campo muestra el vínculo nuevo. Si esa lista no está

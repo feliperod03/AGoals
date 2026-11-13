@@ -35,8 +35,7 @@ interface Props<T extends { id: number }> {
 /**
  * Búsqueda por texto (en el cliente, sin tildes ni mayúsculas) y lista de botones nativos, para elegir un
  * elemento cualquiera. Se recorre con Tab y se activa con Enter o Espacio, sin gestionar foco virtual.
- * Al montarse enfoca la búsqueda. Versión genérica de `agenda/BuscadorTareas`, que sigue usando el selector de
- * madre y el vínculo de subtareas; migrarlo a este queda para Pulido 2.
+ * Al montarse enfoca la búsqueda. `agenda/BuscadorTareas` es su adaptador para tareas.
  */
 export function BuscadorLista<T extends { id: number }>({
   idInput,
