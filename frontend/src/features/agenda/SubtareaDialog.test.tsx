@@ -214,5 +214,7 @@ describe('SubtareaDialog', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Agregar subtarea a «Mudanza»' })).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: 'Editar tarea' })).toBeInTheDocument()
+    // El foco vuelve al botón que abrió el diálogo de elección, dentro del de edición
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Agregar subtarea' })).toHaveFocus())
   })
 })

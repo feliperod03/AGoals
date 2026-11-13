@@ -438,6 +438,20 @@ describe('CofrePage: agendar para hoy', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('Escape cierra sin agendar; desde el menú «⋯» no hay disparador válido y el foco no queda en un nodo desmontado (M15)', async () => {
+    const madre = tarea({ id: 1, titulo: 'Madre' })
+    vi.mocked(getTareas).mockResolvedValue([madre, tarea({ id: 2, titulo: 'Hija', padreId: 1 })])
+    const user = userEvent.setup()
+    renderizar()
+    await abrirMenu(user, 'Madre')
+    await user.click(screen.getByRole('menuitem', { name: 'Agendar para hoy' }))
+    await screen.findByRole('dialog', { name: 'Agendar para hoy' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(agendarTarea).not.toHaveBeenCalled()
+    expect(document.activeElement?.isConnected).toBe(true)
+  })
+
   it('desmarcar la casilla manda incluirSubtareas en false', async () => {
     const madre = tarea({ id: 1, titulo: 'Madre' })
     vi.mocked(getTareas).mockResolvedValue([madre, tarea({ id: 2, titulo: 'Hija', padreId: 1 })])
@@ -561,6 +575,46 @@ describe('CofrePage: chips de filtros activos', () => {
     expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Más filtros (2)' })).toBeInTheDocument()
     expect(titulos()).toEqual(['Sin fecha media'])
+  })
+
+  it('al quitar un chip el foco pasa al que ocupa su lugar, al anterior si era el último y a «Más filtros» si no quedan', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.selectOptions(screen.getByLabelText('Fecha'), 'rango')
+    await user.type(screen.getByLabelText('Desde'), '2026-11-03')
+    await user.selectOptions(screen.getByLabelText('Prioridad'), 'MEDIA')
+    await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
+    expect(chips()).toEqual(['Desde 3 de noviembre', 'Estado: Todas', 'Prioridad media'])
+
+    // El del medio: el foco queda en el que pasó a su lugar.
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Estado: Todas' }))
+    expect(chips()).toEqual(['Desde 3 de noviembre', 'Prioridad media'])
+    expect(screen.getByRole('button', { name: 'Quitar filtro: Prioridad media' })).toHaveFocus()
+
+    // El último: el foco va al anterior.
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Prioridad media' }))
+    expect(chips()).toEqual(['Desde 3 de noviembre'])
+    expect(screen.getByRole('button', { name: 'Quitar filtro: Desde 3 de noviembre' })).toHaveFocus()
+
+    // El único: la lista desaparece y el foco va a «Más filtros».
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Desde 3 de noviembre' }))
+    expect(lista()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Más filtros' })).toHaveFocus()
+  })
+
+  it('el primer chip quitado deja el foco en el siguiente, que pasa a ser el primero', async () => {
+    vi.mocked(getTareas).mockResolvedValue(TAREAS)
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Sin fecha media')
+    await user.click(screen.getByRole('button', { name: 'Más filtros' }))
+    await user.selectOptions(screen.getByLabelText('Prioridad'), 'MEDIA')
+    await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro: Estado: Todas' }))
+    expect(screen.getByRole('button', { name: 'Quitar filtro: Prioridad media' })).toHaveFocus()
   })
 
   it('un acceso rápido encendido no genera chip; los que no lo son, sí', async () => {

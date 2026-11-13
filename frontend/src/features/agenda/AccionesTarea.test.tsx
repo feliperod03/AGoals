@@ -402,6 +402,52 @@ describe('Acciones: desde el diálogo de edición', () => {
     await user.click(within(dialogo).getByRole('button', { name: 'Marcar hecha' }))
     expect(await within(dialogo).findByRole('alert')).toHaveTextContent('Tarea no encontrada: 7')
   })
+
+  describe('el foco vuelve al disparador al cerrar con Escape', () => {
+    it('Editar tarea → la fila que lo abrió', async () => {
+      const user = userEvent.setup()
+      renderizar([], [informe])
+      await abrirEdicion(user)
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(() => expect(screen.getByRole('button', { name: /Informe/ })).toHaveFocus())
+    })
+
+    it('Posponer → el botón «Posponer» del diálogo de edición', async () => {
+      const user = userEvent.setup()
+      renderizar([], [informe])
+      await user.click(within(await abrirEdicion(user)).getByRole('button', { name: 'Posponer' }))
+      await selectorListo(await screen.findByRole('dialog', { name: 'Posponer tarea' }))
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Posponer tarea' })).not.toBeInTheDocument())
+      await waitFor(() => expect(within(screen.getByRole('dialog', { name: 'Editar tarea' })).getByRole('button', { name: 'Posponer' })).toHaveFocus())
+    })
+
+    it('Borrar tarea → el botón «Borrar» del diálogo de edición', async () => {
+      const user = userEvent.setup()
+      renderizar([], [informe])
+      await user.click(within(await abrirEdicion(user)).getByRole('button', { name: 'Borrar' }))
+      await botonBorrarHabilitado(await screen.findByRole('dialog', { name: 'Borrar tarea' }))
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Borrar tarea' })).not.toBeInTheDocument())
+      await waitFor(() => expect(within(screen.getByRole('dialog', { name: 'Editar tarea' })).getByRole('button', { name: 'Borrar' })).toHaveFocus())
+    })
+  })
+})
+
+// M15: diálogos abiertos desde el menú «⋯». El ítem del menú se desmonta, así que no hay disparador
+// válido y el wrapper no fuerza nada (queda el comportamiento de antes). Este test documenta dónde cae.
+describe('Foco al cerrar un diálogo abierto desde el menú «⋯»', () => {
+  it('Borrar tarea: no lanza y el foco no queda en un ítem desmontado', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    await abrirMenu(user, 'Comprar pan')
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
+    await botonBorrarHabilitado(await screen.findByRole('dialog', { name: 'Borrar tarea' }))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(document.activeElement?.isConnected).toBe(true)
+  })
 })
 
 describe('Posponer: selector', () => {

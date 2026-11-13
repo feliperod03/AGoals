@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
@@ -74,6 +75,30 @@ beforeEach(() => {
   vi.mocked(getRecomendacion).mockResolvedValue(LISTA)
   vi.mocked(getProyectos).mockResolvedValue(PROYECTOS)
   vi.mocked(getObjetivos).mockResolvedValue(OBJETIVOS)
+})
+
+describe('RecomendacionDialog: foco', () => {
+  it('Escape cierra y el foco vuelve al botón que lo abrió', async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    function Arnes() {
+      const [abierto, setAbierto] = useState(false)
+      return (
+        <QueryClientProvider client={queryClient}>
+          <button type="button" onClick={() => setAbierto(true)}>
+            Recomendación
+          </button>
+          <RecomendacionDialog abierto={abierto} alCerrar={() => setAbierto(false)} hoy={HOY} aviso="" alAvisar={() => {}} />
+        </QueryClientProvider>
+      )
+    }
+    render(<Arnes />)
+    await user.click(screen.getByRole('button', { name: 'Recomendación' }))
+    await screen.findByText('Armar la casa')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Recomendación' })).toHaveFocus())
+  })
 })
 
 describe('RecomendacionDialog: lista', () => {

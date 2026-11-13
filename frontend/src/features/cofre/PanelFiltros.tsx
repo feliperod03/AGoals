@@ -1,5 +1,5 @@
 import { ArrowDownUp, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -60,9 +60,24 @@ const boton = (activo: boolean) =>
 /** Búsqueda, accesos rápidos, orden y "Más filtros" (filtros completos y elección de accesos rápidos). */
 export function PanelFiltros(p: Props) {
   const [abierto, setAbierto] = useState(false)
+  const botonMasFiltros = useRef<HTMLButtonElement>(null)
+  const zonaChips = useRef<HTMLDivElement>(null)
+  const chipQuitado = useRef<number | null>(null)
   const f = p.filtros
   const chips = chipsDeFiltros(f, p.anclados, p.nombres)
   const cambiar = (parche: Partial<FiltrosCofre>) => p.alCambiarFiltros({ ...f, ...parche })
+
+  // Al quitar un chip su botón desaparece y el foco caería a <body>. Lo devolvemos al chip que ocupa ese
+  // lugar (o al anterior si era el último) y, si no queda ninguno, a «Más filtros». Vive aquí y no en
+  // FiltrosActivos porque la lista entera desaparece cuando no quedan chips.
+  useEffect(() => {
+    const indice = chipQuitado.current
+    if (indice === null) return
+    chipQuitado.current = null
+    const botones = zonaChips.current?.querySelectorAll<HTMLButtonElement>('button')
+    if (botones && botones.length > 0) botones[Math.min(indice, botones.length - 1)]?.focus()
+    else botonMasFiltros.current?.focus()
+  }, [chips])
 
   function alternarAncla(id: PresetId, marcado: boolean) {
     p.alCambiarAnclados(marcado ? [...p.anclados, id] : p.anclados.filter((a) => a !== id))
@@ -108,6 +123,7 @@ export function PanelFiltros(p: Props) {
           </div>
         )}
         <button
+          ref={botonMasFiltros}
           type="button"
           aria-expanded={abierto}
           aria-controls="cofre-mas-filtros"
@@ -124,7 +140,15 @@ export function PanelFiltros(p: Props) {
         )}
       </div>
 
-      <FiltrosActivos chips={chips} alQuitar={(chip) => p.alCambiarFiltros({ ...f, ...chip.quitar })} />
+      <div ref={zonaChips} className="contents">
+        <FiltrosActivos
+          chips={chips}
+          alQuitar={(chip, indice) => {
+            chipQuitado.current = indice
+            p.alCambiarFiltros({ ...f, ...chip.quitar })
+          }}
+        />
+      </div>
 
       {abierto && (
         <div id="cofre-mas-filtros" className="flex flex-col gap-4 rounded-xl border border-line p-4">

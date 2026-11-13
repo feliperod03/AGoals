@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject 
 
 import { BuscadorLista, FilaBuscador } from '@/components/BuscadorLista'
 import { Button } from '@/components/ui/button'
+import { useEscapeParaCerrar } from '@/features/agenda/useEscapeParaCerrar'
 import type { CandidatoPadre } from './candidatosPadre'
 import type { ItemJerarquico } from './tipos'
 
@@ -36,6 +37,7 @@ export function SelectorPadre<T extends ItemJerarquico>({ nombreActual, idActual
       abiertoRef.current = false
     }
   }, [abierto, abiertoRef])
+  useEscapeParaCerrar(abierto, cerrar)
 
   function cerrar() {
     setAbierto(false)

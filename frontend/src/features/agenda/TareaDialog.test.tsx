@@ -555,6 +555,29 @@ describe('TareaDialog: cambiar la madre', () => {
     expect(screen.getByRole('button', { name: 'ComprarSubtarea de «Mudanza» · sin fecha' })).toBeInTheDocument()
   })
 
+  it('Escape con el foco en el título cierra solo el panel y no el diálogo', async () => {
+    const user = userEvent.setup()
+    await abrir(user)
+    await user.click(screen.getByRole('button', { name: 'Cambiar' }))
+    expect(screen.getByLabelText('Buscar madre')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Título'))
+    expect(screen.getByLabelText('Título')).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByLabelText('Buscar madre')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    // Un segundo Escape, con el panel ya cerrado, cierra el diálogo.
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('Escape con el panel cerrado cierra el diálogo', async () => {
+    const user = userEvent.setup()
+    await abrir(user)
+    expect(screen.queryByLabelText('Buscar madre')).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('Escape con la lista abierta cierra solo la lista: el diálogo sigue y conserva lo escrito', async () => {
     const user = userEvent.setup()
     await abrir(user)

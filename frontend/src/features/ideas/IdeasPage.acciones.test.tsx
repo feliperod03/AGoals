@@ -86,6 +86,29 @@ async function elegirVinculo(user: Usuario, dialogo: HTMLElement, tipo: 'Proyect
 }
 
 describe('IdeasPage: crear', () => {
+  it('Escape con el foco en el título cierra solo la lista de proyectos y no el diálogo', async () => {
+    const { user } = await iniciar()
+    const dialogo = await abrirCrear(user)
+    await user.click(within(dialogo).getByRole('radio', { name: 'Proyecto' }))
+    await user.click(within(dialogo).getByRole('button', { name: /^(Elegir|Cambiar)$/ }))
+    const buscador = within(dialogo).getAllByRole('searchbox')[0]!
+    expect(buscador).toBeInTheDocument()
+    await user.click(within(dialogo).getByLabelText('Título'))
+    await user.keyboard('{Escape}')
+    expect(within(dialogo).queryByRole('searchbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('Escape cierra el diálogo y el foco vuelve a «Nueva idea»', async () => {
+    const { user } = await iniciar()
+    await abrirCrear(user)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nueva idea' })).toHaveFocus())
+  })
+
   it('crea una idea suelta con los cinco campos, avisa y la muestra', async () => {
     const { user } = await iniciar()
     const dialogo = await abrirCrear(user)

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject 
 import { Button } from '@/components/ui/button'
 import { BuscadorTareas, Fila } from './BuscadorTareas'
 import type { CandidataMadre } from './candidatasMadre'
+import { useEscapeParaCerrar } from './useEscapeParaCerrar'
 
 export { MAX_FILAS } from './BuscadorTareas'
 
@@ -36,6 +37,7 @@ export function SelectorMadre({ tituloActual, idActual, candidatas, deshabilitad
       abiertoRef.current = false
     }
   }, [abierto, abiertoRef])
+  useEscapeParaCerrar(abierto, cerrar)
 
   function cerrar() {
     setAbierto(false)

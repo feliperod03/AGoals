@@ -103,6 +103,15 @@ describe('BorrarItemDialog: proyecto', () => {
     vi.mocked(borrarProyecto).mockResolvedValue(undefined)
   })
 
+  it('Escape cierra y el foco vuelve al botón que lo abrió', async () => {
+    vi.mocked(getImpactoBorradoProyecto).mockResolvedValue(SIN_NADA_PROYECTO)
+    const { user, dialogo } = await abrir(CONFIG_PROYECTO, casa)
+    await waitFor(() => expect(botonBorrar(dialogo)).toBeEnabled())
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Abrir' })).toHaveFocus())
+  })
+
   it('sin dependencias queda el diálogo simple y el DELETE va sin parámetros', async () => {
     vi.mocked(getImpactoBorradoProyecto).mockResolvedValue(SIN_NADA_PROYECTO)
     const { user, dialogo } = await abrir(CONFIG_PROYECTO, casa)

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
@@ -312,5 +313,29 @@ describe('VincularTareaDialog: mutación en curso', () => {
     expect(alCerrar).toHaveBeenCalledTimes(1)
     await user.keyboard('{Escape}')
     expect(alCerrar).toHaveBeenCalledTimes(2)
+  })
+
+  it('al cerrar, el foco vuelve al botón que lo abrió', async () => {
+    const user = userEvent.setup()
+    servidor = tarea({ id: 12, titulo: 'Embalar' })
+    vi.mocked(getTareas).mockImplementation(async () => [servidor])
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    function Arnes() {
+      const [abierto, setAbierto] = useState(false)
+      return (
+        <QueryClientProvider client={queryClient}>
+          <button type="button" onClick={() => setAbierto(true)}>
+            Vincular
+          </button>
+          {abierto && <VincularTareaDialog tarea={servidor} alCerrar={() => setAbierto(false)} alMensaje={() => {}} />}
+        </QueryClientProvider>
+      )
+    }
+    render(<Arnes />)
+    await user.click(screen.getByRole('button', { name: 'Vincular' }))
+    await dialogo()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Vincular' })).toHaveFocus())
   })
 })

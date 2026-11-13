@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject 
 
 import { BuscadorLista, type CandidataBuscador } from '@/components/BuscadorLista'
 import { Button } from '@/components/ui/button'
+import { useEscapeParaCerrar } from '@/features/agenda/useEscapeParaCerrar'
 import type { ItemJerarquico } from '@/features/jerarquia/tipos'
 
 interface Props<T extends ItemJerarquico> {
@@ -36,6 +37,7 @@ export function SelectorVinculo<T extends ItemJerarquico>({ tipo, nombreActual, 
       abiertoRef.current = false
     }
   }, [abierto, abiertoRef])
+  useEscapeParaCerrar(abierto, cerrar)
 
   function cerrar() {
     setAbierto(false)

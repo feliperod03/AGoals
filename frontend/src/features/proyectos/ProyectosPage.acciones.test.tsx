@@ -67,6 +67,17 @@ async function abrirMenu(user: ReturnType<typeof userEvent.setup>, nombre: strin
 }
 
 describe('ProyectosPage: crear', () => {
+  it('Escape cierra el diálogo y el foco vuelve a «Nuevo proyecto»', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Casa')
+    await user.click(screen.getByRole('button', { name: 'Nuevo proyecto' }))
+    await screen.findByRole('dialog')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo proyecto' })).toHaveFocus())
+  })
+
   it('crea un proyecto: manda el cuerpo completo, avisa y refresca la lista', async () => {
     const user = userEvent.setup()
     renderizar()
@@ -194,6 +205,21 @@ describe('ProyectosPage: editar', () => {
     const panel = within(dialogo).getByRole('searchbox', { name: 'Buscar padre' }).closest('div')!
     const opciones = within(panel).getAllByRole('button').map((b) => b.textContent)
     expect(opciones).toEqual(['Sin padre (actual)', 'OtroProyecto principal'])
+  })
+
+  it('Escape con el foco en el nombre cierra solo la lista de padres y no el diálogo', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Casa')
+    const dialogo = await abrirMenu(user, 'Casa', 'Editar')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cambiar' }))
+    await user.click(within(dialogo).getByLabelText('Nombre'))
+    await user.keyboard('{Escape}')
+    expect(within(dialogo).queryByRole('searchbox', { name: 'Buscar padre' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    // Con la lista cerrada, Escape cierra el diálogo.
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('Escape con la lista de padres abierta cierra solo la lista, no el diálogo', async () => {
