@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 
-
 import { BuscadorLista } from '@/components/BuscadorLista'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -40,8 +39,6 @@ export function VincularTareaDialog({ tarea, alCerrar, alMensaje }: Props) {
 function Contenido({ tarea, vinculo, alCerrar }: { tarea: Tarea; vinculo: ReturnType<typeof useVincularTarea>; alCerrar: () => void }) {
   // Solo se consulta con el diálogo abierto; mismas claves que el Cofre, el listado y el detalle (comparten caché).
   const todas = useTodasLasTareas()
-  // Las mismas claves y funciones que `useListaJerarquia`; se piden directo para no arrastrar `config.ts` (y todos los
-  // endpoints de proyectos/objetivos) a Hoy y al Cofre.
   const proyectos = useProyectos()
   const objetivos = useObjetivos()
   // Un solo buscador abierto a la vez.
