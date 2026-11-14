@@ -33,5 +33,5 @@ Cada rebanada termina con tests pasando, revisión del diff y un commit.
 10. **Pulido 2**, en tres partes más una rebanada aparte (solo frontend; lista detallada en `docs/frontend-diseno.md`):
    - **2a Aspecto y tema** (hecha, `eed9465`): toggle manual de tema (Sistema / Claro / Oscuro, sin parpadeo), hover de filas, estética de Proyectos y Objetivos, selección del calendario en oscuro, scroll al panel del día, formato de hora unificado y objetivos táctiles de 44 px.
    - **2b Foco, avisos y errores** (hecha, `fea13c6` y `6666020`): avisos persistentes en los fallos parciales, errores con dueño y descartables, textos que explican el porqué, foco devuelto al cerrar diálogos, foco al quitar un chip del Cofre y Escape fuera del selector. Lectores de pantalla quedó fuera (Futuro).
-   - **2c Limpieza técnica** (próxima): foco desde los menús «⋯», duplicados, código muerto, nombres y una consulta compartida de proyectos y objetivos.
-   - **9f Vista de día** (opcional, después de 2c): vista de cualquier fecha con tareas y horas, como Hoy.
+   - **2c Foco desde «⋯» y limpieza técnica** (hecha, `c56d5ad` y `f9ec6bc`): el foco vuelve al botón «⋯» tras cerrar un diálogo abierto desde un menú y se evita el `GET` sobrante al borrar un evento; `Campo` y `BuscadorTareas` compartidos, una consulta común de proyectos y objetivos para vincular tareas, menos código muerto y nombres más claros.
+   - **9f Vista de día** (opcional): vista de cualquier fecha con tareas y horas, como Hoy.
