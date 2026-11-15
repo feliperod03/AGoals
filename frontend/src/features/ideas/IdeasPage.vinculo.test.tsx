@@ -80,7 +80,7 @@ describe('IdeasPage: filtro de vínculo', () => {
     const user = await iniciar()
     await user.selectOptions(screen.getByLabelText('Vínculo'), 'proyecto')
     await user.selectOptions(screen.getByLabelText('Proyecto'), 'Vacío')
-    expect(screen.getByText('No hay ideas con estos filtros: Planteadas, Del proyecto «Vacío».')).toBeInTheDocument()
+    expect(screen.getByText('No hay ideas con estos filtros: Planteadas, Del proyecto «Vacío». Las que concluyas están en el filtro «Concluidas».')).toBeInTheDocument()
   })
 
   it('si la lista de proyectos falla, el selector queda deshabilitado con una nota y «Sueltas» sigue andando', async () => {

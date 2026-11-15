@@ -46,7 +46,7 @@ function FilaIdea({ idea, vinculo, acciones }: { idea: Idea; vinculo: string; ac
           </div>
           {idea.conclusion && (
             <p className="mt-1 rounded-xl bg-muted px-3 py-2 text-sm break-words whitespace-pre-line text-tx">
-              <span className="font-medium">Conclusión: </span>
+              <span className="font-medium">{concluida ? 'Conclusión: ' : 'Conclusión anterior: '}</span>
               {idea.conclusion}
             </p>
           )}

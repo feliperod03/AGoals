@@ -9,7 +9,7 @@ export interface DefCategoria {
   etiqueta: string
   singular: string
   plural: string
-  /** Qué pasa con ellos si se elige «Mover» (conservar). */
+  /** Qué pasa con ellos si se elige «Conservar»: adónde van. */
   mover: string
   /** Qué arrastra además cuando `borrados > total`: «subtareas». Sin él no se aclara nada (las ideas no tienen jerarquía). */
   incluye?: string
@@ -68,6 +68,15 @@ export function avisoRescatados(impacto: ImpactoBorrado, elecciones: Elecciones)
   return rescatados === 1
     ? '1 proyecto se salva por estar ligado a otro objetivo.'
     : `${rescatados} proyectos se salvan por estar ligados a otro objetivo.`
+}
+
+/**
+ * Explica por qué cambió el contador de una fila (H-28): al marcar «Borrar» en otra categoría, el alcance de esta crece
+ * (p. ej. «Tareas (2)» pasa a «(5)» al sumarse las de los subproyectos que se borran). `base` = el total con todo conservado.
+ */
+export function notaContador(total: number, base: number | undefined): string | null {
+  if (base === undefined || base <= 0 || total <= base) return null
+  return `Ahora son ${total} (antes ${base}): se suman las de lo que también se borra.`
 }
 
 /** Ayuda bajo el interruptor de una fila. */

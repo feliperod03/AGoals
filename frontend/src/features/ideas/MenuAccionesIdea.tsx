@@ -10,6 +10,7 @@ export function MenuAccionesIdea({ idea, acciones }: { idea: Idea; acciones: Acc
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Acciones de «${idea.titulo}»`}
+        data-menu-idea={idea.id}
         disabled={acciones.pendiente}
         className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-mut hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60"
       >

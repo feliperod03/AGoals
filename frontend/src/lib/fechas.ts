@@ -164,8 +164,8 @@ export function mensajeTareaDesvinculada(titulo: string, tipo: 'proyecto' | 'obj
 // Avisos de confirmación de ideas.
 export const mensajeIdeaCreada = (titulo: string) => `Idea «${titulo}» creada`
 export const mensajeIdeaGuardada = (titulo: string) => `Idea «${titulo}» guardada`
-export const mensajeIdeaConcluida = (titulo: string) => `Idea «${titulo}» concluida`
-export const mensajeIdeaReabierta = (titulo: string) => `Idea «${titulo}» reabierta`
+export const mensajeIdeaConcluida = (titulo: string) => `Idea «${titulo}» concluida; la encuentras en «Concluidas»`
+export const mensajeIdeaReabierta = (titulo: string) => `Idea «${titulo}» reabierta; vuelve a «Planteadas»`
 export const mensajeIdeaBorrada = (titulo: string) => `Idea «${titulo}» borrada`
 
 /** Confirmación al posponer: `2026-11-10` -> `Pospuesta al 10 de noviembre`. */
@@ -511,6 +511,21 @@ export const mensajeEventoYaNoExistia = (titulo: string) => `El evento «${titul
 /** Guardar el evento con otro inicio y el recordatorio acompañándolo (9e). */
 export const mensajeEventoGuardadoConRecordatorio = (titulo: string, inicioIso: string, finIso: string, recordatorioIso: string) =>
   `${mensajeEventoGuardado(titulo, inicioIso, finIso)}; recordatorio movido al ${formatearFechaHoraCorta(recordatorioIso)}`
+
+/** Guardar el evento con otro inicio dejando el recordatorio donde estaba (casilla desmarcada): se dice cuándo queda. */
+export const mensajeEventoGuardadoRecordatorioQueda = (titulo: string, inicioIso: string, finIso: string, recordatorioIso: string) =>
+  `${mensajeEventoGuardado(titulo, inicioIso, finIso)}; el recordatorio queda el ${formatearFechaHoraCorta(recordatorioIso)}`
+
+/**
+ * «de 08:00 a 10:00» (mismo día) o «de mar 15 dic · 08:00 a sáb 5 dic · 08:00» (otro día): cómo cambia un recordatorio
+ * al moverlo (casilla de «Mover también el recordatorio»).
+ */
+export function formatearCambioRecordatorio(desdeIso: string, haciaIso: string): string {
+  const desde = parseISO(desdeIso)
+  const hacia = parseISO(haciaIso)
+  if (differenceInCalendarDays(hacia, desde) === 0) return `de ${format(desde, 'HH:mm')} a ${format(hacia, 'HH:mm')}`
+  return `de ${formatearFechaHoraCorta(desdeIso)} a ${formatearFechaHoraCorta(haciaIso)}`
+}
 
 /** El evento se guardó pero el recordatorio no se pudo mover; `motivo` es el mensaje del servidor. */
 export const mensajeEventoRecordatorioNoMovido = (titulo: string, inicioIso: string, finIso: string, motivo: string) =>

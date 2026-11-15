@@ -85,7 +85,7 @@ const nombreODefecto = (lista: NombresVinculoIdea['proyectos'], id: number) => l
 
 /** Texto del estado vacío: con la vista por defecto, «No hay ideas planteadas.»; si no, nombra todos los filtros activos. */
 export function textoVacioIdeas(f: FiltrosIdeas, nombres: NombresVinculoIdea): string {
-  if (!hayFiltrosActivos(f)) return 'No hay ideas planteadas.'
+  if (!hayFiltrosActivos(f)) return 'No hay ideas planteadas. Las que concluyas están en el filtro «Concluidas».'
   const partes: string[] = []
   if (f.estado === 'planteadas') partes.push('Planteadas')
   if (f.estado === 'concluidas') partes.push('Concluidas')
@@ -95,5 +95,11 @@ export function textoVacioIdeas(f: FiltrosIdeas, nombres: NombresVinculoIdea): s
   if (v.tipo === 'objetivo') partes.push(v.id === null ? 'De algún objetivo' : `Del objetivo «${nombreODefecto(nombres.objetivos, v.id)}»`)
   const busqueda = f.busqueda.trim()
   if (busqueda) partes.push(`Título o descripción contiene «${busqueda}»`)
-  return partes.length === 0 ? 'No hay ideas.' : `No hay ideas con estos filtros: ${partes.join(', ')}.`
+  if (partes.length === 0) return 'No hay ideas.'
+  const base = `No hay ideas con estos filtros: ${partes.join(', ')}.`
+  // Concluir y reabrir mueven la idea de vista: se dice adónde (H-23). Con una búsqueda el vacío es por otra causa.
+  if (busqueda) return base
+  if (f.estado === 'concluidas') return `${base} Las que reabras vuelven a «Planteadas».`
+  if (f.estado === 'planteadas') return `${base} Las que concluyas están en el filtro «Concluidas».`
+  return base
 }

@@ -323,7 +323,7 @@ describe('CalendarioPage 9e: mover el recordatorio con el evento', () => {
     await user.click(await panel().findByRole('button', { name: 'Editar evento: Dentista, 09:00–10:00' }))
     await screen.findByRole('button', { name: 'Recordatorio: mar 15 dic · 08:00' })
     fireEvent.change(campo('Hora de inicio'), { target: { value: '09:45' } })
-    expect(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })).toBeChecked()
+    expect(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de 08:00 a 08:45)' })).toBeChecked()
     expect(screen.getByText('Quedará el mar 15 dic · 08:45.')).toBeInTheDocument()
     await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

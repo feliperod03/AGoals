@@ -163,3 +163,50 @@ describe('AvisoVencidos', () => {
     expect(segundo).not.toBe(primero)
   })
 })
+
+describe('AvisoVencidos: foco (H-37)', () => {
+  it('tras «Entendido» el foco pasa al siguiente «Entendido»', async () => {
+    vencidos.mockResolvedValueOnce([recordatorio(1), recordatorio(2)]).mockResolvedValue([recordatorio(2)])
+    marcar.mockResolvedValue(recordatorio(1, { enviado: true }))
+    renderizar()
+    await userEvent.click(await screen.findByRole('button', { name: 'Entendido: Recordatorio 1' }))
+    await waitFor(() => expect(screen.queryByText('Recordatorio 1')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Entendido: Recordatorio 2' })).toHaveFocus())
+  })
+
+  it('si descarta el último, el foco va al anterior', async () => {
+    vencidos.mockResolvedValueOnce([recordatorio(1), recordatorio(2)]).mockResolvedValue([recordatorio(1)])
+    marcar.mockResolvedValue(recordatorio(2, { enviado: true }))
+    renderizar()
+    await userEvent.click(await screen.findByRole('button', { name: 'Entendido: Recordatorio 2' }))
+    await waitFor(() => expect(screen.queryByText('Recordatorio 2')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Entendido: Recordatorio 1' })).toHaveFocus())
+  })
+
+  it('al descartar el único, el foco va al encabezado de la página', async () => {
+    vencidos.mockResolvedValueOnce([recordatorio(1)]).mockResolvedValue([])
+    marcar.mockResolvedValue(recordatorio(1, { enviado: true }))
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <h1 data-foco-respaldo tabIndex={-1}>
+          Página
+        </h1>
+        <AvisoVencidos />
+      </QueryClientProvider>,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Entendido: Recordatorio 1' }))
+    await waitFor(() => expect(screen.queryByText('Recordatorio 1')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Página' })).toHaveFocus())
+  })
+
+  it('si falla, el foco no se mueve a otra fila', async () => {
+    vencidos.mockResolvedValue([recordatorio(1), recordatorio(2)])
+    marcar.mockRejectedValue(new ApiError(500, 'Error del servidor'))
+    renderizar()
+    await userEvent.click(await screen.findByRole('button', { name: 'Entendido: Recordatorio 1' }))
+    expect(await screen.findByText('Error del servidor')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getByRole('button', { name: 'Entendido: Recordatorio 2' })).not.toHaveFocus()
+  })
+})

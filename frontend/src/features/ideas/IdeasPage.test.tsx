@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { objetivo, proyecto } from '@/features/jerarquia/fabrica'
+import { enfocarRespaldo } from '@/components/ui/focoRespaldo'
 import { renderizarIdeas } from './renderIdeas'
 import { idea } from './fabrica'
 
@@ -104,10 +105,10 @@ describe('IdeasPage: estados vacíos y de error', () => {
     expect(await screen.findByText('Aún no tienes ideas.')).toBeInTheDocument()
   })
 
-  it('con ideas pero ninguna planteada: «No hay ideas planteadas.»', async () => {
+  it('con ideas pero ninguna planteada: «No hay ideas planteadas.» y dónde están las concluidas', async () => {
     vi.mocked(getIdeas).mockResolvedValue(IDEAS.filter((i) => i.estado === 'CONCLUIDA'))
     renderizarIdeas()
-    expect(await screen.findByText('No hay ideas planteadas.')).toBeInTheDocument()
+    expect(await screen.findByText('No hay ideas planteadas. Las que concluyas están en el filtro «Concluidas».')).toBeInTheDocument()
   })
 
   it('el texto de vacío nombra los filtros activos', async () => {
@@ -134,5 +135,16 @@ describe('IdeasPage: estados vacíos y de error', () => {
     vi.mocked(getIdeas).mockRejectedValue(new ApiError(0, 'No se pudo conectar con el servidor.'))
     renderizarIdeas()
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.')
+  })
+})
+
+describe('IdeasPage: foco de respaldo (H-07)', () => {
+  it('el encabezado es el elemento de respaldo del foco', async () => {
+    renderizarIdeas()
+    await screen.findByText('Viajar')
+    const h1 = screen.getByRole('heading', { level: 1 })
+    expect(h1).toHaveAttribute('data-foco-respaldo')
+    enfocarRespaldo()
+    expect(h1).toHaveFocus()
   })
 })

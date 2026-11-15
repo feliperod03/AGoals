@@ -13,6 +13,7 @@ import {
   aValorDatetimeLocal,
   deFechaYHoraLocal,
   esFechaValida,
+  formatearCambioRecordatorio,
   formatearFechaHoraCorta,
   notaRecordatorioEventoNoConsultado,
   notaRecordatorioEventoYaEnviado,
@@ -59,6 +60,15 @@ export function EventoDialog({ acciones, alCerrarFoco }: Props) {
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * Lleva el foco al campo con error tras un intento de guardar (H-32): el inicio si falla, y si no el fin (su hora, o su
+ * día con «Todo el día»). Solo se llama al enviar, nunca al recalcular los errores mientras se edita.
+ */
+function enfocarCampoConError(errores: Pick<ErroresEvento, 'inicio' | 'fin'>, todoElDia: boolean) {
+  const id = errores.inicio ? 'evento-inicio-dia' : errores.fin ? (todoElDia ? 'evento-fin-dia' : 'evento-fin-hora') : null
+  if (id) document.getElementById(id)?.focus()
 }
 
 /** Inicio válido según el modo (con «Todo el día» basta el día). */
@@ -149,12 +159,15 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
       const resultado = aRequestEvento(valores)
       if (!resultado.ok) {
         setErroresFecha({ inicio: resultado.errores.inicio, fin: resultado.errores.fin })
+        enfocarCampoConError(resultado.errores, valores.todoElDia)
         return
       }
       if (esperando) return
       // Se recalcula con el inicio del cuerpo que se manda; el hook lo vuelve a validar con `instanteMovido`.
-      const mueve = evento && pendiente && mover && instanteMovido(pendiente, evento.fechaHoraInicio, resultado.request.fechaHoraInicio)
-      acciones.guardar(resultado.request, mueve ? pendiente : undefined)
+      const cambia = evento && pendiente && instanteMovido(pendiente, evento.fechaHoraInicio, resultado.request.fechaHoraInicio)
+      const mueve = cambia && mover
+      // Con la casilla desmarcada el aviso dice cuándo queda el recordatorio (H-35).
+      acciones.guardar(resultado.request, mueve ? pendiente : undefined, cambia && !mover ? pendiente?.fechaHora : undefined)
     },
     () => {
       const resultado = aRequestEvento(getValues())
@@ -236,7 +249,7 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
               onChange={(e) => setMover(e.target.checked)}
               aria-describedby="evento-recordatorio-ayuda"
             />
-            <span>Mover también el recordatorio (cae el {formatearFechaHoraCorta(pendiente.fechaHora)})</span>
+            <span>Mover también el recordatorio ({formatearCambioRecordatorio(pendiente.fechaHora, aMover)})</span>
           </label>
           <div id="evento-recordatorio-ayuda" className="text-xs text-mut">
             {mover ? (
@@ -245,7 +258,7 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
                 {seguiraVencido && <p>Seguirá vencido: el aviso saldrá enseguida.</p>}
               </>
             ) : (
-              <p>El recordatorio se queda donde está.</p>
+              <p>El recordatorio se queda donde está: el {formatearFechaHoraCorta(pendiente.fechaHora)}.</p>
             )}
           </div>
         </div>

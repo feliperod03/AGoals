@@ -127,14 +127,14 @@ describe('BorrarItemDialog: proyecto', () => {
     expect(screen.getByTestId('aviso').textContent).toBe('«Casa» borrado')
   })
 
-  it('con dependencias muestra una fila por categoría con elementos, todo en Mover, y confirma conservar explícito', async () => {
+  it('con dependencias muestra una fila por categoría con elementos, todo en Conservar, y confirma conservar explícito', async () => {
     const { user, dialogo } = await abrir(CONFIG_PROYECTO, casa)
     const subproyectos = await within(dialogo).findByRole('group', { name: 'Subproyectos (2)' })
     expect(subproyectos).toBeInTheDocument()
     expect(grupo(dialogo, 'Tareas (2)')).toBeInTheDocument()
     expect(within(dialogo).queryByRole('group', { name: /Ideas/ })).not.toBeInTheDocument()
     for (const g of [subproyectos, grupo(dialogo, 'Tareas (2)')]) {
-      expect(within(g).getByRole('radio', { name: 'Mover' })).toBeChecked()
+      expect(within(g).getByRole('radio', { name: 'Conservar' })).toBeChecked()
       expect(within(g).getByRole('radio', { name: 'Borrar' })).not.toBeChecked()
     }
     expect(within(subproyectos).getByText('Pasan al nivel superior')).toBeInTheDocument()
@@ -193,12 +193,14 @@ describe('BorrarItemDialog: proyecto', () => {
     const ideas = await within(dialogo).findByRole('group', { name: 'Ideas (1)' })
     // Con los subproyectos por borrar el alcance de las tareas crece.
     expect(grupo(dialogo, 'Tareas (5)')).toBeInTheDocument()
+    // H-28: el salto de 2 a 5 se explica en la fila.
+    expect(within(grupo(dialogo, 'Tareas (5)')).getByText(/Ahora son 5 \(antes 2\)/)).toBeInTheDocument()
 
     await user.click(within(ideas).getByRole('radio', { name: 'Borrar' }))
     await waitFor(() => expect(within(dialogo).getByRole('status')).toHaveTextContent('Se borrarán «Casa», 3 subproyectos y 1 idea.'))
 
-    // Vuelven los subproyectos a Mover: la fila de ideas desaparece...
-    await user.click(within(grupo(dialogo, 'Subproyectos (2)')).getByRole('radio', { name: 'Mover' }))
+    // Vuelven los subproyectos a Conservar: la fila de ideas desaparece...
+    await user.click(within(grupo(dialogo, 'Subproyectos (2)')).getByRole('radio', { name: 'Conservar' }))
     await waitFor(() => expect(within(dialogo).queryByRole('group', { name: /Ideas/ })).not.toBeInTheDocument())
     await waitFor(() => expect(botonBorrar(dialogo)).toBeEnabled())
     // ...y el DELETE no la manda aunque la elección siga guardada.
@@ -213,7 +215,7 @@ describe('BorrarItemDialog: proyecto', () => {
     await user.click(within(subproyectos).getByRole('radio', { name: 'Borrar' }))
     const ideas = await within(dialogo).findByRole('group', { name: 'Ideas (1)' })
     await user.click(within(ideas).getByRole('radio', { name: 'Borrar' }))
-    await user.click(within(grupo(dialogo, 'Subproyectos (2)')).getByRole('radio', { name: 'Mover' }))
+    await user.click(within(grupo(dialogo, 'Subproyectos (2)')).getByRole('radio', { name: 'Conservar' }))
     await waitFor(() => expect(within(dialogo).queryByRole('group', { name: /Ideas/ })).not.toBeInTheDocument())
 
     await user.click(within(grupo(dialogo, 'Subproyectos (2)')).getByRole('radio', { name: 'Borrar' }))
@@ -308,7 +310,7 @@ describe('BorrarItemDialog: objetivo', () => {
     expect(vi.mocked(borrarObjetivo).mock.calls[0]).toEqual([3])
   })
 
-  it('con dependencias muestra las filas con elementos con su ayuda de Mover y manda conservar explícito', async () => {
+  it('con dependencias muestra las filas con elementos con su ayuda de Conservar y manda conservar explícito', async () => {
     const { user, dialogo } = await abrir(CONFIG_OBJETIVO, salud)
     const subobjetivos = await within(dialogo).findByRole('group', { name: 'Subobjetivos (1)' })
     const proyectos = grupo(dialogo, 'Proyectos (3)')

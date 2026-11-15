@@ -34,7 +34,9 @@ import {
   formatearDesfase,
   formatearDiaMes,
   formatearFechaCorta,
+  formatearCambioRecordatorio,
   formatearFechaHoraCorta,
+  mensajeEventoGuardadoRecordatorioQueda,
   formatearFechaLarga,
   mensajeIdeaBorrada,
   mensajeIdeaConcluida,
@@ -199,8 +201,8 @@ describe('mensajes de ideas', () => {
   it('nombran la idea entre comillas angulares', () => {
     expect(mensajeIdeaCreada('Cantar')).toBe('Idea «Cantar» creada')
     expect(mensajeIdeaGuardada('Cantar')).toBe('Idea «Cantar» guardada')
-    expect(mensajeIdeaConcluida('Cantar')).toBe('Idea «Cantar» concluida')
-    expect(mensajeIdeaReabierta('Cantar')).toBe('Idea «Cantar» reabierta')
+    expect(mensajeIdeaConcluida('Cantar')).toBe('Idea «Cantar» concluida; la encuentras en «Concluidas»')
+    expect(mensajeIdeaReabierta('Cantar')).toBe('Idea «Cantar» reabierta; vuelve a «Planteadas»')
     expect(mensajeIdeaBorrada('Cantar')).toBe('Idea «Cantar» borrada')
   })
 })
@@ -826,5 +828,21 @@ describe('formatearRangoEvento y mensajes de eventos', () => {
       'Evento «Dentista» guardado (mar 15 dic, 09:00–10:00), pero no se pudo mover el recordatorio (No existe el recordatorio). Revísalo en «Recordatorio…»',
     )
     expect(notaRecordatorioEventoNoConsultado()).toBe('No se pudo consultar el recordatorio de este evento: si tiene uno, no se moverá.')
+  })
+})
+
+describe('recordatorio de evento (H-35)', () => {
+  it('formatearCambioRecordatorio: mismo día, solo horas', () => {
+    expect(formatearCambioRecordatorio('2026-12-15T08:00:00-03:00', '2026-12-15T10:00:00-03:00')).toBe('de 08:00 a 10:00')
+  })
+
+  it('formatearCambioRecordatorio: otro día, fecha y hora en cada extremo', () => {
+    expect(formatearCambioRecordatorio('2026-12-15T08:00:00-03:00', '2026-12-16T08:00:00-03:00')).toBe('de mar 15 dic · 08:00 a mié 16 dic · 08:00')
+  })
+
+  it('mensajeEventoGuardadoRecordatorioQueda dice cuándo queda', () => {
+    expect(mensajeEventoGuardadoRecordatorioQueda('Dentista', '2026-12-15T10:00:00-03:00', '2026-12-15T11:00:00-03:00', '2026-12-15T08:00:00-03:00')).toBe(
+      'Evento «Dentista» guardado (mar 15 dic, 10:00–11:00); el recordatorio queda el mar 15 dic · 08:00',
+    )
   })
 })

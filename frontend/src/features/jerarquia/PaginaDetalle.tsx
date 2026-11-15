@@ -105,7 +105,7 @@ export function PaginaDetalle<T extends ItemJerarquico, R>({ config, idParam, da
         {volver}
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-4xl break-words">{item.nombre}</h1>
+            <h1 data-foco-respaldo tabIndex={-1} className="text-4xl break-words outline-none">{item.nombre}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <SelectorEstado item={item} acciones={acciones} />
               {item.prioridad && <PrioridadChip prioridad={item.prioridad} />}

@@ -47,11 +47,12 @@ export function useMarcarEnviado() {
     },
   })
 
-  const marcar = (id: number) => {
+  /** `despues`: solo tras un éxito y con el refresco hecho (para mover el foco; con un error no se llama). */
+  const marcar = (id: number, despues?: () => void) => {
     if (enCurso.current) return
     enCurso.current = true
     setError(null)
-    mutacion.mutate(id)
+    mutacion.mutate(id, { onSuccess: () => despues?.() })
   }
 
   return { marcar, pendiente: mutacion.isPending, error }

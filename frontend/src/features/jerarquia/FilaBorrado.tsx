@@ -14,11 +14,11 @@ interface Props {
 }
 
 const OPCIONES: { valor: Eleccion; etiqueta: string }[] = [
-  { valor: 'conservar', etiqueta: 'Mover' },
+  { valor: 'conservar', etiqueta: 'Conservar' },
   { valor: 'borrar', etiqueta: 'Borrar' },
 ]
 
-/** Una categoría del borrado: interruptor Mover / Borrar con radios nativos y el texto de lo que pasa con cada uno. */
+/** Una categoría del borrado: interruptor Conservar / Borrar con radios nativos y el texto de lo que pasa con cada uno. */
 export function FilaBorrado({ titulo, eleccion, alElegir, ayuda, deshabilitada }: Props) {
   const id = useId()
   const idAyuda = `${id}-ayuda`

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { enfocarRespaldo, enfocarRespaldoDespues } from './focoRespaldo'
+import { enfocarDespues, enfocarRespaldo, enfocarRespaldoDespues, vecinoDe } from './focoRespaldo'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -58,5 +58,55 @@ describe('enfocarRespaldoDespues', () => {
     otro.focus()
     vi.runAllTimers()
     expect(document.activeElement).toBe(otro)
+  })
+})
+
+describe('vecinoDe', () => {
+  const lista = () => {
+    document.body.innerHTML = '<button data-x="1"></button><button data-x="2"></button><button data-x="3"></button>'
+  }
+  it('devuelve el siguiente', () => {
+    lista()
+    expect(vecinoDe('data-x', 1)).toBe('2')
+  })
+  it('si es el último, devuelve el anterior', () => {
+    lista()
+    expect(vecinoDe('data-x', 3)).toBe('2')
+  })
+  it('sin otros elementos, o con un valor inexistente, devuelve null', () => {
+    document.body.innerHTML = '<button data-x="1"></button>'
+    expect(vecinoDe('data-x', 1)).toBeNull()
+    expect(vecinoDe('data-x', 9)).toBeNull()
+  })
+})
+
+describe('enfocarDespues', () => {
+  it('enfoca el primer selector que exista tras el ciclo de eventos', () => {
+    vi.useFakeTimers()
+    document.body.innerHTML = '<h1 data-foco-respaldo tabindex="-1">H</h1><button id="b">B</button>'
+    enfocarDespues(['#no-existe', '#b'])
+    expect(document.activeElement).toBe(document.body)
+    vi.runAllTimers()
+    expect(document.activeElement?.id).toBe('b')
+  })
+  it('si sigue deshabilitado tras los reintentos, cae al encabezado', () => {
+    vi.useFakeTimers()
+    document.body.innerHTML = '<h1 data-foco-respaldo tabindex="-1">H</h1><button id="b" disabled>B</button>'
+    enfocarDespues(['#b', null])
+    vi.runAllTimers()
+    expect(document.activeElement?.tagName).toBe('H1')
+  })
+})
+
+describe('enfocarDespues: destino deshabilitado', () => {
+  it('espera a que se habilite y entonces lo enfoca', () => {
+    vi.useFakeTimers()
+    document.body.innerHTML = '<h1 data-foco-respaldo tabindex="-1">H</h1><button id="b" disabled>B</button>'
+    enfocarDespues(['#b'])
+    vi.advanceTimersByTime(60)
+    expect(document.activeElement?.tagName).toBe('BODY')
+    ;(document.getElementById('b') as HTMLButtonElement).disabled = false
+    vi.advanceTimersByTime(60)
+    expect(document.activeElement?.id).toBe('b')
   })
 })

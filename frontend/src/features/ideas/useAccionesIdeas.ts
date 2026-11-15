@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
+import { enfocarDespues, vecinoDe } from '@/components/ui/focoRespaldo'
 import { actualizarIdea, borrarIdea, concluirIdea, crearIdea, reabrirIdea } from '@/api/ideas'
 import { mensajeIdeaBorrada, mensajeIdeaConcluida, mensajeIdeaCreada, mensajeIdeaGuardada, mensajeIdeaReabierta } from '@/lib/fechas'
 import type { Idea, IdeaRequest } from '@/types/idea'
@@ -45,6 +46,16 @@ export interface AccionesIdeas {
 interface Opciones {
   /** Confirmación para el aviso flotante de la página. */
   alMensaje: (mensaje: string) => void
+}
+
+/**
+ * Foco tras una acción sobre una idea (H-25): al «⋯» de su fila si sigue en la lista (editar) o, si salió de ella
+ * (concluir/reabrir con el filtro por defecto), al de la fila vecina; sin ninguna, al encabezado. El vecino se calcula
+ * ANTES de la mutación, cuando la fila aún está. Solo se llama tras un éxito.
+ */
+function enfocarFilaDe(id: number) {
+  const vecino = vecinoDe('data-menu-idea', id)
+  return () => enfocarDespues([`[data-menu-idea="${id}"]`, vecino ? `[data-menu-idea="${vecino}"]` : null])
 }
 
 /**
@@ -146,7 +157,12 @@ export function useAccionesIdeas({ alMensaje }: Opciones): AccionesIdeas {
       setDialogo({ idea })
     },
     cerrarDialogo: () => setDialogo(null),
-    guardar: (request, idea) => lanzar(() => guardar.mutate({ id: idea?.id, request })),
+    guardar: (request, idea) =>
+      lanzar(() => {
+        // Solo al editar: al crear, el foco ya vuelve a «Nueva idea».
+        const despues = idea ? enfocarFilaDe(idea.id) : undefined
+        guardar.mutate({ id: idea?.id, request }, { onSuccess: () => despues?.() })
+      }),
     errorGuardar: guardar.error?.message ?? null,
     guardando: guardar.isPending,
     concluir: aConcluir
@@ -154,7 +170,11 @@ export function useAccionesIdeas({ alMensaje }: Opciones): AccionesIdeas {
           idea: aConcluir,
           error: concluir.error?.message ?? null,
           pendiente: concluir.isPending,
-          confirmar: (conclusion) => lanzar(() => concluir.mutate({ idea: aConcluir, conclusion })),
+          confirmar: (conclusion) =>
+            lanzar(() => {
+              const despues = enfocarFilaDe(aConcluir.id)
+              concluir.mutate({ idea: aConcluir, conclusion }, { onSuccess: despues })
+            }),
           cancelar: () => setAConcluir(null),
         }
       : null,
@@ -165,7 +185,8 @@ export function useAccionesIdeas({ alMensaje }: Opciones): AccionesIdeas {
     reabrir: (idea) =>
       lanzar(() => {
         setErrorReabrir(null)
-        reabrir.mutate(idea)
+        const despues = enfocarFilaDe(idea.id)
+        reabrir.mutate(idea, { onSuccess: despues })
       }),
     borrado: aBorrar
       ? {

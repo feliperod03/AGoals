@@ -339,3 +339,51 @@ describe('VincularTareaDialog: mutación en curso', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Vincular' })).toHaveFocus())
   })
 })
+
+describe('VincularTareaDialog: foco (H-20)', () => {
+  it('tras elegir un proyecto, el foco vuelve a su botón «Cambiar»', async () => {
+    const user = userEvent.setup()
+    const { alMensaje } = renderizar()
+    const d = await dialogo()
+    await listo(d)
+    await user.click(within(d).getByRole('button', { name: 'Cambiar proyecto' }))
+    await user.click(within(d).getByRole('button', { name: /^Mudanza/ }))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Cambiar proyecto' })).toHaveFocus())
+  })
+
+  it('tras elegir un objetivo, el foco vuelve al «Cambiar» del objetivo (no al del proyecto)', async () => {
+    const user = userEvent.setup()
+    const { alMensaje } = renderizar()
+    const d = await dialogo()
+    await listo(d)
+    await user.click(within(d).getByRole('button', { name: 'Cambiar objetivo' }))
+    await user.click(within(d).getByRole('button', { name: /^Salud/ }))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalled())
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Cambiar objetivo' })).toHaveFocus())
+  })
+
+  it('elegir el que ya tiene solo cierra el buscador y deja el foco en «Cambiar»', async () => {
+    const user = userEvent.setup()
+    renderizar({ proyectoId: 5 })
+    const d = await dialogo()
+    await listo(d)
+    await user.click(within(d).getByRole('button', { name: 'Cambiar proyecto' }))
+    await user.click(within(d).getByRole('button', { name: /^Casa nueva/ }))
+    expect(asignarProyecto).not.toHaveBeenCalled()
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Cambiar proyecto' })).toHaveFocus())
+  })
+
+  it('si el servidor rechaza el cambio, el buscador sigue abierto y el foco no se mueve a «Cambiar»', async () => {
+    vi.mocked(asignarProyecto).mockRejectedValue(new ApiError(404, 'No existe el proyecto 7'))
+    const user = userEvent.setup()
+    renderizar()
+    const d = await dialogo()
+    await listo(d)
+    await user.click(within(d).getByRole('button', { name: 'Cambiar proyecto' }))
+    await user.click(within(d).getByRole('button', { name: /^Mudanza/ }))
+    expect(await within(d).findByRole('alert')).toHaveTextContent('No existe el proyecto 7')
+    await new Promise((r) => setTimeout(r, 20))
+    expect(within(d).getByRole('button', { name: 'Cambiar proyecto' })).not.toHaveFocus()
+  })
+})

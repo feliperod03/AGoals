@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
 import type { CategoriaBorrado, Eleccion, Elecciones } from '@/types/impactoBorrado'
-import { avisoRescatados, categoriasVisibles, eleccionDe, parametrosDe, partesBorradas, resumenBorrado, textoFila } from './borrado'
+import { avisoRescatados, categoriasVisibles, eleccionDe, notaContador, parametrosDe, partesBorradas, resumenBorrado, textoFila } from './borrado'
 import type { ConfigJerarquia } from './config'
 import { FilaBorrado } from './FilaBorrado'
 import type { ItemJerarquico } from './tipos'
@@ -13,7 +13,7 @@ import { useImpactoBorrado } from './useImpactoBorrado'
 
 /**
  * Confirmación de borrado de un proyecto u objetivo. Muestra una fila por categoría con elementos (subelementos,
- * proyectos, tareas, ideas) para elegir «Mover» o «Borrar», y un resumen en vivo de lo que desaparece según la
+ * proyectos, tareas, ideas) para elegir «Conservar» o «Borrar», y un resumen en vivo de lo que desaparece según la
  * vista previa del backend. Sin elementos dependientes queda el diálogo simple, con DELETE sin parámetros.
  */
 export function BorrarItemDialog<T extends ItemJerarquico, R>({ config, acciones }: { config: ConfigJerarquia<T, R>; acciones: AccionesJerarquia<T> }) {
@@ -39,12 +39,17 @@ function ContenidoBorrado<T extends ItemJerarquico, R>({
   // Se guarda la elección de toda categoría tocada, también si su fila desaparece: si reaparece, conserva el valor.
   const [elecciones, setElecciones] = useState<Elecciones>({})
   const impacto = useImpactoBorrado(config, item.id, elecciones)
+  // Totales de la primera respuesta (todo en «Conservar»): sirven para explicar si el contador de una fila crece (H-28).
+  const [base, setBase] = useState<Partial<Record<CategoriaBorrado, number>> | null>(null)
 
   const datos = impacto.data
   const visibles = datos ? categoriasVisibles(datos, config.categoriasBorrado) : []
   // Con datos de la elección anterior (`isPlaceholderData`) se muestra lo viejo pero no se deja confirmar.
   const actualizada = impacto.isSuccess && !impacto.isPlaceholderData && !impacto.isFetching
   const rescatados = datos ? avisoRescatados(datos, elecciones) : null
+
+  // Se fija una sola vez, durante el render (patrón de React para derivar estado de lo que llega, sin un efecto).
+  if (base === null && datos && actualizada) setBase(Object.fromEntries(Object.entries(datos).map(([clave, conteo]) => [clave, conteo?.total ?? 0])))
 
   function confirmar() {
     if (!datos) return
@@ -85,7 +90,12 @@ function ContenidoBorrado<T extends ItemJerarquico, R>({
                 titulo={`${categoria.etiqueta} (${datos[categoria.clave]?.total ?? 0})`}
                 eleccion={eleccionDe(elecciones, categoria.clave)}
                 alElegir={(eleccion) => elegir(categoria.clave, eleccion)}
-                ayuda={textoFila(categoria, datos, eleccionDe(elecciones, categoria.clave))}
+                ayuda={[
+                  textoFila(categoria, datos, eleccionDe(elecciones, categoria.clave)),
+                  notaContador(datos[categoria.clave]?.total ?? 0, base?.[categoria.clave]),
+                ]
+                  .filter(Boolean)
+                  .join('. ')}
                 deshabilitada={borrado.pendiente}
               />
             ))}

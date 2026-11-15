@@ -332,7 +332,7 @@ describe('RecomendacionDialog: agendar', () => {
 
 describe('RecomendacionDialog: próximos días', () => {
   const FUTURA = rec({ id: 7, titulo: 'Sacar turno', fecha: '2026-11-13', prioridad: 'MEDIA' })
-  const interruptor = () => screen.getByRole('switch', { name: 'Incluir próximos N días' })
+  const interruptor = () => screen.getByRole('switch', { name: 'Incluir tareas de los próximos días' })
   const ultimosParams = () => vi.mocked(getRecomendacion).mock.lastCall![0]
 
   it('apagado no manda hasta', async () => {
@@ -467,5 +467,80 @@ describe('RecomendacionDialog: próximos días', () => {
     await user.click(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' }))
     expect(interruptor()).toBeDisabled()
     expect(screen.getByRole('combobox', { name: 'Cantidad de días' })).toBeDisabled()
+  })
+})
+
+describe('RecomendacionDialog: textos (H-15, H-17)', () => {
+  it('el interruptor no lleva la «N» literal', async () => {
+    renderizar()
+    await screen.findByText('Armar la casa')
+    expect(screen.getByRole('switch', { name: 'Incluir tareas de los próximos días' })).toBeInTheDocument()
+    expect(screen.queryByText(/próximos N días/)).not.toBeInTheDocument()
+  })
+
+  it('con «Antigüedad» aclara de qué fecha cuenta; con «Prioridad» no lo dice', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Armar la casa')
+    expect(screen.queryByText(/Cuenta desde la fecha de la tarea/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Antigüedad' }))
+    expect(screen.getByText('Cuenta desde la fecha de la tarea; si no tiene, desde que se creó.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Prioridad' }))
+    expect(screen.queryByText(/Cuenta desde la fecha de la tarea/)).not.toBeInTheDocument()
+  })
+})
+
+describe('RecomendacionDialog: foco tras agendar (H-16)', () => {
+  it('pasa al «Agendar» de la fila siguiente', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agendarTarea).mockResolvedValue([tarea({ id: 1, fecha: HOY })])
+    renderizar()
+    await screen.findByText('Armar la casa')
+    vi.mocked(getRecomendacion).mockResolvedValue([LISTA[1]!])
+
+    await user.click(screen.getByRole('button', { name: 'Agendar «Armar la casa» para hoy' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' })).toHaveFocus())
+  })
+
+  it('si agenda la última fila, pasa a la anterior', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agendarTarea).mockResolvedValue([tarea({ id: 4, fecha: HOY })])
+    renderizar()
+    await screen.findByText('Llamar al banco')
+    vi.mocked(getRecomendacion).mockResolvedValue([LISTA[0]!])
+
+    await user.click(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Agendar «Armar la casa» para hoy' })).toHaveFocus())
+  })
+
+  it('si no queda ninguna fila, pasa al primer control del diálogo', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecomendacion).mockResolvedValue([LISTA[1]!])
+    vi.mocked(agendarTarea).mockResolvedValue([tarea({ id: 4, fecha: HOY })])
+    renderizar()
+    await screen.findByText('Llamar al banco')
+    vi.mocked(getRecomendacion).mockResolvedValue([])
+
+    await user.click(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Prioridad' })).toHaveFocus())
+  })
+
+  it('si agendar falla, el foco no se mueve a otra fila', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agendarTarea).mockRejectedValue(new ApiError(409, 'La tarea cambió'))
+    renderizar()
+    await screen.findByText('Armar la casa')
+    const boton = screen.getByRole('button', { name: 'Agendar «Armar la casa» para hoy' })
+
+    await user.click(boton)
+
+    expect(await screen.findByText('La tarea cambió')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getByRole('button', { name: 'Agendar «Llamar al banco» para hoy' })).not.toHaveFocus()
   })
 })

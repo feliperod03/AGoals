@@ -26,6 +26,8 @@ interface Variables {
   destino: DestinoVinculo
   /** Se llama tras un éxito, antes de refrescar (p. ej. para cerrar el buscador). Con un error NO se llama. */
   alExito?: () => void
+  /** Se llama tras un éxito, cuando ya terminó el refresco (los botones vuelven a estar habilitados): para mover el foco. */
+  despues?: () => void
 }
 
 const CLAVE_LISTA: Record<TipoVinculo, string> = { proyecto: 'proyectos', objetivo: 'objetivos' }
@@ -80,7 +82,7 @@ export function useVincularTarea({ alMensaje }: Opciones) {
     if (enCurso.current) return
     enCurso.current = true
     setError(null)
-    mutacion.mutate(variables)
+    mutacion.mutate(variables, { onSuccess: () => variables.despues?.() })
   }
 
   return {

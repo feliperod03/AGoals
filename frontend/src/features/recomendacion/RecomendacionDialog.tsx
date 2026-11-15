@@ -1,6 +1,8 @@
 import { ArrowDownUp } from 'lucide-react'
 import { useMemo } from 'react'
 
+import { enfocarDespues, vecinoDe } from '@/components/ui/focoRespaldo'
+
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -23,6 +25,8 @@ interface Props {
 }
 
 const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+
+const AYUDA_ANTIGUEDAD = 'Cuenta desde la fecha de la tarea; si no tiene, desde que se creó.'
 
 const ETIQUETA_SENTIDO: Record<OrdenRecomendacion, Record<SentidoOrden, string>> = {
   prioridad: { desc: 'Alta primero', asc: 'Baja primero' },
@@ -50,6 +54,15 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
   const objetivos = useMemo(() => new Map((r.objetivos.data ?? []).map((o) => [o.id, o.nombre])), [r.objetivos.data])
   const errorListados = r.proyectos.error?.message ?? r.objetivos.error?.message ?? null
 
+  /** Agenda y, si salió bien, el foco pasa al «Agendar» de la fila siguiente (o de la anterior) o, sin filas, al primer control. */
+  function agendarConFoco(raiz: Parameters<typeof agendar.mutate>[0]['tarea'], incluirSubtareas: boolean) {
+    const vecino = vecinoDe('data-agendar', raiz.id)
+    agendar.mutate(
+      { tarea: raiz, incluirSubtareas },
+      { onSuccess: () => enfocarDespues([vecino ? `[data-agendar="${vecino}"]` : null, '[data-primer-control-recomendacion]']) },
+    )
+  }
+
   const ordenBoton = (valor: OrdenRecomendacion) =>
     cn('rounded-full border px-3 py-1 text-sm', FOCO, r.orden === valor ? 'border-acc bg-acc text-acc-tx' : 'border-line bg-card hover:bg-muted')
 
@@ -73,7 +86,7 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
             <span className="text-sm text-mut" aria-hidden="true">
               Ordenar por
             </span>
-            <button type="button" aria-pressed={r.orden === 'prioridad'} className={ordenBoton('prioridad')} onClick={() => r.setOrden('prioridad')}>
+            <button type="button" data-primer-control-recomendacion aria-pressed={r.orden === 'prioridad'} className={ordenBoton('prioridad')} onClick={() => r.setOrden('prioridad')}>
               Prioridad
             </button>
             <button type="button" aria-pressed={r.orden === 'antiguedad'} className={ordenBoton('antiguedad')} onClick={() => r.setOrden('antiguedad')}>
@@ -85,6 +98,7 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
             {ETIQUETA_SENTIDO[r.orden][r.sentido]}
           </Button>
         </div>
+        {r.orden === 'antiguedad' && <p className="text-xs text-mut">{AYUDA_ANTIGUEDAD}</p>}
         <HorizonteFuturas horizonte={r.horizonte} alEncender={r.setIncluirFuturas} alElegir={r.setHorizonte} deshabilitado={agendar.isPending} />
         <FiltroVinculo
           filtro={r.filtro}
@@ -110,7 +124,7 @@ function Contenido({ hoy, aviso, alAvisar }: Pick<Props, 'hoy' | 'aviso' | 'alAv
           proyectos={proyectos}
           objetivos={objetivos}
           pendiente={agendar.isPending}
-          alAgendar={(raiz, incluirSubtareas) => agendar.mutate({ tarea: raiz.tarea, incluirSubtareas })}
+          alAgendar={(raiz, incluirSubtareas) => agendarConFoco(raiz.tarea, incluirSubtareas)}
         />
       )}
     </div>

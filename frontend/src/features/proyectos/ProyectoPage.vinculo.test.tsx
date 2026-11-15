@@ -203,3 +203,53 @@ describe('ProyectoPage: tareas ligadas (8.4b)', () => {
     expect(quitarTarea).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ProyectoPage: foco en tareas ligadas (H-21)', () => {
+  it('tras vincular una existente, el foco vuelve a «Vincular una existente»', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    const s = await ligadas()
+    await user.click(s.getByRole('button', { name: 'Vincular una existente' }))
+    await user.click(within(seccion()).getByRole('button', { name: /^Suelta/ }))
+    await waitFor(() => expect(within(seccion()).getByRole('button', { name: 'Quitar «Suelta» del proyecto' })).toBeInTheDocument())
+    await waitFor(() => expect(within(seccion()).getByRole('button', { name: 'Vincular una existente' })).toHaveFocus())
+  })
+
+  it('tras quitar, el foco pasa al «Quitar» vecino', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    const s = await ligadas()
+    await user.click(s.getByRole('button', { name: 'Quitar «Pedir presupuesto» del proyecto' }))
+    await waitFor(() => expect(within(seccion()).queryByRole('button', { name: 'Quitar «Pedir presupuesto» del proyecto' })).not.toBeInTheDocument())
+    await waitFor(() => expect(within(seccion()).getByRole('button', { name: 'Quitar «Llamar al flete» del proyecto' })).toHaveFocus())
+  })
+
+  it('si quita la última fila con vecino anterior, el foco va al anterior', async () => {
+    const user = userEvent.setup()
+    renderizar()
+    const s = await ligadas()
+    await user.click(s.getByRole('button', { name: 'Quitar «Llamar al flete» del proyecto' }))
+    await waitFor(() => expect(within(seccion()).getByRole('button', { name: 'Quitar «Pedir presupuesto» del proyecto' })).toHaveFocus())
+  })
+
+  it('si no queda otro «Quitar», el foco va a «Vincular una existente»', async () => {
+    tareas = tareas.filter((t) => t.id !== 11)
+    const user = userEvent.setup()
+    renderizar()
+    const s = await ligadas()
+    await user.click(s.getByRole('button', { name: 'Quitar «Pedir presupuesto» del proyecto' }))
+    await waitFor(() => expect(within(seccion()).queryByRole('button', { name: /^Quitar/ })).not.toBeInTheDocument())
+    await waitFor(() => expect(within(seccion()).getByRole('button', { name: 'Vincular una existente' })).toHaveFocus())
+  })
+
+  it('si el servidor rechaza quitar, el foco no salta a otra fila', async () => {
+    vi.mocked(quitarTarea).mockRejectedValue(new ApiError(400, 'La tarea 10 no pertenece al proyecto 1'))
+    const user = userEvent.setup()
+    renderizar()
+    const s = await ligadas()
+    await user.click(s.getByRole('button', { name: 'Quitar «Pedir presupuesto» del proyecto' }))
+    expect(await within(seccion()).findByRole('alert')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(within(seccion()).getByRole('button', { name: 'Quitar «Llamar al flete» del proyecto' })).not.toHaveFocus()
+  })
+})

@@ -43,7 +43,7 @@ function Raiz({ raiz, hoy, proyectos, objetivos, pendiente, alAgendar }: Omit<Pr
     <li className="border-b border-line py-3 last:border-b-0">
       <div className="flex items-start gap-3">
         <Datos tarea={tarea} hoy={hoy} proyectos={proyectos} objetivos={objetivos} />
-        <Button type="button" size="sm" variant="secondary" className="max-sm:h-11" disabled={pendiente} onClick={() => alAgendar(raiz, cantidad > 0 && incluir)}>
+        <Button type="button" size="sm" variant="secondary" className="max-sm:h-11" data-agendar={tarea.id} disabled={pendiente} onClick={() => alAgendar(raiz, cantidad > 0 && incluir)}>
           Agendar <span className="sr-only">«{tarea.titulo}»</span> para hoy
         </Button>
       </div>

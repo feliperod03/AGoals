@@ -20,3 +20,45 @@ export function enfocarRespaldo() {
 export function enfocarRespaldoDespues() {
   setTimeout(enfocarRespaldo, 0)
 }
+
+/**
+ * Valor de `atributo` del vecino del elemento con ese valor entre todos los `[atributo]` del documento: el siguiente o,
+ * si era el último, el anterior. `null` si no hay otro. Se calcula ANTES de la acción, cuando la fila aún existe.
+ */
+export function vecinoDe(atributo: string, valor: string | number): string | null {
+  const todos = Array.from(document.querySelectorAll<HTMLElement>(`[${atributo}]`))
+  const i = todos.findIndex((el) => el.getAttribute(atributo) === String(valor))
+  if (i === -1) return null
+  const vecino = todos[i + 1] ?? todos[i - 1]
+  return vecino?.getAttribute(atributo) ?? null
+}
+
+/** Cuántas veces se reintenta (cada `ESPERA_MS`) mientras el destino existe pero sigue deshabilitado (mutación terminando). */
+const REINTENTOS = 20
+const ESPERA_MS = 25
+
+/**
+ * Tras el siguiente ciclo de eventos enfoca el primer selector que exista. Si ese elemento sigue deshabilitado (el botón
+ * se rehabilita cuando React termina de aplicar el fin de la mutación, un poco después de `onSuccess`), reintenta unos
+ * instantes en vez de saltarlo; si no llega a habilitarse, o ningún selector existe, cae al encabezado de respaldo.
+ * Sin `preventScroll`: el elemento destino debe quedar a la vista.
+ */
+export function enfocarDespues(selectores: Array<string | null | undefined>) {
+  function intentar(restantes: number) {
+    for (const s of selectores) {
+      if (!s) continue
+      const el = document.querySelector<HTMLElement>(s)
+      if (!el) continue
+      if (!(el as HTMLButtonElement).disabled) {
+        el.focus()
+        return
+      }
+      if (restantes > 0) {
+        setTimeout(() => intentar(restantes - 1), ESPERA_MS)
+        return
+      }
+    }
+    enfocarRespaldo()
+  }
+  setTimeout(() => intentar(REINTENTOS), 0)
+}

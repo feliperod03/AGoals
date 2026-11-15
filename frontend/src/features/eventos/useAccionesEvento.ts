@@ -10,6 +10,7 @@ import {
   mensajeEventoCreado,
   mensajeEventoGuardado,
   mensajeEventoGuardadoConRecordatorio,
+  mensajeEventoGuardadoRecordatorioQueda,
   mensajeEventoRecordatorioNoMovido,
   mensajeEventoYaNoExistia,
 } from '@/lib/fechas'
@@ -31,8 +32,9 @@ export interface AccionesEvento {
    * Crea (diálogo de creación) o reemplaza (diálogo de edición) con el cuerpo completo.
    * `recordatorio` (solo al editar): el del evento, para moverlo con el inicio (9e). Se mueve únicamente si no fue
    * enviado y el instante de inicio cambió; si no, se ignora. Primero va el PUT del evento y después el del recordatorio.
+   * `quedaEn` (solo al editar, con la casilla desmarcada): cuándo queda el recordatorio sin moverse; solo se usa para el aviso.
    */
-  guardar: (request: EventoRequest, recordatorio?: Recordatorio) => void
+  guardar: (request: EventoRequest, recordatorio?: Recordatorio, quedaEn?: string) => void
   guardando: boolean
   /** Mensaje del servidor tal cual; el diálogo queda abierto con él. */
   errorGuardar: string | null
@@ -79,6 +81,8 @@ interface Variables {
   /** Inicio del evento abierto al llamar a `guardar` (el que tenía antes de este PUT). */
   inicioViejo?: string
   recordatorio?: Recordatorio
+  /** Instante (ISO) en que queda el recordatorio si no se movió aunque cambió el inicio: solo para el aviso. */
+  quedaEn?: string
 }
 
 /**
@@ -146,7 +150,7 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
 
   const guardarMutacion = useMutation({
     mutationFn: guardarEvento,
-    onSuccess: async ({ evento, movido }, { id }) => {
+    onSuccess: async ({ evento, movido }, { id, quedaEn }) => {
       // `['recordatorios']` solo si se intentó mover (haya salido bien o no): banner, Próximos y la consulta por evento.
       await Promise.all([invalidarEventos(), movido ? queryClient.invalidateQueries({ queryKey: ['recordatorios'] }) : null])
       setDialogo(null)
@@ -159,6 +163,8 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
       } else if (movido) {
         // Fallo parcial: el evento sí quedó guardado. El aviso no expira para que no pase desapercibido.
         alMensaje(mensajeEventoRecordatorioNoMovido(titulo, inicio, fin, movido.motivo), { persistente: true })
+      } else if (quedaEn) {
+        alMensaje(mensajeEventoGuardadoRecordatorioQueda(titulo, inicio, fin, quedaEn))
       } else {
         alMensaje(mensajeEventoGuardado(titulo, inicio, fin))
       }
@@ -211,9 +217,9 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
     abrirCrear: (iniciales) => abrir({ iniciales }),
     abrirEditar: (evento) => abrir({ evento }),
     cerrarDialogo: () => setDialogo(null),
-    guardar: (request, recordatorio) =>
+    guardar: (request, recordatorio, quedaEn) =>
       lanzar(() =>
-        guardarMutacion.mutate({ id: dialogo?.evento?.id, request, inicioViejo: dialogo?.evento?.fechaHoraInicio, recordatorio }),
+        guardarMutacion.mutate({ id: dialogo?.evento?.id, request, inicioViejo: dialogo?.evento?.fechaHoraInicio, recordatorio, quedaEn }),
       ),
     guardando: guardarMutacion.isPending,
     errorGuardar: guardarMutacion.error?.message ?? null,

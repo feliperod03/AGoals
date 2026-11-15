@@ -133,3 +133,15 @@ describe('DialogContent: devolver el foco', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Abrir B' })).toHaveFocus())
   })
 })
+
+describe('DialogContent: capa', () => {
+  it('en tema oscuro la capa es negra translúcida (oscurece, no aclara)', async () => {
+    const user = userEvent.setup()
+    render(<Ejemplo />)
+    await user.click(screen.getByRole('button', { name: 'Abrir' }))
+    await screen.findByRole('dialog')
+    const capa = document.querySelector('[data-state="open"].fixed.inset-0')
+    expect(capa).toHaveClass('dark:bg-black/60')
+    expect(capa).toHaveClass('bg-tx/40')
+  })
+})

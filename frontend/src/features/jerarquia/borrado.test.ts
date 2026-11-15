@@ -9,6 +9,7 @@ import {
   partesBorradas,
   plural,
   resumenBorrado,
+  notaContador,
   textoFila,
   unir,
   type DefCategoria,
@@ -113,7 +114,7 @@ describe('avisoRescatados', () => {
 })
 
 describe('textoFila', () => {
-  it('Mover describe adónde van', () => {
+  it('Conservar describe adónde van', () => {
     expect(textoFila(PROYECTOS, VACIO, 'conservar')).toBe('Quedan sin objetivo')
     expect(textoFila(TAREAS, VACIO, 'conservar')).toBe('Quedan sueltas')
   })
@@ -138,5 +139,18 @@ describe('textoFila', () => {
   it('si no desaparece nada (todos rescatados) lo dice', () => {
     const impacto: ImpactoBorrado = { ...VACIO, proyectos: { total: 2, borrados: 0, rescatados: 2 } }
     expect(textoFila(PROYECTOS, impacto, 'borrar')).toBe('No se borra ninguno')
+  })
+})
+
+describe('notaContador (H-28)', () => {
+  it('explica el aumento del contador respecto del total con todo conservado', () => {
+    expect(notaContador(5, 2)).toBe('Ahora son 5 (antes 2): se suman las de lo que también se borra.')
+  })
+
+  it('no dice nada si no cambió, si bajó o si no hay base', () => {
+    expect(notaContador(2, 2)).toBeNull()
+    expect(notaContador(1, 2)).toBeNull()
+    expect(notaContador(3, undefined)).toBeNull()
+    expect(notaContador(3, 0)).toBeNull()
   })
 })

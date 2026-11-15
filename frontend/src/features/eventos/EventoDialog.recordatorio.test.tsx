@@ -39,6 +39,8 @@ function recordatorio(parcial: Partial<Recordatorio> = {}): Recordatorio {
 /** Lo que "tiene" el servidor: los mocks de escritura lo modifican, así el refresco muestra lo nuevo. */
 let servidor: Recordatorio[]
 const alMensaje = vi.fn()
+/** El evento que abre «Abrir»: cada test puede cambiarlo (se restablece en `beforeEach`). */
+let eventoPrueba: Evento = EVENTO
 
 function Pagina({ editar }: { editar: boolean }) {
   const acciones = useAccionesEvento({ alMensaje })
@@ -48,7 +50,7 @@ function Pagina({ editar }: { editar: boolean }) {
       <button
         type="button"
         ref={nuevo}
-        onClick={() => (editar ? acciones.abrirEditar(EVENTO) : acciones.abrirCrear(valoresParaHueco('2026-12-15', 9 * 60)))}
+        onClick={() => (editar ? acciones.abrirEditar(eventoPrueba) : acciones.abrirCrear(valoresParaHueco('2026-12-15', 9 * 60)))}
       >
         Abrir
       </button>
@@ -74,6 +76,7 @@ const dialogoEvento = () => screen.getByRole('dialog', { name: 'Editar evento' }
 const dialogoRecordatorio = () => screen.findByRole('dialog', { name: 'Recordatorio de «Dentista»' })
 
 beforeEach(() => {
+  eventoPrueba = EVENTO
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-12-10T12:00:00-03:00'))
   vi.resetAllMocks()
@@ -219,7 +222,7 @@ describe('EventoDialog: mover el recordatorio con el inicio (9e)', () => {
     await consultado('Recordatorio: mar 15 dic · 08:00')
     expect(casilla()).not.toBeInTheDocument()
     cambiar('Hora de inicio', '09:30')
-    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })
+    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de 08:00 a 08:30)' })
     expect(c).toBeChecked()
     expect(screen.getByText('Quedará el mar 15 dic · 08:30.')).toBeInTheDocument()
     expect(screen.queryByText(/Seguirá vencido/)).not.toBeInTheDocument()
@@ -291,11 +294,52 @@ describe('EventoDialog: mover el recordatorio con el inicio (9e)', () => {
     await consultado('Recordatorio: mar 15 dic · 08:00')
     cambiar('Hora de inicio', '09:30')
     await user.click(await screen.findByRole('checkbox', { name: /Mover también/ }))
-    expect(screen.getByText('El recordatorio se queda donde está.')).toBeInTheDocument()
+    expect(screen.getByText('El recordatorio se queda donde está: el mar 15 dic · 08:00.')).toBeInTheDocument()
     await user.click(guardar())
     await waitFor(() => expect(actualizarEvento).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(alMensaje).toHaveBeenCalled())
     expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it('H-35: evento 09:00–11:00 con recordatorio 1 h antes y casilla desmarcada: el aviso dice la hora real en que queda', async () => {
+    eventoPrueba = { ...EVENTO, fechaHoraFin: '2026-12-15T11:00:00-03:00' }
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Hora de inicio', '10:00')
+    // El fin viaja con el inicio conservando la duración (2 h): 12:00.
+    expect(campo('Hora de fin').value).toBe('12:00')
+    await user.click(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de 08:00 a 09:00)' }))
+    await user.click(guardar())
+    await waitFor(() => expect(actualizarEvento).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledTimes(1))
+    expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('; el recordatorio queda el mar 15 dic · 08:00'))
+    expect(actualizarRecordatorio).not.toHaveBeenCalled()
+  })
+
+  it('H-35: el caso del hallazgo (recordatorio ya en las 10:00, evento a las 11:00 que pasa a las 14:00, desmarcada) dice 10:00', async () => {
+    eventoPrueba = { ...EVENTO, fechaHoraInicio: '2026-12-15T11:00:00-03:00', fechaHoraFin: '2026-12-15T12:00:00-03:00' }
+    const user = await montar(true, [recordatorio({ fechaHora: '2026-12-15T10:00:00-03:00' })])
+    await consultado('Recordatorio: mar 15 dic · 10:00')
+    cambiar('Hora de inicio', '14:00')
+    await user.click(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de 10:00 a 13:00)' }))
+    await user.click(guardar())
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledTimes(1))
+    expect(alMensaje).toHaveBeenCalledWith(expect.stringContaining('; el recordatorio queda el mar 15 dic · 10:00'))
+  })
+
+  it('H-35: si el recordatorio cambia de día, la casilla muestra fecha y hora de cada extremo', async () => {
+    await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    cambiar('Día de inicio', '2026-12-16')
+    expect(await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de mar 15 dic · 08:00 a mié 16 dic · 08:00)' })).toBeChecked()
+  })
+
+  it('H-35: sin cambio de inicio, o con la casilla marcada, el aviso no dice «queda»', async () => {
+    const user = await montar(true, [recordatorio()])
+    await consultado('Recordatorio: mar 15 dic · 08:00')
+    await user.click(guardar())
+    await waitFor(() => expect(alMensaje).toHaveBeenCalledTimes(1))
+    expect(alMensaje.mock.calls[0]?.[0]).not.toMatch(/queda el/)
   })
 
   it('D2: una casilla desmarcada sigue desmarcada si se oculta y vuelve a aparecer', async () => {
@@ -380,7 +424,7 @@ describe('EventoDialog: mover el recordatorio con el inicio (9e)', () => {
     expect(screen.getByLabelText('Fecha y hora')).toHaveValue('2026-12-15T08:00')
     await user.click(crear)
     await user.click(await within(d).findByRole('button', { name: 'Listo' }))
-    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (cae el mar 15 dic · 08:00)' })
+    const c = await screen.findByRole('checkbox', { name: 'Mover también el recordatorio (de 08:00 a 11:00)' })
     expect(c).toBeChecked()
     expect(screen.getByText('Quedará el mar 15 dic · 11:00.')).toBeInTheDocument()
     await waitFor(() => expect(guardar()).toBeEnabled())

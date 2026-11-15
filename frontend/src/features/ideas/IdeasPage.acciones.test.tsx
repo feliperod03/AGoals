@@ -479,7 +479,7 @@ describe('IdeasPage: reabrir', () => {
     await verTodas(user)
     const fila = (await screen.findByText('Cerrada')).closest('li')!
     await waitFor(() => expect(within(fila).getByText('Planteada')).toBeInTheDocument())
-    expect(fila).toHaveTextContent('Conclusión: Vieja')
+    expect(fila).toHaveTextContent('Conclusión anterior: Vieja')
   })
 
   it('404: el error se ve en la página y la lista se refresca', async () => {
@@ -589,5 +589,93 @@ describe('IdeasPage: foco desde el menú «⋯»', () => {
     const dialogo = await abrirMenu(user, 'Primera', 'Concluir')
     await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Primera»' })).toHaveFocus())
+  })
+})
+
+describe('IdeasPage: avisos y rótulos (H-23, H-24)', () => {
+  it('concluir dice dónde queda la idea', async () => {
+    const { user } = await iniciar()
+    const dialogo = await abrirMenu(user, 'Primera', 'Concluir')
+    await user.click(within(dialogo).getByRole('button', { name: 'Concluir' }))
+    await waitFor(() => expect(aviso()).toHaveTextContent('Idea «Primera» concluida; la encuentras en «Concluidas»'))
+  })
+
+  it('reabrir dice dónde queda la idea', async () => {
+    const { user } = await iniciar()
+    await user.selectOptions(screen.getByLabelText('Estado'), 'concluidas')
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Cerrada»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Reabrir' }))
+    await waitFor(() => expect(aviso()).toHaveTextContent('Idea «Cerrada» reabierta; vuelve a «Planteadas»'))
+    // Con el filtro «Concluidas» la lista queda vacía: el estado vacío sugiere adónde fue.
+    expect(await screen.findByText(/Las que reabras vuelven a «Planteadas»/)).toBeInTheDocument()
+  })
+
+  it('una idea planteada con conclusión previa la rotula «Conclusión anterior»; una concluida, «Conclusión»', async () => {
+    const { user } = await iniciar()
+    const reabierta = (await screen.findByText('Reabierta')).closest('li')!
+    expect(reabierta).toHaveTextContent('Conclusión anterior: Salió bien')
+    await verTodas(user)
+    const cerrada = (await screen.findByText('Cerrada')).closest('li')!
+    expect(cerrada).toHaveTextContent('Conclusión: Vieja')
+    expect(cerrada).not.toHaveTextContent('Conclusión anterior')
+  })
+})
+
+describe('IdeasPage: foco tras acciones (H-25)', () => {
+  const menu = (t: string) => screen.getByRole('button', { name: `Acciones de «${t}»` })
+
+  it('tras editar, el foco vuelve al «⋯» de la misma fila', async () => {
+    const { user } = await iniciar()
+    const dialogo = await abrirMenu(user, 'Primera', 'Editar')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(aviso()).toHaveTextContent('Idea «Primera» guardada'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(menu('Primera')).toHaveFocus())
+  })
+
+  it('tras concluir (la fila sale de «Planteadas»), el foco pasa al «⋯» de la fila siguiente', async () => {
+    const { user } = await iniciar()
+    expect(titulos()).toEqual(['Reabierta', 'Primera'])
+    const dialogo = await abrirMenu(user, 'Reabierta', 'Concluir')
+    await user.click(within(dialogo).getByRole('button', { name: 'Concluir' }))
+    await waitFor(() => expect(titulos()).toEqual(['Primera']))
+    await waitFor(() => expect(menu('Primera')).toHaveFocus())
+  })
+
+  it('tras concluir la última fila, el foco pasa a la anterior', async () => {
+    const { user } = await iniciar()
+    const dialogo = await abrirMenu(user, 'Primera', 'Concluir')
+    await user.click(within(dialogo).getByRole('button', { name: 'Concluir' }))
+    await waitFor(() => expect(titulos()).toEqual(['Reabierta']))
+    await waitFor(() => expect(menu('Reabierta')).toHaveFocus())
+  })
+
+  it('tras reabrir (sale de «Concluidas»), el foco pasa al encabezado si no queda otra fila', async () => {
+    const { user } = await iniciar()
+    await user.selectOptions(screen.getByLabelText('Estado'), 'concluidas')
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Cerrada»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Reabrir' }))
+    await waitFor(() => expect(titulos()).toEqual([]))
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Ideas' })).toHaveFocus())
+  })
+
+  it('tras reabrir con otras filas visibles («Todas»), el foco queda en el «⋯» de la misma idea', async () => {
+    const { user } = await iniciar()
+    await verTodas(user)
+    await user.click(await screen.findByRole('button', { name: 'Acciones de «Cerrada»' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Reabrir' }))
+    await waitFor(() => expect(aviso()).toHaveTextContent('reabierta'))
+    await waitFor(() => expect(menu('Cerrada')).toHaveFocus())
+  })
+
+  it('si concluir falla (409), el foco no salta a otra fila', async () => {
+    vi.mocked(concluirIdea).mockRejectedValue(new ApiError(409, 'La idea 2 ya está concluida'))
+    const { user } = await iniciar()
+    const dialogo = await abrirMenu(user, 'Reabierta', 'Concluir')
+    await user.click(within(dialogo).getByRole('button', { name: 'Concluir' }))
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('ya está concluida')
+    await new Promise((r) => setTimeout(r, 20))
+    // Con el diálogo abierto el resto está aria-hidden: se busca por el atributo, no por rol.
+    expect(document.querySelector('[data-menu-idea="1"]')).not.toHaveFocus()
   })
 })

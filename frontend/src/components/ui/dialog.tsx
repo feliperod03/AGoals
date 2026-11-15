@@ -37,7 +37,7 @@ function ContenidoAbierto({ className, children, onCloseAutoFocus, ...props }: R
 
   return (
     <>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-tx/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-tx/40 dark:bg-black/60 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
       <DialogPrimitive.Content
         className={cn(
           // Angosto: casi todo el ancho y alto con scroll interno; ancho: columna centrada.

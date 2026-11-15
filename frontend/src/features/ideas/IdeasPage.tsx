@@ -35,7 +35,7 @@ export function IdeasPage() {
     <div>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-4xl">Ideas</h1>
+          <h1 data-foco-respaldo tabIndex={-1} className="text-4xl outline-none">Ideas</h1>
           <p className="mt-1 text-sm text-mut">Lo que se te ocurre, con su conclusión cuando la cierras. Por defecto, las planteadas.</p>
         </div>
         <Button onClick={acciones.abrirCrear}>

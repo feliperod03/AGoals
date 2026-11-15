@@ -47,7 +47,7 @@ export function EncabezadoCalendario({
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 id={idTitulo} className="text-4xl">
+        <h1 id={idTitulo} data-foco-respaldo tabIndex={-1} className="text-4xl outline-none">
           {titulo}
         </h1>
         <p role="status" className="mt-1 min-h-5 text-sm text-mut">

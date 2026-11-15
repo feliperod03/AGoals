@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { enfocarDespues, vecinoDe } from '@/components/ui/focoRespaldo'
 import { PrioridadChip } from '@/components/PrioridadChip'
 import { Button } from '@/components/ui/button'
 import { ErrorEnLinea, Tarjeta, TextoVacio } from '@/components/Tarjeta'
@@ -74,6 +75,7 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
               disabled={vinculo.pendiente}
               aria-expanded={vinculando}
               aria-controls={`ligadas-vincular-${campo}`}
+              data-vincular-existente
               onClick={() => setVinculando((v) => !v)}
             >
               Vincular una existente
@@ -87,7 +89,16 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
               candidatas={candidatas}
               deshabilitado={vinculo.pendiente}
               // Solo se cierra tras un éxito: con un error el buscador sigue abierto y el mensaje a la vista.
-              alElegir={(tarea) => vinculo.asignar({ tipo, tarea, destino, alExito: () => setVinculando(false) })}
+              alElegir={(tarea) =>
+                vinculo.asignar({
+                  tipo,
+                  tarea,
+                  destino,
+                  alExito: () => setVinculando(false),
+                  // El buscador se desmonta: el foco vuelve al botón que lo abrió (H-21).
+                  despues: () => enfocarDespues(['[data-vincular-existente]']),
+                })
+              }
             />
           )}
         </div>
@@ -103,7 +114,11 @@ export function TareasLigadas({ campo, id, titulo, aclaracion, textoVacio, nombr
       {nodos && nodos.total > 0 && (
         <ul className="flex flex-col">
           {nodos.nodos.map((nodo) => (
-            <Fila key={nodo.tarea.id} nodo={nodo} campo={campo} id={id} tipo={tipo} pendiente={vinculo.pendiente} alQuitar={(tarea) => vinculo.quitar({ tipo, tarea, destino })} />
+            <Fila key={nodo.tarea.id} nodo={nodo} campo={campo} id={id} tipo={tipo} pendiente={vinculo.pendiente} alQuitar={(tarea) => {
+                // La fila sale de la lista: el foco pasa al «Quitar» vecino o, sin ninguno, a «Vincular una existente» (H-21).
+                const vecino = vecinoDe('data-quitar', tarea.id)
+                vinculo.quitar({ tipo, tarea, destino, despues: () => enfocarDespues([vecino ? `[data-quitar="${vecino}"]` : null, '[data-vincular-existente]']) })
+              }} />
           ))}
         </ul>
       )}
@@ -147,6 +162,7 @@ function Fila({ nodo, ...resto }: PropsFila) {
             size="sm"
             disabled={pendiente}
             aria-label={`Quitar «${tarea.titulo}» del ${tipo}`}
+            data-quitar={tarea.id}
             onClick={() => alQuitar(tarea)}
           >
             Quitar

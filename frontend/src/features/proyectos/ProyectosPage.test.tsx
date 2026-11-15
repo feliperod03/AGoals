@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { objetivo, proyecto } from '@/features/jerarquia/fabrica'
+import { enfocarRespaldo } from '@/components/ui/focoRespaldo'
 import { ProyectosPage } from './ProyectosPage'
 
 vi.mock('@/api/proyectos', () => ({ getProyectos: vi.fn(), crearProyecto: vi.fn(), actualizarProyecto: vi.fn(), borrarProyecto: vi.fn(), getImpactoBorradoProyecto: vi.fn() }))
@@ -177,5 +178,16 @@ describe('ProyectosPage: filtros', () => {
     expect(screen.getByLabelText('Buscar por nombre')).toHaveValue('')
     expect(screen.getByLabelText('Estado')).toHaveValue('abiertos')
     expect(nombres()).toEqual(['Acción social', 'Casa'])
+  })
+})
+
+describe('ProyectosPage: foco de respaldo (H-07)', () => {
+  it('el encabezado es el elemento de respaldo del foco', async () => {
+    renderizar()
+    await screen.findByText('Aún no tienes proyectos.')
+    const h1 = screen.getByRole('heading', { level: 1 })
+    expect(h1).toHaveAttribute('data-foco-respaldo')
+    enfocarRespaldo()
+    expect(h1).toHaveFocus()
   })
 })

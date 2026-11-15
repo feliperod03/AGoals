@@ -11,14 +11,16 @@ import type { AccionesEvento } from './useAccionesEvento'
  * Foco al cerrar la edición: el `Dialog` de Radix solo lo devuelve a su `DialogTrigger`, y estos diálogos son
  * controlados (no tienen trigger), así que lo devolvemos a mano al elemento que lo tenía al abrir (el bloque, la fila,
  * la celda del día o «Nuevo evento»). Si ese elemento ya no está en la página (se borró el evento, o se movió de día y
- * su bloque se volvió a montar) o era el `body` (un clic en un hueco no enfoca nada), va a `focoAlternativo`.
+ * su bloque se volvió a montar) o era el `body` (un clic en un hueco no enfoca nada), va a `focoAlternativo` sin desplazar la página.
  */
 export function DialogosEvento({ acciones, focoAlternativo }: { acciones: AccionesEvento; focoAlternativo: RefObject<HTMLElement | null> }) {
   function alCerrarFoco(evento: Event) {
     evento.preventDefault()
     const disparador = acciones.disparador.current
     if (disparador && disparador !== document.body && disparador.isConnected) disparador.focus()
-    else focoAlternativo.current?.focus()
+    // `preventScroll` solo en este respaldo (H-33): un clic en un hueco de la semana deja el foco en <body>, y llevarlo a
+    // «Nuevo evento» (arriba del todo) saltaría al inicio de la página y se perdería el sitio en la rejilla.
+    else focoAlternativo.current?.focus({ preventScroll: true })
   }
   return (
     <>

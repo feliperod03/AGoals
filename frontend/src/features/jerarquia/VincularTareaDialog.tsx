@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { enfocarDespues } from '@/components/ui/focoRespaldo'
 import { BuscadorLista } from '@/components/BuscadorLista'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -108,6 +109,8 @@ function Campo({ tipo, tarea, lista, cargando, fallo, vinculo, abierto, alAbrir,
   const candidatos = useMemo(() => (lista ? candidatosParaTarea(lista, idActual) : []), [lista, idActual])
   const nota = fallo ? `No se pudo cargar la lista de ${plural}` : cargando ? `Cargando ${plural}…` : undefined
   const titulo = `campo-vinculo-${tipo}`
+  // El buscador se desmonta al elegir: el foco vuelve al «Cambiar» usado (H-20), cuando ya no está deshabilitado.
+  const volverACambiar = () => enfocarDespues([`[data-cambiar-vinculo="${tipo}"]`])
 
   return (
     <section aria-labelledby={titulo} className="flex flex-col gap-2 rounded-xl border border-line p-3">
@@ -125,6 +128,7 @@ function Campo({ tipo, tarea, lista, cargando, fallo, vinculo, abierto, alAbrir,
             size="sm"
             disabled={bloqueado}
             aria-label={`Cambiar ${tipo}`}
+            data-cambiar-vinculo={tipo}
             aria-expanded={abierto && disponible}
             aria-controls={`vincular-panel-${tipo}`}
             onClick={alAbrir}
@@ -159,8 +163,11 @@ function Campo({ tipo, tarea, lista, cargando, fallo, vinculo, abierto, alAbrir,
             deshabilitado={vinculo.pendiente}
             alElegir={(item) => {
               // Elegir el que ya tiene no cambia nada: solo se cierra el buscador, sin llamada.
-              if (item.id === idActual) return alCerrarBuscador()
-              vinculo.asignar({ tipo, tarea, destino: { id: item.id, nombre: item.nombre }, alExito: alCerrarBuscador })
+              if (item.id === idActual) {
+                alCerrarBuscador()
+                return volverACambiar()
+              }
+              vinculo.asignar({ tipo, tarea, destino: { id: item.id, nombre: item.nombre }, alExito: alCerrarBuscador, despues: volverACambiar })
             }}
           />
           {actual && (

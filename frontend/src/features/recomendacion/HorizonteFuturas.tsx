@@ -11,7 +11,7 @@ interface Props {
 
 const FOCO = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 
-/** Interruptor «Incluir próximos N días»; el selector de N solo aparece con el interruptor encendido. */
+/** Interruptor «Incluir tareas de los próximos días»; el selector de N solo aparece con el interruptor encendido. */
 export function HorizonteFuturas({ horizonte, alEncender, alElegir, deshabilitado }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -25,7 +25,7 @@ export function HorizonteFuturas({ horizonte, alEncender, alElegir, deshabilitad
           onChange={(e) => alEncender(e.target.checked)}
           className={cn('size-4 accent-acc', FOCO)}
         />
-        Incluir próximos N días
+        Incluir tareas de los próximos días
       </label>
       {horizonte !== null && (
         <select

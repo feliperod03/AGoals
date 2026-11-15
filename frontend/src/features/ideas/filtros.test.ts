@@ -93,16 +93,16 @@ describe('textoVacioIdeas', () => {
   const nombres = { proyectos: [{ id: 5, nombre: 'Casa' }], objetivos: [{ id: 8, nombre: 'Salud' }] }
 
   it('con la vista por defecto no habla de filtros', () => {
-    expect(textoVacioIdeas(FILTROS_POR_DEFECTO, nombres)).toBe('No hay ideas planteadas.')
+    expect(textoVacioIdeas(FILTROS_POR_DEFECTO, nombres)).toBe('No hay ideas planteadas. Las que concluyas están en el filtro «Concluidas».')
   })
 
   it('nombra todos los filtros activos', () => {
-    expect(textoVacioIdeas(f({ estado: 'concluidas' }), nombres)).toBe('No hay ideas con estos filtros: Concluidas.')
+    expect(textoVacioIdeas(f({ estado: 'concluidas' }), nombres)).toBe('No hay ideas con estos filtros: Concluidas. Las que reabras vuelven a «Planteadas».')
     expect(textoVacioIdeas(f({ vinculo: { tipo: 'sueltas' }, busqueda: ' sol ' }), nombres)).toBe(
       'No hay ideas con estos filtros: Planteadas, Sueltas, Título o descripción contiene «sol».',
     )
     expect(textoVacioIdeas(f({ estado: 'todas', vinculo: { tipo: 'proyecto', id: 5 } }), nombres)).toBe('No hay ideas con estos filtros: Del proyecto «Casa».')
-    expect(textoVacioIdeas(f({ vinculo: { tipo: 'objetivo', id: 8 } }), nombres)).toBe('No hay ideas con estos filtros: Planteadas, Del objetivo «Salud».')
+    expect(textoVacioIdeas(f({ vinculo: { tipo: 'objetivo', id: 8 } }), nombres)).toBe('No hay ideas con estos filtros: Planteadas, Del objetivo «Salud». Las que concluyas están en el filtro «Concluidas».')
     expect(textoVacioIdeas(f({ vinculo: { tipo: 'objetivo', id: null } }), nombres)).toContain('De algún objetivo')
   })
 

@@ -342,3 +342,58 @@ describe('EventoDialog: editar', () => {
     expect(await screen.findByRole('heading', { name: 'Borrar evento' })).toBeInTheDocument()
   })
 })
+
+describe('EventoDialog: foco al campo con error (H-32)', () => {
+  it('fin anterior al inicio: tras «Guardar» el foco va a «Hora de fin», marcado como inválido', async () => {
+    const user = await montar({ iniciales: valoresParaHueco('2026-12-15', 9 * 60) })
+    await user.type(campo('Título'), 'Dentista')
+    cambiar('Hora de fin', '08:00')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('El fin debe ser posterior al inicio')
+    expect(campo('Hora de fin')).toHaveFocus()
+    expect(campo('Hora de fin')).toHaveAttribute('aria-invalid', 'true')
+    expect(crearEvento).not.toHaveBeenCalled()
+  })
+
+  it('con «Todo el día» y el último día antes del primero, el foco va a «Último día»', async () => {
+    const user = await montar({ iniciales: valoresTodoElDia('2026-12-15') })
+    await user.type(campo('Título'), 'Feriado')
+    cambiar('Último día', '2026-12-14')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('El último día no puede ser anterior al primero')
+    expect(campo('Último día')).toHaveFocus()
+  })
+
+  it('si falla el inicio, el foco va al día de inicio', async () => {
+    const user = await montar({ iniciales: valoresParaHueco('2026-12-15', 9 * 60) })
+    await user.type(campo('Título'), 'Dentista')
+    cambiar('Hora de inicio', '')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('Indica el día y la hora de inicio')
+    expect(campo('Día de inicio')).toHaveFocus()
+  })
+
+  it('con un error de fin visible, cambiar una hora NO mueve el foco', async () => {
+    const user = await montar({ iniciales: valoresParaHueco('2026-12-15', 9 * 60) })
+    await user.type(campo('Título'), 'Dentista')
+    cambiar('Hora de fin', '08:00')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('El fin debe ser posterior al inicio')
+    // El foco se lleva a otro control a propósito: editar no debe devolverlo al campo con error.
+    campo('Título').focus()
+    cambiar('Hora de inicio', '07:00')
+    cambiar('Hora de fin', '07:30')
+    expect(campo('Título')).toHaveFocus()
+    // Un error de fin que se recalcula al editar tampoco lo roba: sigue sin foco programático hasta el próximo «Guardar».
+    cambiar('Hora de fin', '06:00')
+    expect(campo('Título')).toHaveFocus()
+  })
+
+  it('título vacío y fin mal a la vez: el foco queda en el título (el primer campo del formulario)', async () => {
+    const user = await montar({ iniciales: valoresParaHueco('2026-12-15', 9 * 60) })
+    cambiar('Hora de fin', '08:00')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await screen.findByText('El título es obligatorio')
+    expect(campo('Título')).toHaveFocus()
+  })
+})

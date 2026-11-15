@@ -1,6 +1,7 @@
 import { BellRing } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { enfocarDespues, vecinoDe } from '@/components/ui/focoRespaldo'
 import { formatearFechaHoraCorta } from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
 import { useTituloRecordatorio } from './useRecordatorios'
@@ -28,7 +29,11 @@ export function AvisoVencidos() {
                 recordatorio={r}
                 pendiente={pendiente}
                 error={error?.id === r.id ? error.mensaje : null}
-                alEntender={() => marcar(r.id)}
+                alEntender={() => {
+                  // La fila desaparece: el foco pasa al «Entendido» vecino o, sin ninguno, al encabezado de la página (H-37).
+                  const vecino = vecinoDe('data-entendido', r.id)
+                  marcar(r.id, () => enfocarDespues([vecino ? `[data-entendido="${vecino}"]` : null]))
+                }}
               />
             ))}
           </ul>
@@ -56,7 +61,7 @@ function FilaVencido({ recordatorio, pendiente, error, alEntender }: FilaProps) 
           <p className="truncate text-tx">{texto}</p>
           <p className="text-xs text-mut">Para el {formatearFechaHoraCorta(recordatorio.fechaHora)}</p>
         </div>
-        <Button variant="secondary" size="sm" disabled={pendiente} aria-label={`Entendido: ${texto}`} onClick={alEntender}>
+        <Button variant="secondary" size="sm" data-entendido={recordatorio.id} disabled={pendiente} aria-label={`Entendido: ${texto}`} onClick={alEntender}>
           Entendido
         </Button>
       </div>

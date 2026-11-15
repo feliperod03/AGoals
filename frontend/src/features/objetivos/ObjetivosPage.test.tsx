@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { objetivo } from '@/features/jerarquia/fabrica'
+import { enfocarRespaldo } from '@/components/ui/focoRespaldo'
 import { ObjetivosPage } from './ObjetivosPage'
 
 vi.mock('@/api/objetivos', () => ({ getObjetivos: vi.fn(), crearObjetivo: vi.fn(), actualizarObjetivo: vi.fn(), borrarObjetivo: vi.fn(), getImpactoBorradoObjetivo: vi.fn() }))
@@ -67,5 +68,16 @@ describe('ObjetivosPage', () => {
     expect(screen.getByText('Ningún objetivo coincide con los filtros.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Volver a la vista por defecto' }))
     expect(nombres()).toEqual(['Salud'])
+  })
+})
+
+describe('ObjetivosPage: foco de respaldo (H-07)', () => {
+  it('el encabezado es el elemento de respaldo del foco', async () => {
+    renderizar()
+    await screen.findByText('Aún no tienes objetivos.')
+    const h1 = screen.getByRole('heading', { level: 1 })
+    expect(h1).toHaveAttribute('data-foco-respaldo')
+    enfocarRespaldo()
+    expect(h1).toHaveFocus()
   })
 })

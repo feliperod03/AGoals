@@ -8,6 +8,7 @@ import { getEventos } from '@/api/eventos'
 import { getTareas } from '@/api/tareas'
 import type { Evento } from '@/types/evento'
 import type { Tarea } from '@/types/tarea'
+import { enfocarRespaldo } from '@/components/ui/focoRespaldo'
 import { CalendarioPage } from './CalendarioPage'
 
 vi.mock('@/api/eventos', () => ({ getEventos: vi.fn(), getEvento: vi.fn() }))
@@ -567,5 +568,14 @@ describe('CalendarioPage: «Hoy» no apila entradas', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
     await atras()
     expect(ubicacion()).toHaveTextContent('/otra')
+  })
+})
+
+describe('CalendarioPage: foco de respaldo (H-07)', () => {
+  it('el encabezado es el elemento de respaldo del foco', () => {
+    montar()
+    expect(titulo()).toHaveAttribute('data-foco-respaldo')
+    enfocarRespaldo()
+    expect(titulo()).toHaveFocus()
   })
 })
