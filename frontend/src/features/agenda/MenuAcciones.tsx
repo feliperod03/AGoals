@@ -31,7 +31,7 @@ export function MenuAcciones({ tarea, acciones, alAgendar }: { tarea: Tarea; acc
         {cancelada ? (
           <DropdownMenuItem onSelect={() => acciones.ejecutar('reactivar', tarea)}>Reactivar</DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onSelect={() => acciones.ejecutar('cancelar', tarea)}>Cancelar</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => acciones.ejecutar('cancelar', tarea)}>Marcar como cancelada</DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={() => acciones.pedirBorrado(tarea)}>Borrar</DropdownMenuItem>
       </DropdownMenuContent>

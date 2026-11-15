@@ -9,6 +9,7 @@ import {
   mensajeBorrada,
   mensajeMadreCambiada,
   mensajePospuesta,
+  mensajeRecordatorioConservado,
   mensajeRecordatorioMovido,
   mensajeRecordatorioNoMovido,
   mensajeSinFecha,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/fechas'
 import type { Recordatorio } from '@/types/recordatorio'
 import type { ModoSubtareas, Tarea } from '@/types/tarea'
+import { enfocarRespaldoDespues } from '@/components/ui/focoRespaldo'
 import { requestConEstado, requestConPadre, requestSinFecha } from './formularioTarea'
 import { requestMovido } from './recordatorioForm'
 import type { AlMensaje } from './useMensajeTemporal'
@@ -186,7 +188,8 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
   const [aRecordatorio, setARecordatorio] = useState<Tarea | null>(null)
   const [aBorrar, setABorrar] = useState<Tarea | null>(null)
   const [errorBorrado, setErrorBorrado] = useState<string | null>(null)
-  const [recordatorio, setRecordatorio] = useState<Recordatorio | null>(null)
+  // Recordatorio pendiente por el que se pregunta y la acción (hecha o cancelar) que originó la pregunta.
+  const [pregunta, setPregunta] = useState<{ recordatorio: Recordatorio; tipo: 'hecha' | 'cancelar' } | null>(null)
   const [errorRecordatorio, setErrorRecordatorio] = useState<string | null>(null)
 
   const invalidarTareas = () =>
@@ -217,6 +220,8 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       alTerminar(tarea.id)
       // Se pasó un recordatorio a mover (haya salido bien o no): se refrescan banner, Próximos y la consulta por tarea.
       if (tipo === 'posponer' && conRecordatorio) await queryClient.invalidateQueries({ queryKey: ['recordatorios'] })
+      // La fila pudo salir de la lista: si el foco quedó en <body>, va al encabezado de la página.
+      if (tipo === 'posponer' || tipo === 'sinFecha') enfocarRespaldoDespues()
       if (tipo === 'hecha' || tipo === 'cancelar') {
         try {
           const lista = await queryClient.fetchQuery({
@@ -227,7 +232,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
           const pendiente = lista.find((r) => !r.enviado)
           if (pendiente) {
             setErrorRecordatorio(null)
-            setRecordatorio(pendiente)
+            setPregunta({ recordatorio: pendiente, tipo })
           }
         } catch {
           // Sin la consulta no se puede preguntar: la acción ya salió bien, se omite la pregunta.
@@ -245,6 +250,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       setASubtarea(null)
       alMensaje(mensajeMadreCambiada(tarea.titulo, madre.titulo))
       await invalidarTareas()
+      enfocarRespaldoDespues()
     },
     onError: (e) => setErrorSubtarea(e.message),
   })
@@ -258,6 +264,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
       alTerminar(tarea.id)
       // `['recordatorios']` siempre: la tarea borrada también pierde el suyo (y con 'borrar', los de sus descendientes).
       await Promise.all([invalidarTareas(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
+      enfocarRespaldoDespues()
     },
     onError: (e) => {
       setErrorBorrado(e.message)
@@ -270,7 +277,7 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
     mutationFn: (id: number) => borrarRecordatorio(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['recordatorios'] })
-      setRecordatorio(null)
+      setPregunta(null)
       alMensaje('Recordatorio borrado')
     },
     onError: (e) => setErrorRecordatorio(e.message),
@@ -344,16 +351,20 @@ export function useAccionesTarea({ alMensaje, alTerminar, alSubtarea }: Opciones
           cancelar: () => setABorrar(null),
         }
       : null,
-    preguntaRecordatorio: recordatorio
+    preguntaRecordatorio: pregunta
       ? {
-          recordatorio,
+          recordatorio: pregunta.recordatorio,
           error: errorRecordatorio,
           pendiente: borradoRecordatorio.isPending,
           borrar: () => {
             setErrorRecordatorio(null)
-            borradoRecordatorio.mutate(recordatorio.id)
+            borradoRecordatorio.mutate(pregunta.recordatorio.id)
           },
-          conservar: () => setRecordatorio(null),
+          // El aviso de la acción ya pudo expirar mientras se decidía: se repite diciendo qué pasó con el recordatorio.
+          conservar: () => {
+            setPregunta(null)
+            alMensaje(mensajeRecordatorioConservado(MENSAJES[pregunta.tipo]))
+          },
         }
       : null,
   }

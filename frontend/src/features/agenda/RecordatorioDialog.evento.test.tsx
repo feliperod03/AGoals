@@ -99,6 +99,8 @@ describe('Recordatorio de un evento', () => {
     expect(alMensaje).toHaveBeenCalledWith('Recordatorio creado para el jue 12 nov · 14:00')
     // Cada cambio es una llamada inmediata: el diálogo sigue abierto y pasa a editar.
     expect(await within(d).findByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
+    // Y el foco pasa a «Listo» (no queda en el contenedor del diálogo).
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Listo' })).toHaveFocus())
   })
 
   it('un evento de día completo arranca su primer día a las 09:00 y lo dice como lapso', async () => {

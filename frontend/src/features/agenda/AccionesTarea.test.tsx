@@ -127,7 +127,7 @@ describe('Acciones: menú (Radix)', () => {
     boton.focus()
     await user.keyboard('{Enter}')
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Proyecto y objetivo…', 'Recordatorio…', 'Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Agregar subtarea', 'Posponer', 'Proyecto y objetivo…', 'Recordatorio…', 'Marcar como cancelada', 'Borrar'])
     await user.keyboard('{ArrowDown}')
     expect(within(menu).getByRole('menuitem', { name: 'Posponer' })).toHaveFocus()
     await user.keyboard('{Escape}')
@@ -139,7 +139,7 @@ describe('Acciones: menú (Radix)', () => {
     const user = userEvent.setup()
     renderizar([tarea({ id: 1, titulo: 'A', estado: 'HECHO' }), tarea({ id: 2, titulo: 'B', estado: 'CANCELADO' })])
     let menu = await abrirMenu(user, 'A')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Proyecto y objetivo…', 'Cancelar', 'Borrar'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Proyecto y objetivo…', 'Marcar como cancelada', 'Borrar'])
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     menu = await abrirMenu(user, 'B')
@@ -198,7 +198,7 @@ describe('Acciones: peticiones y mensajes', () => {
     const user = userEvent.setup()
     renderizar([tarea({ id: 7, titulo: 'Comprar pan', prioridad: 'ALTA', padreId: 3 })])
     await abrirMenu(user, 'Comprar pan')
-    await user.click(screen.getByRole('menuitem', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Marcar como cancelada' }))
     await waitFor(() => expect(actualizarTarea).toHaveBeenCalled())
     expect(actualizarTarea).toHaveBeenCalledWith(7, {
       titulo: 'Comprar pan',
@@ -287,7 +287,7 @@ describe('Acciones: recordatorio pendiente', () => {
       'cancelar',
       async (user: Usuario) => {
         await abrirMenu(user, 'Comprar pan')
-        await user.click(screen.getByRole('menuitem', { name: 'Cancelar' }))
+        await user.click(screen.getByRole('menuitem', { name: 'Marcar como cancelada' }))
       },
     ],
   ])('al %s pregunta si hay uno sin enviar y "Borrar recordatorio" lo borra', async (_, accion) => {
@@ -303,7 +303,7 @@ describe('Acciones: recordatorio pendiente', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('"Conservarlo" no borra nada', async () => {
+  it('"Conservarlo" no borra nada y avisa que el recordatorio se conservó', async () => {
     const user = userEvent.setup()
     vi.mocked(getRecordatoriosDeTarea).mockResolvedValue([recordatorio({ id: 50, tareaId: 7 })])
     renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
@@ -311,6 +311,40 @@ describe('Acciones: recordatorio pendiente', () => {
     await user.click(within(await screen.findByRole('dialog', { name: 'Recordatorio pendiente' })).getByRole('button', { name: 'Conservarlo' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(borrarRecordatorio).not.toHaveBeenCalled()
+    expect(await screen.findByRole('status')).toHaveTextContent('Marcada como hecha; el recordatorio se conservó')
+  })
+
+  it('al cancelar, "Conservarlo" avisa con el texto de cancelar', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecordatoriosDeTarea).mockResolvedValue([recordatorio({ id: 50, tareaId: 7 })])
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    await abrirMenu(user, 'Comprar pan')
+    await user.click(screen.getByRole('menuitem', { name: 'Marcar como cancelada' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Recordatorio pendiente' })).getByRole('button', { name: 'Conservarlo' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('status')).toHaveTextContent('Tarea cancelada; el recordatorio se conservó')
+  })
+
+  it('cerrar la pregunta con Escape equivale a conservarlo y también avisa', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecordatoriosDeTarea).mockResolvedValue([recordatorio({ id: 50, tareaId: 7 })])
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    await user.click(await screen.findByRole('button', { name: 'Marcar «Comprar pan» como hecha' }))
+    await screen.findByRole('dialog', { name: 'Recordatorio pendiente' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarRecordatorio).not.toHaveBeenCalled()
+    expect(await screen.findByRole('status')).toHaveTextContent('Marcada como hecha; el recordatorio se conservó')
+  })
+
+  it('"Borrar recordatorio" sigue avisando que se borró', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRecordatoriosDeTarea).mockResolvedValue([recordatorio({ id: 50, tareaId: 7 })])
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    await user.click(await screen.findByRole('button', { name: 'Marcar «Comprar pan» como hecha' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Recordatorio pendiente' })).getByRole('button', { name: 'Borrar recordatorio' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('status')).toHaveTextContent('Recordatorio borrado')
   })
 
   it.each([
@@ -582,5 +616,52 @@ describe('Posponer: selector', () => {
 
     const menu = await abrirMenu(user, 'Vieja')
     expect(within(menu).queryByRole('menuitem', { name: 'Posponer' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Acciones: foco de respaldo cuando el «⋯» desaparece (H-07)', () => {
+  const encabezado = () => screen.getByRole('heading', { name: /^Hoy/ })
+
+  /** La primera lectura de la agenda trae la tarea; las siguientes (tras la acción) ya no. */
+  function conLaFilaQueDesaparece(t: Tarea) {
+    const vacia: Agenda = { fecha: '2026-11-10', conHora: [], sinHora: [] }
+    const renderizado = renderizar([t])
+    vi.mocked(getAgenda).mockResolvedValue(vacia)
+    return renderizado
+  }
+
+  it('posponer: la fila sale de la lista y el foco va al encabezado', async () => {
+    const user = userEvent.setup()
+    conLaFilaQueDesaparece(tarea({ id: 7, titulo: 'Comprar pan' }))
+    await abrirMenu(user, 'Comprar pan')
+    await user.click(screen.getByRole('menuitem', { name: 'Posponer' }))
+    const selector = await selectorListo(await screen.findByRole('dialog', { name: 'Posponer tarea' }))
+    await user.click(within(selector).getByRole('button', { name: /^Mañana/ }))
+    await waitFor(() => expect(posponerTarea).toHaveBeenCalledWith(7, '2026-11-11'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(encabezado()).toHaveFocus())
+  })
+
+  it('borrar: la fila desaparece y el foco va al encabezado', async () => {
+    const user = userEvent.setup()
+    conLaFilaQueDesaparece(tarea({ id: 7, titulo: 'Comprar pan' }))
+    await abrirMenu(user, 'Comprar pan')
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Borrar tarea' })
+    await user.click(await botonBorrarHabilitado(dialogo))
+    await waitFor(() => expect(borrarTarea).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(encabezado()).toHaveFocus())
+  })
+
+  it('si la fila sigue en la lista, el foco vuelve al «⋯» y no al encabezado', async () => {
+    const user = userEvent.setup()
+    renderizar([tarea({ id: 7, titulo: 'Comprar pan' })])
+    await abrirMenu(user, 'Comprar pan')
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
+    const dialogo = await screen.findByRole('dialog', { name: 'Borrar tarea' })
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Acciones de «Comprar pan»' })).toHaveFocus())
+    expect(encabezado()).not.toHaveFocus()
   })
 })

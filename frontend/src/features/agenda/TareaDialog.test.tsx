@@ -439,7 +439,7 @@ describe('TareaDialog: cambiar la madre', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(actualizarTarea).toHaveBeenCalled())
     expect(actualizarTarea).toHaveBeenCalledWith(8, expect.objectContaining({ padreId: 3 }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Guardada para el 10 de noviembre')
+    expect(await screen.findByRole('status')).toHaveTextContent('Guardada para hoy')
   })
 
   it('elegir la misma madre de siempre no cuenta como cambio', async () => {
@@ -450,7 +450,7 @@ describe('TareaDialog: cambiar la madre', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(actualizarTarea).toHaveBeenCalled())
     expect(actualizarTarea).toHaveBeenCalledWith(8, expect.objectContaining({ padreId: 3 }))
-    expect(await screen.findByRole('status')).toHaveTextContent('Guardada para el 10 de noviembre')
+    expect(await screen.findByRole('status')).toHaveTextContent('Guardada para hoy')
   })
 
   it('la lista no ofrece la propia tarea, sus descendientes ni cerradas ajenas, y marca la madre actual', async () => {

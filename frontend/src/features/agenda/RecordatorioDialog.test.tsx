@@ -99,6 +99,41 @@ describe('Recordatorio de una tarea', () => {
     expect(await within(d).findByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
   })
 
+  it('al crear, el foco pasa a «Listo» (no queda en el contenedor del diálogo)', async () => {
+    const user = userEvent.setup()
+    renderizar(deTarea())
+    const d = await dialogoTarea()
+    const crear = await within(d).findByRole('button', { name: 'Crear recordatorio' })
+    await waitFor(() => expect(crear).toBeEnabled())
+    await user.click(crear)
+    await within(d).findByRole('button', { name: 'Guardar cambios' })
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Listo' })).toHaveFocus())
+  })
+
+  it('si crear falla, el foco no se mueve a «Listo»', async () => {
+    const user = userEvent.setup()
+    vi.mocked(crearRecordatorio).mockRejectedValue(new ApiError(400, 'Fecha inválida'))
+    renderizar(deTarea())
+    const d = await dialogoTarea()
+    const crear = await within(d).findByRole('button', { name: 'Crear recordatorio' })
+    await waitFor(() => expect(crear).toBeEnabled())
+    await user.click(crear)
+    expect(await within(d).findByRole('alert')).toHaveTextContent('Fecha inválida')
+    expect(within(d).getByRole('button', { name: 'Listo' })).not.toHaveFocus()
+  })
+
+  it('guardar cambios de uno existente no mueve el foco a «Listo»', async () => {
+    const user = userEvent.setup()
+    renderizar(deTarea(), [recordatorio({ id: 50 })])
+    const d = await dialogoTarea()
+    const guardar = await within(d).findByRole('button', { name: 'Guardar cambios' })
+    await waitFor(() => expect(guardar).toBeEnabled())
+    await user.click(guardar)
+    await waitFor(() => expect(actualizarRecordatorio).toHaveBeenCalled())
+    await waitFor(() => expect(within(d).getByRole('status')).toHaveTextContent('Recordatorio'))
+    expect(within(d).getByRole('button', { name: 'Listo' })).not.toHaveFocus()
+  })
+
   it('con recordatorio abre en modo edición y el PUT reenvía los cinco campos', async () => {
     const user = userEvent.setup()
     renderizar(deTarea(), [recordatorio({ id: 50, descripcion: 'Llevar cinta', canal: 'CORREO' })])
@@ -207,13 +242,22 @@ describe('Recordatorio de una tarea', () => {
     await waitFor(() => expect(campoFecha()).toBeEnabled())
   })
 
-  it('si la hora elegida ya pasó, avisa sin bloquear', async () => {
+  it('tarea de hoy sin hora: como las 09:00 ya pasaron, propone la próxima hora en punto y no avisa', async () => {
+    // Hoy es 10/11 a las 12:00.
+    renderizar(deTarea({ fecha: '2026-11-10' }))
+    const d = await dialogoTarea()
+    await within(d).findByRole('button', { name: 'Crear recordatorio' })
+    expect(campoFecha()).toHaveValue('2026-11-10T13:00')
+    expect(within(d).queryByText(/ya pasó/)).not.toBeInTheDocument()
+  })
+
+  it('si la hora elegida a mano ya pasó, avisa sin bloquear', async () => {
     const user = userEvent.setup()
-    // Hoy es 10/11 a las 12:00: el 09:00 de hoy ya pasó.
     renderizar(deTarea({ fecha: '2026-11-10' }))
     const d = await dialogoTarea()
     const crear = await within(d).findByRole('button', { name: 'Crear recordatorio' })
     await waitFor(() => expect(crear).toBeEnabled())
+    fireEvent.change(campoFecha(), { target: { value: '2026-11-10T09:00' } })
     expect(within(d).getByText('Esa hora ya pasó: el aviso saldrá enseguida.')).toBeInTheDocument()
     await user.click(crear)
     await waitFor(() => expect(crearRecordatorio).toHaveBeenCalledTimes(1))

@@ -39,6 +39,32 @@ describe('valor inicial', () => {
     expect(valorInicialTarea(tarea({}), AHORA)).toBe('2026-11-11T09:00')
   })
 
+  describe('tarea de hoy sin hora', () => {
+    const deHoy = tarea({ fecha: '2026-11-10' })
+    const a = (hora: string) => new Date(`2026-11-10T${hora}-03:00`)
+
+    it('si las 09:00 todavía no pasaron, se queda en 09:00', () => {
+      expect(valorInicialTarea(deHoy, a('08:00:00'))).toBe('2026-11-10T09:00')
+    })
+    it('si ya pasaron, propone la próxima hora en punto', () => {
+      expect(valorInicialTarea(deHoy, a('12:00:00'))).toBe('2026-11-10T13:00')
+      expect(valorInicialTarea(deHoy, a('13:45:00'))).toBe('2026-11-10T14:00')
+      expect(valorInicialTarea(deHoy, a('09:00:00'))).toBe('2026-11-10T10:00')
+    })
+    it('a las 22:xx propone las 23:00; desde las 23:00 deja 09:00 (queda la nota «ya pasó»)', () => {
+      expect(valorInicialTarea(deHoy, a('22:30:00'))).toBe('2026-11-10T23:00')
+      expect(valorInicialTarea(deHoy, a('23:30:00'))).toBe('2026-11-10T09:00')
+      expect(yaPaso(valorInicialTarea(deHoy, a('23:30:00')), a('23:30:00'))).toBe(true)
+    })
+    it('con hora de inicio, la respeta aunque ya haya pasado', () => {
+      expect(valorInicialTarea(tarea({ fecha: '2026-11-10', horaInicio: '08:30:00' }), a('13:45:00'))).toBe('2026-11-10T08:30')
+    })
+    it('de otro día no cambia', () => {
+      expect(valorInicialTarea(tarea({ fecha: '2026-11-11' }), a('13:45:00'))).toBe('2026-11-11T09:00')
+      expect(valorInicialTarea(tarea({ fecha: '2026-11-09' }), a('13:45:00'))).toBe('2026-11-09T09:00')
+    })
+  })
+
   it('mañana se calcula en el día local, también cerca de la medianoche', () => {
     expect(valorInicialSuelto(new Date('2026-11-10T23:50:00-03:00'))).toBe('2026-11-11T09:00')
   })

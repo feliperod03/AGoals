@@ -29,7 +29,7 @@ export function EncabezadoHoy({
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="text-4xl">Hoy</h1>
+        <h1 data-foco-respaldo tabIndex={-1} className="text-4xl outline-none">Hoy</h1>
         <p className="mt-1 text-sm text-mut first-letter:uppercase">{formatearFechaLarga(fecha)}</p>
         {partes.length > 0 && <p className="mt-1 text-sm text-mut">{partes.join(', ')}</p>}
       </div>

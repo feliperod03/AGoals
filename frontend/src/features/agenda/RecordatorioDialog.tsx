@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -119,6 +119,16 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
   const { recordatorio, cargando, fallo, reintentar } = consulta
   // Sin la consulta no se sabe si hay uno: nunca se escribe a ciegas.
   const bloqueado = cargando || fallo
+  // Al crear, el botón «Crear recordatorio» se desmonta (el formulario se reinicia por `key`) y el foco caería al
+  // contenedor del diálogo. Se lleva a «Listo» en cuanto termina la mutación (mientras dura, «Listo» está deshabilitado).
+  const botonListo = useRef<HTMLButtonElement>(null)
+  const enfocarListo = useRef(false)
+  const { pendiente, error: errorAccion } = acciones
+  useEffect(() => {
+    if (!enfocarListo.current || pendiente) return
+    enfocarListo.current = false
+    if (!errorAccion) botonListo.current?.focus()
+  }, [pendiente, errorAccion, recordatorio])
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -150,7 +160,11 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
         bloqueado={bloqueado}
         etiquetaGuardar={recordatorio ? 'Guardar cambios' : 'Crear recordatorio'}
         acciones={acciones}
-        alGuardar={(req) => (recordatorio ? acciones.actualizar(recordatorio.id, req) : acciones.crear(req))}
+        alGuardar={(req) => {
+          if (recordatorio) return acciones.actualizar(recordatorio.id, req)
+          enfocarListo.current = true
+          acciones.crear(req)
+        }}
         quitar={
           recordatorio
             ? { etiqueta: `Quitar el recordatorio de «${titulo}»`, alQuitar: () => acciones.borrar(recordatorio.id) }
@@ -164,7 +178,7 @@ function ContenidoConsultado({ consulta, sujeto, titulo, base, valorNuevo, nota,
       <ErrorDialogo mensaje={acciones.error} />
 
       <div className="flex justify-end">
-        <Button className="max-sm:h-11" type="button" variant="secondary" disabled={acciones.pendiente} onClick={alCerrar}>
+        <Button ref={botonListo} className="max-sm:h-11" type="button" variant="secondary" disabled={acciones.pendiente} onClick={alCerrar}>
           Listo
         </Button>
       </div>

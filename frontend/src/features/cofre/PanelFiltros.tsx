@@ -61,6 +61,7 @@ const boton = (activo: boolean) =>
 export function PanelFiltros(p: Props) {
   const [abierto, setAbierto] = useState(false)
   const botonMasFiltros = useRef<HTMLButtonElement>(null)
+  const campoBusqueda = useRef<HTMLInputElement>(null)
   const zonaChips = useRef<HTMLDivElement>(null)
   const chipQuitado = useRef<number | null>(null)
   const f = p.filtros
@@ -88,7 +89,7 @@ export function PanelFiltros(p: Props) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-medium">
           Buscar por título
-          <input type="search" className={CAMPO} value={f.busqueda} onChange={(e) => cambiar({ busqueda: e.target.value })} />
+          <input ref={campoBusqueda} type="search" className={CAMPO} value={f.busqueda} onChange={(e) => cambiar({ busqueda: e.target.value })} />
         </label>
         <div className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label="Ordenar por" className="flex flex-wrap items-center gap-2">
@@ -134,7 +135,16 @@ export function PanelFiltros(p: Props) {
           <ChevronDown className={cn('size-4 transition-transform', abierto && 'rotate-180')} aria-hidden="true" />
         </button>
         {hayFiltrosActivos(f) && (
-          <Button type="button" variant="ghost" size="sm" onClick={p.alVolverALaVistaPorDefecto}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              p.alVolverALaVistaPorDefecto()
+              // El botón desaparece al restablecer: sin esto el foco caería a <body>.
+              campoBusqueda.current?.focus()
+            }}
+          >
             Volver a la vista por defecto
           </Button>
         )}

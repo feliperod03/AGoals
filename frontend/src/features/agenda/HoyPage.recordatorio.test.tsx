@@ -86,7 +86,7 @@ describe('Hoy: «Recordatorio…»', () => {
     await user.click(crear)
     await waitFor(() => expect(crearRecordatorio).toHaveBeenCalledWith(expect.objectContaining({ tareaId: 12, canal: 'APP' })))
     await waitFor(() =>
-      expect(screen.getAllByRole('status').some((r) => r.textContent?.includes('Recordatorio creado para el mar 10 nov · 09:00'))).toBe(true),
+      expect(screen.getAllByRole('status').some((r) => r.textContent?.includes('Recordatorio creado para el mar 10 nov · 13:00'))).toBe(true),
     )
   })
 

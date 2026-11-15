@@ -247,8 +247,23 @@ describe('mensajeGuardada', () => {
     expect(mensajeGuardada(null)).toBe('Guardada en el cofre')
   })
   it('con fecha la escribe en español', () => {
-    expect(mensajeGuardada('2026-11-12')).toBe('Guardada para el 12 de noviembre')
-    expect(mensajeGuardada('2026-12-01')).toBe('Guardada para el 1 de diciembre')
+    expect(mensajeGuardada('2026-11-12', '2026-11-10')).toBe('Guardada para el 12 de noviembre')
+    expect(mensajeGuardada('2026-12-01', '2026-11-10')).toBe('Guardada para el 1 de diciembre')
+  })
+  it('dice «hoy» y «mañana» cuando corresponde', () => {
+    expect(mensajeGuardada('2026-11-10', '2026-11-10')).toBe('Guardada para hoy')
+    expect(mensajeGuardada('2026-11-11', '2026-11-10')).toBe('Guardada para mañana')
+  })
+  it('mañana cruza el fin de mes y de año', () => {
+    expect(mensajeGuardada('2026-12-01', '2026-11-30')).toBe('Guardada para mañana')
+    expect(mensajeGuardada('2027-01-01', '2026-12-31')).toBe('Guardada para mañana')
+  })
+  it('ayer y pasado mañana llevan la fecha', () => {
+    expect(mensajeGuardada('2026-11-09', '2026-11-10')).toBe('Guardada para el 9 de noviembre')
+    expect(mensajeGuardada('2026-11-12', '2026-11-10')).toBe('Guardada para el 12 de noviembre')
+  })
+  it('sin hoy explícito usa el día local', () => {
+    expect(mensajeGuardada(hoy())).toBe('Guardada para hoy')
   })
 })
 

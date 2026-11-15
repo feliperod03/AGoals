@@ -658,6 +658,17 @@ describe('CofrePage: chips de filtros activos', () => {
     expect(screen.queryByRole('button', { name: 'Volver a la vista por defecto' })).not.toBeInTheDocument()
   })
 
+  it('«Volver a la vista por defecto» lleva el foco al campo de búsqueda', async () => {
+    vi.mocked(getTareas).mockResolvedValue([tarea({ id: 1, titulo: 'Tarea mediana', prioridad: 'MEDIA' })])
+    const user = userEvent.setup()
+    renderizar()
+    await screen.findByText('Tarea mediana')
+    await user.click(screen.getByRole('button', { name: 'Prioridad alta' }))
+    await user.click(screen.getByRole('button', { name: 'Volver a la vista por defecto' }))
+    expect(screen.queryByRole('button', { name: 'Volver a la vista por defecto' })).not.toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar por título' })).toHaveFocus()
+  })
+
   it('si solo queda la línea base dice «No hay tareas abiertas.»', async () => {
     const user = userEvent.setup()
     renderizar()

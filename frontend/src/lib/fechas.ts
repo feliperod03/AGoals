@@ -132,9 +132,11 @@ export function rangoDelDia(fecha: string = hoy()): { desde: string; hasta: stri
   }
 }
 
-/** Mensaje de confirmación al guardar una tarea: sin fecha va al cofre. */
-export function mensajeGuardada(fecha: string | null): string {
+/** Mensaje de confirmación al guardar una tarea: sin fecha va al cofre; hoy y mañana se dicen con esas palabras. */
+export function mensajeGuardada(fecha: string | null, hoyLocal: string = hoy()): string {
   if (!fecha) return 'Guardada en el cofre'
+  if (fecha === hoyLocal) return 'Guardada para hoy'
+  if (fecha === sumarDias(hoyLocal, 1)) return 'Guardada para mañana'
   return `Guardada para el ${format(parseISO(fecha), "d 'de' MMMM", { locale: es })}`
 }
 
@@ -272,6 +274,9 @@ export const mensajeRecordatorioMovido = (fechaTarea: string, iso: string) =>
 /** La tarea se pospuso pero el recordatorio no se pudo mover; `motivo` es el mensaje del servidor. */
 export const mensajeRecordatorioNoMovido = (fechaTarea: string, motivo: string) =>
   `${mensajePospuesta(fechaTarea)}, pero no se pudo mover el recordatorio (${motivo}). Revísalo en «Recordatorio…»`
+
+/** Marcar hecha o cancelar y conservar el recordatorio pendiente: `base` es el aviso de la acción. */
+export const mensajeRecordatorioConservado = (base: string) => `${base}; el recordatorio se conservó`
 
 /** «Dejar sin fecha» con un recordatorio pendiente: el recordatorio se queda donde estaba. */
 export const mensajeSinFechaConRecordatorio = () => `${mensajeSinFecha()}; el recordatorio no se movió`

@@ -70,35 +70,56 @@ describe('DialogContent: devolver el foco', () => {
     expect(screen.getByRole('button', { name: 'Abrir' })).not.toHaveFocus()
   })
 
-  it('si el disparador ya no existe, no lanza ni enfoca', async () => {
-    const user = userEvent.setup()
-    function Efimero() {
-      const [mostrar, setMostrar] = useState(true)
-      const [abierto, setAbierto] = useState(false)
-      return (
-        <>
-          {mostrar && (
-            <button type="button" onClick={() => { setAbierto(true) }}>
-              Abrir
+  function Efimero({ conRespaldo }: { conRespaldo: boolean }) {
+    const [mostrar, setMostrar] = useState(true)
+    const [abierto, setAbierto] = useState(false)
+    return (
+      <>
+        {conRespaldo && (
+          <h1 data-foco-respaldo tabIndex={-1}>
+            Página
+          </h1>
+        )}
+        {mostrar && (
+          <button type='button' onClick={() => setAbierto(true)}>
+            Abrir
+          </button>
+        )}
+        <Dialog open={abierto} onOpenChange={setAbierto}>
+          <DialogContent>
+            <DialogTitle>X</DialogTitle>
+            <DialogDescription>X</DialogDescription>
+            <button
+              type='button'
+              onClick={() => {
+                setMostrar(false)
+                setAbierto(false)
+              }}
+            >
+              Quitar y cerrar
             </button>
-          )}
-          <Dialog open={abierto} onOpenChange={setAbierto}>
-            <DialogContent>
-              <DialogTitle>X</DialogTitle>
-              <DialogDescription>X</DialogDescription>
-              <button type="button" onClick={() => { setMostrar(false); setAbierto(false) }}>
-                Quitar y cerrar
-              </button>
-            </DialogContent>
-          </Dialog>
-        </>
-      )
-    }
-    render(<Efimero />)
+          </DialogContent>
+        </Dialog>
+      </>
+    )
+  }
+
+  it('si el disparador ya no existe y la página no tiene respaldo, no lanza ni enfoca nada', async () => {
+    const user = userEvent.setup()
+    render(<Efimero conRespaldo={false} />)
     await user.click(screen.getByRole('button', { name: 'Abrir' }))
     await user.click(await screen.findByRole('button', { name: 'Quitar y cerrar' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(document.body).toHaveFocus()
+  })
+
+  it('si el disparador ya no existe y la página tiene un elemento de respaldo, el foco va ahí', async () => {
+    const user = userEvent.setup()
+    render(<Efimero conRespaldo />)
+    await user.click(screen.getByRole('button', { name: 'Abrir' }))
+    await user.click(await screen.findByRole('button', { name: 'Quitar y cerrar' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Página' })).toHaveFocus())
   })
 
   it('con diálogos apilados, el de arriba devuelve el foco al botón del de abajo', async () => {

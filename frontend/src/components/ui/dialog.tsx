@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
+import { enfocarRespaldo } from './focoRespaldo'
 import { tomarDisparador } from './retornoFoco'
 
 // Dialog al estilo shadcn sobre Radix: Radix se ocupa del foco dentro (queda atrapado), de Escape y de
@@ -31,6 +32,7 @@ function ContenidoAbierto({ className, children, onCloseAutoFocus, ...props }: R
     if (e.defaultPrevented) return // el consumidor decide a dónde va el foco
     e.preventDefault()
     if (disparador instanceof HTMLElement && disparador !== document.body && disparador.isConnected) disparador.focus()
+    else enfocarRespaldo() // el disparador ya no existe: antes el foco caía a <body>
   }
 
   return (

@@ -61,7 +61,7 @@ export function CofrePage() {
     <div>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-4xl">Cofre</h1>
+          <h1 data-foco-respaldo tabIndex={-1} className="text-4xl outline-none">Cofre</h1>
           <p className="mt-1 text-sm text-mut">Todas tus tareas, con filtros. Por defecto, las abiertas que aún no tienen fecha.</p>
         </div>
         <Button onClick={() => setDialogo({})}>

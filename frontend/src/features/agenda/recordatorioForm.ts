@@ -32,12 +32,17 @@ export type DestinoRecordatorio =
 
 /**
  * Valor de `datetime-local` con el que arranca el recordatorio de una tarea nueva: la hora de inicio de la tarea
- * si la tiene; si solo tiene fecha, ese día a las 09:00; si no tiene fecha, mañana a las 09:00.
+ * si la tiene; si solo tiene fecha, ese día a las 09:00 (si es hoy y las 09:00 ya pasaron, la próxima hora en
+ * punto; después de las 23:00 no queda ninguna dentro del día y se deja 09:00, con la nota «Esa hora ya pasó»);
+ * si no tiene fecha, mañana a las 09:00.
  */
 export function valorInicialTarea(tarea: Tarea, ahora: Date): string {
   if (tarea.fecha === null) return valorInicialSuelto(ahora)
-  const hora = tarea.horaInicio ? tarea.horaInicio.slice(0, 5) : HORA_POR_DEFECTO
-  return `${tarea.fecha}T${hora}`
+  if (tarea.horaInicio) return `${tarea.fecha}T${tarea.horaInicio.slice(0, 5)}`
+  const porDefecto = `${tarea.fecha}T${HORA_POR_DEFECTO}`
+  if (tarea.fecha !== aFechaLocal(ahora) || !yaPaso(porDefecto, ahora)) return porDefecto
+  const siguiente = ahora.getHours() + 1
+  return siguiente > 23 ? porDefecto : `${tarea.fecha}T${String(siguiente).padStart(2, '0')}:00`
 }
 
 /**
