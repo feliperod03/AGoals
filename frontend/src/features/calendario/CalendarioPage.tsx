@@ -8,7 +8,7 @@ import { useTodasLasTareas } from '@/features/agenda/useTodasLasTareas'
 import { DialogosEvento } from '@/features/eventos/DialogosEvento'
 import { valoresParaHueco, valoresParaNuevo, valoresTodoElDia } from '@/features/eventos/formularioEvento'
 import { useAccionesEvento } from '@/features/eventos/useAccionesEvento'
-import { diasDeLaSemana, formatearMes, formatearRangoSemana, partesLocales, rangoDeFechas, sumarDias, sumarMeses } from '@/lib/fechas'
+import { diasDeLaSemana, formatearMes, formatearRangoSemana, mesDe, partesLocales, rangoDeFechas, sumarDias, sumarMeses } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
 import { diasDeLaCuadricula, elementosPorDia } from './calendario'
 import { CuadriculaMes } from './CuadriculaMes'
@@ -26,7 +26,8 @@ import { VistaSemana } from './VistaSemana'
  *
  * 9c: crear, editar y borrar eventos. «Nuevo evento» crea en el día seleccionado; las filas del panel, los bloques y
  * los chips de la semana abren la edición. Tras crear, el calendario va al día de inicio del evento (replace si ya se
- * ve, push si no); editar no navega. Crear no depende de que la lista de eventos haya cargado.
+ * ve, push si no); editar solo navega si el evento queda fuera del mes o la semana que se ve (H-34). Crear no depende
+ * de que la lista de eventos haya cargado.
  */
 export function CalendarioPage() {
   const { ahora, hoy } = useAhora()
@@ -44,10 +45,21 @@ export function CalendarioPage() {
 
   const porDia = useMemo(() => elementosPorDia(dias, eventos.data ?? [], tareas.data ?? []), [dias, eventos.data, tareas.data])
 
+  /*
+    «A la vista» (H-34): en la semana, sus 7 días; en el mes, el MES mostrado (no los días grises de otro mes que la
+    cuadrícula también dibuja). Un evento en un día gris cambia de mes, igual que uno en otro mes cualquiera. Un clic en
+    un día gris de la cuadrícula, en cambio, sigue seleccionándolo sin cambiar de mes (eso es intencional).
+  */
+  const estaALaVista = (fecha: string) => (vista === 'semana' ? dias.includes(fecha) : mesDe(fecha) === mes)
   function irAlDiaDe(evento: Evento) {
     const inicio = partesLocales(evento.fechaHoraInicio).fecha
-    if (dias.includes(inicio)) estado.seleccionarDia(inicio)
+    if (estaALaVista(inicio)) estado.seleccionarDia(inicio)
     else estado.saltarADia(inicio)
+  }
+  /** Tras editar: solo navega si el evento quedó fuera de lo que se ve; si sigue a la vista, la página no se mueve. */
+  function irSiQuedoFuera(evento: Evento) {
+    const inicio = partesLocales(evento.fechaHoraInicio).fecha
+    if (!estaALaVista(inicio)) estado.saltarADia(inicio)
   }
 
   /*
@@ -71,7 +83,7 @@ export function CalendarioPage() {
     scrollAlPanel()
   }, [dia])
 
-  const acciones = useAccionesEvento({ alMensaje: confirmacion.mostrar, alCrear: irAlDiaDe })
+  const acciones = useAccionesEvento({ alMensaje: confirmacion.mostrar, alCrear: irAlDiaDe, alGuardar: irSiQuedoFuera })
   const crearEnDia = (fecha: string) => acciones.abrirCrear(valoresParaNuevo(fecha, hoy, ahora))
   const crearEnHueco = (fecha: string, minutos: number | null) =>
     acciones.abrirCrear(minutos === null ? valoresTodoElDia(fecha) : valoresParaHueco(fecha, minutos))
@@ -118,6 +130,7 @@ export function CalendarioPage() {
           alSaltar={estado.saltarADia}
           alAbrirEvento={acciones.abrirEditar}
           alCrearEnHueco={crearEnHueco}
+          listo={!eventos.isPending && !eventos.isPlaceholderData && !tareas.isPending}
         />
       ) : (
         /*

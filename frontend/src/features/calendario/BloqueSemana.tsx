@@ -46,6 +46,9 @@ interface Props {
  * Botón vacío que cubre un evento entero y abre su edición. Va como HERMANO del dibujo (nunca un `div` dentro de un
  * `button`): el dibujo sigue `aria-hidden`, con su `title` y su container query, y el botón lleva el nombre accesible
  * («Editar evento: Reunión, 09:00–10:00»). Lo usan los bloques y los chips de la franja «Sin hora».
+ *
+ * Como el botón tapa al dibujo, el `title` de este no llega al mouse: por eso el botón lleva el suyo con el texto completo
+ * (H-31). Para lectores queda como descripción, detrás del nombre; es un repetido menor a cambio del tooltip.
  */
 export function BotonEditarEvento({
   elemento,
@@ -60,6 +63,7 @@ export function BotonEditarEvento({
     <button
       type="button"
       aria-label={etiquetaEditarEvento(elemento)}
+      title={tituloDeBloque(elemento)}
       onClick={() => alAbrirEvento(elemento.evento)}
       className={cn('absolute inset-0 z-10 cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
     />
@@ -134,7 +138,9 @@ export function BloqueSemana({ elemento, rango, altoTotal, alAbrirEvento }: Prop
               <span className="hidden truncate font-semibold tabular-nums @min-[56px]:inline">{hora}</span>
             </span>
             <span
-              className={cn('min-w-0 break-words', hecha && 'line-through')}
+              // `text-ellipsis` pone los puntos suspensivos también cuando UNA palabra no cabe a lo ancho (el line-clamp solo
+              // los pone al cortar por alto); así no queda «Traba» a secas.
+              className={cn('min-w-0 break-normal text-ellipsis', hecha && 'line-through')}
               style={{ display: '-webkit-box', WebkitLineClamp: lineas, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
             >
               {elemento.titulo}

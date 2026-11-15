@@ -13,6 +13,8 @@ import {
   diasDeLaCuadricula,
   esDeFranja,
   lineasDeTitulo,
+  minutoInicialSemana,
+  offsetInicialSemana,
   rangoDeLaSemana,
   repartirDia,
   semanaDesdeUrl,
@@ -516,6 +518,47 @@ describe('rangoDeLaSemana', () => {
   it('un evento largo (franja) no estira el rango', () => {
     const congreso = evento('2026-12-08T09:00:00-03:00', '2026-12-10T18:00:00-03:00')
     expect(rangoDeLaSemana(conHora(elementosPorDia(SEMANA, [congreso], [])))).toEqual({ inicioHora: 8, finHora: 21 })
+  })
+})
+
+describe('minutoInicialSemana y offsetInicialSemana (H-30)', () => {
+  const conHora = (eventos: Evento[], tareas: Tarea[]) => {
+    const mapa = elementosPorDia(SEMANA, eventos, tareas)
+    return SEMANA.map((d) => repartirDia(mapa.get(d) ?? []).conHora)
+  }
+  const ahora = new Date('2026-12-08T15:10:00-03:00')
+
+  it('si la semana contiene hoy: la hora actual, aunque haya eventos antes', () => {
+    const mañana = evento('2026-12-08T09:00:00-03:00', '2026-12-08T10:00:00-03:00')
+    expect(minutoInicialSemana(SEMANA, '2026-12-08', ahora, conHora([mañana], []))).toBe(15 * 60 + 10)
+  })
+
+  it('si no contiene hoy: el primer elemento con hora de la semana', () => {
+    const tarde = evento('2026-12-10T15:00:00-03:00', '2026-12-10T16:00:00-03:00')
+    const mañana = tarea({ fecha: '2026-12-09', horaInicio: '10:30:00', horaFin: '11:00:00' })
+    expect(minutoInicialSemana(SEMANA, '2026-11-01', ahora, conHora([tarde], [mañana]))).toBe(10 * 60 + 30)
+  })
+
+  it('no cuenta el tramo que continúa desde el día anterior (arranca a las 00:00)', () => {
+    const guardia = evento('2026-12-10T22:00:00-03:00', '2026-12-11T02:00:00-03:00')
+    const tarde = evento('2026-12-09T15:00:00-03:00', '2026-12-09T16:00:00-03:00')
+    expect(minutoInicialSemana(SEMANA, '2026-11-01', ahora, conHora([guardia, tarde], []))).toBe(15 * 60)
+    // Solo la guardia: el viernes es continuación (se ignora) y queda el jueves a las 22:00.
+    expect(minutoInicialSemana(SEMANA, '2026-11-01', ahora, conHora([guardia], []))).toBe(22 * 60)
+  })
+
+  it('sin nada con hora (tareas sin hora, evento largo): las 08:00', () => {
+    const congreso = evento('2026-12-08T09:00:00-03:00', '2026-12-10T18:00:00-03:00')
+    expect(minutoInicialSemana(SEMANA, '2026-11-01', ahora, conHora([congreso], [tarea({ fecha: '2026-12-08' })]))).toBe(8 * 60)
+    expect(minutoInicialSemana(SEMANA, '2026-11-01', ahora, conHora([], []))).toBe(8 * 60)
+  })
+
+  it('el desplazamiento deja una hora de contexto, sin pasar del inicio ni del fin del rango', () => {
+    const rango = { inicioHora: 8, finHora: 21 }
+    expect(offsetInicialSemana(15 * 60, rango)).toBe(6 * PX_POR_HORA_SEMANA) // 14:00 → 6 h bajo las 08:00
+    expect(offsetInicialSemana(8 * 60 + 20, rango)).toBe(0) // no sube de las 08:00
+    expect(offsetInicialSemana(23 * 60, rango)).toBe(13 * PX_POR_HORA_SEMANA) // no pasa de las 21:00
+    expect(offsetInicialSemana(22 * 60, { inicioHora: 0, finHora: 24 })).toBe(21 * PX_POR_HORA_SEMANA)
   })
 })
 

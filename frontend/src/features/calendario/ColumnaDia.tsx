@@ -99,7 +99,7 @@ export function ColumnaDia({
       className={cn('min-w-0 border-l border-line', seleccionada && 'bg-sel')}
     >
       <div
-        className={cn('sticky top-0 z-20 flex items-center justify-center border-b border-line', seleccionada ? 'bg-sel' : 'bg-card')}
+        className={cn('sticky top-[var(--alto-vencidos,0px)] z-20 flex items-center justify-center border-b border-line', seleccionada ? 'bg-sel' : 'bg-card')}
         style={{ height: ALTO_ENCABEZADO_DIA }}
       >
         <button

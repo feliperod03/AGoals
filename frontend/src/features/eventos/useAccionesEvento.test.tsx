@@ -35,10 +35,11 @@ function preparar() {
   const invalidar = vi.spyOn(queryClient, 'invalidateQueries')
   const alMensaje = vi.fn()
   const alCrear = vi.fn()
+  const alGuardar = vi.fn()
   const Envoltorio = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  const hook = renderHook(() => useAccionesEvento({ alMensaje, alCrear }), { wrapper: Envoltorio })
+  const hook = renderHook(() => useAccionesEvento({ alMensaje, alCrear, alGuardar }), { wrapper: Envoltorio })
   const claves = () => invalidar.mock.calls.map(([f]) => JSON.stringify(f?.queryKey)).sort()
-  return { ...hook, queryClient, alMensaje, alCrear, claves }
+  return { ...hook, queryClient, alMensaje, alCrear, alGuardar, claves }
 }
 
 function pendiente<T>() {
@@ -58,7 +59,7 @@ beforeEach(() => {
 
 describe('useAccionesEvento: guardar', () => {
   it('crear: POST, refresca solo eventos, cierra, avisa y llama a alCrear con el evento creado', async () => {
-    const { result, alMensaje, alCrear, claves } = preparar()
+    const { result, alMensaje, alCrear, alGuardar, claves } = preparar()
     act(() => result.current.abrirCrear(valoresParaHueco('2026-12-15', 540)))
     expect(result.current.dialogo?.iniciales).toBeDefined()
     act(() => result.current.guardar(REQUEST))
@@ -66,17 +67,19 @@ describe('useAccionesEvento: guardar', () => {
     expect(crearEvento).toHaveBeenCalledWith(REQUEST)
     expect(actualizarEvento).not.toHaveBeenCalled()
     expect(alCrear).toHaveBeenCalledWith(EVENTO)
+    expect(alGuardar).not.toHaveBeenCalled()
     expect(result.current.dialogo).toBeNull()
     expect(claves()).toEqual(['["eventos"]'])
   })
 
-  it('editar: PUT al id del evento abierto, sin alCrear', async () => {
-    const { result, alMensaje, alCrear } = preparar()
+  it('editar: PUT al id del evento abierto, sin alCrear y con alGuardar (H-34)', async () => {
+    const { result, alMensaje, alCrear, alGuardar } = preparar()
     act(() => result.current.abrirEditar(EVENTO))
     act(() => result.current.guardar({ ...REQUEST, titulo: 'Dentista nuevo' }))
     await waitFor(() => expect(alMensaje).toHaveBeenCalledWith('Evento «Dentista» guardado (mar 15 dic, 09:00–10:00)'))
     expect(actualizarEvento).toHaveBeenCalledWith(9, { ...REQUEST, titulo: 'Dentista nuevo' })
     expect(alCrear).not.toHaveBeenCalled()
+    expect(alGuardar).toHaveBeenCalledWith(EVENTO)
   })
 
   it('el refresco termina ANTES de cerrar el diálogo (y mientras tanto sigue «guardando»)', async () => {

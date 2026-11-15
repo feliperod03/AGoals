@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -72,6 +72,91 @@ describe('AvisoVencidos', () => {
     expect(await screen.findByText('+2 más pendientes')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Entendido/ })).toHaveLength(5)
     expect(screen.queryByText('Recordatorio 6')).not.toBeInTheDocument()
+  })
+
+  it('H-36: el banner va pegado arriba, la lista tiene altura máxima con scroll y el «+N más» queda fuera', async () => {
+    vencidos.mockResolvedValue([1, 2, 3, 4, 5, 6, 7].map((i) => recordatorio(i)))
+    renderizar()
+    const banner = await screen.findByRole('region', { name: 'Recordatorios vencidos' })
+    // El sticky va en la región viva (hija de <main>), no en la sección: dentro de su propio contenedor no se pegaría.
+    expect(screen.getByRole('status')).toHaveClass('sticky', 'top-0', 'z-30')
+    expect(banner).toHaveClass('bg-card')
+    const lista = within(banner).getByRole('list')
+    expect(lista.className).toMatch(/max-h-\[min\(28vh,13rem\)\]/)
+    expect(lista).toHaveClass('overflow-y-auto')
+    // El resumen no está dentro del área con scroll: se ve siempre.
+    expect(lista).not.toContainElement(screen.getByText('+2 más pendientes'))
+    // Sigue dentro de la región viva, que no se mueve del DOM.
+    expect(screen.getByRole('status')).toContainElement(banner)
+  })
+
+  describe('H-36: --alto-vencidos para las cabeceras fijas de la semana', () => {
+    const original = globalThis.ResizeObserver
+    let alto = 0
+    let avisarCambio: (() => void) | null = null
+    const lee = () => document.documentElement.style.getPropertyValue('--alto-vencidos')
+
+    beforeEach(() => {
+      alto = 120
+      avisarCambio = null
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => alto)
+      globalThis.ResizeObserver = class {
+        constructor(callback: () => void) {
+          avisarCambio = callback
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {
+          avisarCambio = null
+        }
+      } as unknown as typeof ResizeObserver
+    })
+    afterEach(() => {
+      globalThis.ResizeObserver = original
+      vi.restoreAllMocks()
+      document.documentElement.style.removeProperty('--alto-vencidos')
+    })
+
+    it('sin avisos no está definida', async () => {
+      renderizar()
+      await waitFor(() => expect(vencidos).toHaveBeenCalled())
+      expect(lee()).toBe('')
+    })
+
+    it('al quedar sin avisos (tras «Entendido») la variable vuelve a quedar sin definir', async () => {
+      vencidos.mockResolvedValueOnce([recordatorio(1)]).mockResolvedValue([])
+      marcar.mockResolvedValue(recordatorio(1, { enviado: true }))
+      renderizar()
+      const boton = await screen.findByRole('button', { name: 'Entendido: Recordatorio 1' })
+      expect(lee()).toBe('120px')
+      await userEvent.click(boton)
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Recordatorios vencidos' })).not.toBeInTheDocument())
+      expect(lee()).toBe('')
+    })
+
+    it('publica el alto al aparecer y lo actualiza con el ResizeObserver', async () => {
+      vencidos.mockResolvedValue([recordatorio(1), recordatorio(2)])
+      renderizar()
+      await screen.findByText('Recordatorio 1')
+      expect(lee()).toBe('120px')
+      alto = 64
+      act(() => avisarCambio?.())
+      expect(lee()).toBe('64px')
+    })
+
+    it('al desmontar queda sin definir', async () => {
+      vencidos.mockResolvedValue([recordatorio(1)])
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const { unmount } = render(
+        <QueryClientProvider client={queryClient}>
+          <AvisoVencidos />
+        </QueryClientProvider>,
+      )
+      await screen.findByText('Recordatorio 1')
+      expect(lee()).toBe('120px')
+      unmount()
+      expect(lee()).toBe('')
+    })
   })
 
   it('sin descripción usa el título de la tarea', async () => {

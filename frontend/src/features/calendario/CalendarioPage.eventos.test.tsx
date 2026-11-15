@@ -165,6 +165,29 @@ describe('CalendarioPage 9c: crear', () => {
     await waitFor(() => expect(ubicacion()).toBe('/calendario?mes=2026-12&dia=2026-12-15'))
   })
 
+  it('crear en un día gris del mes siguiente cambia el encabezado y el mes (H-34)', async () => {
+    // La cuadrícula de noviembre llega hasta el domingo 6 de diciembre: el 3 de diciembre se VE, pero es de otro mes.
+    const user = montar('/calendario?mes=2026-11&dia=2026-11-10')
+    await user.click(nuevoEvento())
+    await user.type(campo('Título'), 'Dentista')
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2026-12-03' } })
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?mes=2026-12&dia=2026-12-03'))
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Diciembre de 2026')
+    expect(await panel().findByRole('button', { name: 'Editar evento: Dentista, 13:00–14:00' })).toBeInTheDocument()
+    // Hoy estaba seleccionado: el diálogo propone la próxima hora en punto (13:00).
+    // Push: «atrás» vuelve a noviembre.
+    await user.click(screen.getByRole('button', { name: 'Atrás' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?mes=2026-11&dia=2026-11-10'))
+  })
+
+  it('un clic en un día gris de otro mes solo lo selecciona: el mes no cambia (intencional)', async () => {
+    const user = montar('/calendario?mes=2026-11&dia=2026-11-10')
+    await user.click(await screen.findByRole('button', { name: /^jueves 3 de diciembre/ }))
+    expect(ubicacion()).toBe('/calendario?mes=2026-11&dia=2026-12-03')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Noviembre de 2026')
+  })
+
   it('tras crear desde «Nuevo evento», el foco vuelve a «Nuevo evento»', async () => {
     const user = montar('/calendario?mes=2026-12&dia=2026-12-15')
     await user.click(nuevoEvento())
@@ -192,17 +215,30 @@ describe('CalendarioPage 9c: crear', () => {
 })
 
 describe('CalendarioPage 9c: editar y borrar', () => {
-  it('editar desde el panel no navega y el aviso usa los datos guardados', async () => {
+  it('editar dentro del mes no navega y el aviso usa los datos guardados', async () => {
     servidor = [evento('Dentista', '2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')]
     const user = montar('/calendario?mes=2026-12&dia=2026-12-15')
     await user.click(await panel().findByRole('button', { name: 'Editar evento: Dentista, 09:00–10:00' }))
     await user.clear(campo('Título'))
     await user.type(campo('Título'), 'Dentista (control)')
-    fireEvent.change(campo('Día de inicio'), { target: { value: '2027-02-01' } })
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2026-12-18' } })
     await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(ubicacion()).toBe('/calendario?mes=2026-12&dia=2026-12-15')
-    expect(screen.getByText('Evento «Dentista (control)» guardado (lun 1 feb, 09:00–10:00)')).toBeInTheDocument()
+    expect(screen.getByText('Evento «Dentista (control)» guardado (vie 18 dic, 09:00–10:00)')).toBeInTheDocument()
+  })
+
+  it('editar moviendo el evento a otro mes lleva a ese mes, con push (H-34)', async () => {
+    servidor = [evento('Dentista', '2026-12-15T09:00:00-03:00', '2026-12-15T10:00:00-03:00')]
+    const user = montar('/calendario?mes=2026-12&dia=2026-12-15')
+    await user.click(await panel().findByRole('button', { name: 'Editar evento: Dentista, 09:00–10:00' }))
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2027-02-01' } })
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?mes=2027-02&dia=2027-02-01'))
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Febrero de 2027')
+    expect(screen.getByText('Evento «Dentista» guardado (lun 1 feb, 09:00–10:00)')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Atrás' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?mes=2026-12&dia=2026-12-15'))
   })
 
   it('Escape devuelve el foco a la fila que abrió la edición', async () => {
@@ -279,6 +315,81 @@ describe('CalendarioPage 9c: atajos de mouse', () => {
     expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-15')
     // Un hueco no enfoca nada: el foco va a «Nuevo evento».
     await waitFor(() => expect(nuevoEvento()).toHaveFocus())
+  })
+})
+
+describe('CalendarioPage H-30 y H-34 en la semana', () => {
+  const scrollTo = vi.mocked(window.scrollTo)
+  const grilla = () => within(screen.getByTestId('semana-por-horas'))
+  beforeEach(() => {
+    scrollTo.mockClear()
+    servidor = [evento('Reunión', '2026-12-15T15:00:00-03:00', '2026-12-15T16:00:00-03:00')]
+  })
+
+  // Rango 08–21: las 15:00 con una hora de contexto (14:00) están a 6 h × 48 px = 288; − cabecera (56) − holgura (8) = 224.
+  async function montarSemana() {
+    const user = montar('/calendario?vista=semana&dia=2026-12-15')
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 224, behavior: 'auto' }))
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    return user
+  }
+
+  it('abre la semana desplazada a la zona útil, una sola vez y cuando los eventos ya cargaron', async () => {
+    await montarSemana()
+  })
+
+  it('abrir y cerrar el diálogo de un evento no desplaza la página', async () => {
+    const user = await montarSemana()
+    await user.click(grilla().getByRole('button', { name: 'Editar evento: Reunión, 15:00–16:00' }))
+    expect(dialogo().getByRole('heading', { name: 'Editar evento' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await user.click(nuevoEvento())
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+  })
+
+  it('guardar un evento que se queda en la misma semana (editar o crear) no desplaza la página', async () => {
+    const user = await montarSemana()
+    await user.click(grilla().getByRole('button', { name: 'Editar evento: Reunión, 15:00–16:00' }))
+    await user.type(campo('Título'), ' 2')
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-15')
+
+    await user.click(nuevoEvento())
+    await user.type(campo('Título'), 'Otro')
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2026-12-17' } })
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-17'))
+    await grilla().findByRole('button', { name: /^Editar evento: Otro/ })
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+  })
+
+  it('crear un evento en otra semana lleva a esa semana y la desplaza a SU zona útil', async () => {
+    const user = await montarSemana()
+    await user.click(nuevoEvento())
+    await user.type(campo('Título'), 'Cena')
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2026-12-22' } })
+    fireEvent.change(campo('Hora de inicio'), { target: { value: '17:00' } })
+    fireEvent.change(campo('Hora de fin'), { target: { value: '18:00' } })
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-22'))
+    // 17:00 → desde las 16:00: 8 h × 48 = 384; − 64 = 320. Solo cuando los eventos de esa semana ya están.
+    await waitFor(() => expect(scrollTo).toHaveBeenLastCalledWith({ top: 320, behavior: 'auto' }))
+    expect(scrollTo).toHaveBeenCalledTimes(2)
+  })
+
+  it('editar un evento moviéndolo a otra semana lleva a esa semana y la desplaza', async () => {
+    const user = await montarSemana()
+    await user.click(grilla().getByRole('button', { name: 'Editar evento: Reunión, 15:00–16:00' }))
+    fireEvent.change(campo('Día de inicio'), { target: { value: '2026-12-29' } })
+    await user.click(dialogo().getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(ubicacion()).toBe('/calendario?vista=semana&dia=2026-12-29'))
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(2))
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 224, behavior: 'auto' })
   })
 })
 

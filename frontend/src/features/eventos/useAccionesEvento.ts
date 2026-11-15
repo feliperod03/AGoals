@@ -68,6 +68,8 @@ interface Opciones {
   alMensaje: AlMensaje
   /** Tras crear (con el refresco ya hecho): la página salta al día del evento. */
   alCrear?: (evento: Evento) => void
+  /** Tras editar bien (con el refresco ya hecho): la página puede llevar al día del evento si quedó fuera de lo que se ve. */
+  alGuardar?: (evento: Evento) => void
 }
 
 const esStatus = (e: unknown, status: number) => e instanceof ApiError && e.status === status
@@ -121,7 +123,7 @@ function esConsultaDelEvento(clave: readonly unknown[], eventoId: number): boole
  * evento (banner de vencidos, Próximos recordatorios). Un 404 (borrado en otra pestaña) refresca las dos; al borrar,
  * un 404 ya cumplió el objetivo y se cierra con «El evento «X» ya no existía».
  */
-export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEvento {
+export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): AccionesEvento {
   const queryClient = useQueryClient()
   const [dialogo, setDialogo] = useState<EstadoEventoDialog | null>(null)
   const [aBorrar, setABorrar] = useState<Evento | null>(null)
@@ -168,6 +170,7 @@ export function useAccionesEvento({ alMensaje, alCrear }: Opciones): AccionesEve
       } else {
         alMensaje(mensajeEventoGuardado(titulo, inicio, fin))
       }
+      if (id !== undefined) alGuardar?.(evento)
     },
     onError: async (e) => {
       if (esStatus(e, 404)) await invalidarTodo()

@@ -8,6 +8,7 @@ import {
   limitesDeSemana,
   mesDe,
   minutosDeHora,
+  minutosDelDia,
   moverMesConservandoDia,
   parsearMes,
   semanasDelMes,
@@ -268,6 +269,29 @@ export function repartirDia(elementos: ElementoDia[]): { sinHora: ElementoDia[];
 /** Rango común de las 7 columnas: 08–21 o lo que haga falta para que entre todo lo de la semana. */
 export function rangoDeLaSemana(conHoraPorDia: ElementoConHora[][]): Rango {
   return calcularRango(conHoraPorDia.flat())
+}
+
+/** Hora (en minutos del día) a la que apunta la semana si no hay nada mejor: las 08:00. */
+const MINUTO_POR_DEFECTO_SEMANA = 8 * 60
+
+/** Margen de contexto que queda por encima de la hora de interés al abrir la semana. */
+const MARGEN_INICIAL_SEMANA_MIN = 60
+
+/**
+ * Minuto del día que la semana debe dejar a la vista al abrirse (H-30): la hora actual si la semana contiene hoy; si no,
+ * el primer elemento con hora de la semana (sin contar los tramos que continúan desde el día anterior, que arrancan a
+ * las 00:00 y llevarían a la madrugada); si no hay ninguno, las 08:00.
+ */
+export function minutoInicialSemana(dias: string[], hoy: string, ahora: Date, conHoraPorDia: ElementoConHora[][]): number {
+  if (dias.includes(hoy)) return minutosDelDia(ahora, hoy)
+  const inicios = conHoraPorDia.flat().filter((e) => !(e.tipo === 'evento' && e.empiezaAntes)).map((e) => e.inicioMin)
+  return inicios.length > 0 ? Math.min(...inicios) : MINUTO_POR_DEFECTO_SEMANA
+}
+
+/** Píxeles, desde el borde superior de la línea de tiempo, a los que apuntar para ver `minuto` con una hora de contexto arriba. */
+export function offsetInicialSemana(minuto: number, rango: Rango): number {
+  const destino = Math.max(rango.inicioHora * 60, minuto - MARGEN_INICIAL_SEMANA_MIN)
+  return Math.min(destino - rango.inicioHora * 60, (rango.finHora - rango.inicioHora) * 60) * (PX_POR_HORA_SEMANA / 60)
 }
 
 /**
