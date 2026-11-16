@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 15/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; recurrencia decidida; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 15/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; recurrencia: backend hecho; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -166,7 +166,6 @@ Solo frontend, sin dependencias nuevas ni backend. Reusa el `RecordatorioDialog`
 - **Hora por defecto** (`valorInicialEvento`): con hora, `MINUTOS_AVISO_EVENTO` = 60 minutos antes del inicio (puede caer el día anterior); de días completos, su primer día a las 09:00. La constante vive solo en `recordatorioForm.ts`. Bajo la descripción, `mensajeEventoEmpieza`: «El evento empieza el <fecha y hora corta>» o, de días completos, «El evento es <lapso>» (porque «00:00» confunde).
 - **Capas:** `eventos/` importa de `agenda/`; ningún archivo de `agenda/` importa de `eventos/` ni de `calendario/` (`RecordatorioDialog` solo usa el tipo `Evento`).
 - **Mover el recordatorio al mover el evento:** ver 9e (abajo).
-- **Pruebas manuales:** 12 casos OK (`.playwright-mcp/informe-9d.md`).
 
 ## Mover el recordatorio al mover el evento (9e; commit `d949a6b`)
 Solo frontend, sin dependencias nuevas ni backend. Modelo: 8.5c (`PosponerDialog`).
@@ -176,7 +175,6 @@ Solo frontend, sin dependencias nuevas ni backend. Modelo: 8.5c (`PosponerDialog
 - **Guardar:** `guardar(request, recordatorio?)` en `useAccionesEvento`: PUT del evento y DESPUÉS PUT del recordatorio con los cinco campos (`requestMovido`, el mismo de 8.5c); si el segundo falla, el evento queda guardado, el diálogo se cierra y el aviso lleva el mensaje del servidor, sin reintento. El guard `enCurso` cubre las dos llamadas (doble clic = un PUT de cada uno). Invalida `['eventos']` siempre y `['recordatorios']` solo si intentó mover. Mensajes en `lib/fechas.ts`: `mensajeEventoGuardadoConRecordatorio` y `mensajeEventoRecordatorioNoMovido`.
 - **Consulta del recordatorio** (la misma de «Recordatorio…»): `Guardar` espera solo si el inicio cambió y la consulta está cargando. Si falla (incluso con datos viejos), se guarda el evento sin mover y el diálogo lo avisa antes con `notaRecordatorioEventoNoConsultado` (D1); nunca se escribe a ciegas.
 - **Recordatorio creado desde el diálogo con un inicio sin guardar:** se crea con el inicio GUARDADO; al volver, la casilla muestra el instante coherente con el inicio nuevo.
-- **Pruebas manuales:** OK (`.playwright-mcp/informe-9e.md`).
 
 ## Pulido 2a: aspecto y tema (commit `eed9465`)
 Solo frontend, sin dependencias ni backend. 1358 tests (88 archivos).
@@ -185,7 +183,6 @@ Solo frontend, sin dependencias ni backend. 1358 tests (88 archivos).
 - **Calendario:** token `--sel` (claro `#ece2ce`, oscuro `#141d30`) para el día elegido; tras un clic de mouse en un día del mes, `scrollIntoView({ block: 'nearest' })` lleva al panel «Detalle del día» (no con teclado). `DetalleDia` conserva `hover:bg-side`.
 - **Hora:** `formatearHoraDelDia` (1440 → `00:00`) en calendario y Hoy; `formatearMinutos(1440)` sigue dando `24:00`.
 - **Táctil (H5):** `max-sm:h-11` en 11 botones; el resto, a la fase móvil.
-- **Pruebas:** manuales OK a 1280 y 390 px, claro y oscuro.
 
 ## Pulido 2b: foco, avisos y errores (commits `fea13c6` y `6666020`)
 Solo frontend, sin dependencias; dos tandas. 1398 tests (90 archivos).
@@ -202,7 +199,6 @@ Solo frontend más un comentario en `EventoService.eliminar`; sin dependencias n
 - **H3 (A):** `invalidarTrasBorrar(eventoId)` en `useAccionesEvento` evita un `GET` sobrante al borrar un evento (deja obsoleta la consulta `['recordatorios',{eventoId}]` con `refetchType: 'none'`).
 - **Duplicados (B):** `components/Campo.tsx` compartido; `BuscadorTareas` adaptador de `BuscadorLista`; `esAbierto` de `jerarquia/tipos`; `puedeAgregarSubtarea` → `esTareaAbierta`.
 - **Consulta neutral (B):** `jerarquia/useListasVinculo.ts` (`useProyectos()`, `useObjetivos()`) la usan `VincularTareaDialog`, `TareasLigadas` y `config.ts`; `useCofre` y `useRecomendacion` conservan a propósito su consulta directa. `SelectorObjetivo`: sin el id actual en la lista dice «Objetivo n.º N (no disponible)».
-- **Pruebas manuales:** OK (`.playwright-mcp/informe-p2c.md`).
 
 ## Pulido 3: revisión de usabilidad y sus arreglos (p2d `69d5fcf`; p3a `646228b`; p3b `0bd4cf1`; p3c `df3310c`)
 Solo frontend, sin dependencias, backend ni migraciones. p2d: limpieza de 3 líneas en `VincularTareaDialog`. Tests: p3a 1449 (95 archivos), p3b 1504 (96), p3c 1534 (97); lint, build y `scripts/smoke-test.ps1` OK; manuales con Playwright (`.playwright-mcp/informe-p3a|p3b|p3c.md`).
@@ -213,15 +209,16 @@ Solo frontend, sin dependencias, backend ni migraciones. p2d: limpieza de 3 lín
 - **Se mantienen por decisión:** subtarea sin fecha va al Cofre (H-10); «Subtarea de» solo si la madre queda fuera de la lista (H-11); búsqueda y accesos rápidos sin chips (H-12).
 - **Hallazgos pendientes:** H-01 (Hoy en una columna a 1054 px), H-03 (prioridad en el bloque planificado), H-04 (completar/deshacer desde el bloque), H-14 y H-26 (filtros de Cofre e Ideas en la URL), H-18 y H-19 (objetivo del subproyecto; selector con buscador), H-22 (Deshacer al quitar una tarea ligada), H-27 (chip del filtro activo en Ideas), H-29 y H-42 (panel «Detalle del día» fuera de vista: panel lateral o hoja inferior) y los móviles H-39 (Proyectos, Objetivos e Ideas fuera de la navegación), H-40 (objetivos táctiles < 44 px) y H-41 (pie fijo con «Guardar» en diálogos). Además: «Entendido todos» (choca con «mostrar no es marcar»), animar el colapso del banner y probar el teclado virtual real. Safari no tiene *scroll anchoring*: revisar el banner en iOS.
 
-## Eventos recurrentes (decidido el 15/11; plan pendiente)
-Entran en la v1 (antes estaban fuera: `CLAUDE.md`, `modelo-datos.md`, roadmap 7a). Opción A: una «serie» guarda la regla y MATERIALIZA eventos reales (`serie_id` nullable en evento), cada uno con su recordatorio; el resto de la app no cambia (se descartó expandir al consultar: cada recordatorio necesita su estado y su `UNIQUE`). Reglas: semanal (uno o varios días, cada 1 o 2 semanas) y mensual por día del mes (si falta el día, el último del mes); final obligatorio (hasta una fecha o N veces, con tope). Solo desde hoy en adelante (si hoy es el día de la regla, empieza hoy); recordatorio opcional con el mismo desfase en todas (60 min antes por defecto), omitido si su instante ya pasó. Editar y borrar: «solo este» o «toda la serie» = esta ocurrencia y las siguientes (las pasadas no se tocan). Fuera: tareas y recordatorios sueltos recurrentes. Creación atómica. Rebanadas: backend, luego frontend.
+## Eventos recurrentes (backend hecho `5417722`; frontend pendiente)
+Entran en la v1. Backend hecho (V3 `serie_evento` + `evento.serie_id`, módulo `serie`, 845 tests; detalle en `modelo-datos.md`). Una serie guarda la regla y MATERIALIZA eventos reales desde hoy en adelante (máx. 260); semanal (varios días, cada 1 o 2 semanas) o mensual por día del mes (si falta, el último); final obligatorio (`hasta` o `repeticiones`). `POST /api/series-eventos` (`ahora`, `zonaHoraria` IANA del navegador, `horaInicio`/`horaFin`, `recordatorio`: `{}` = 60 min, ausente = ninguno) devuelve `{serie, eventos, recordatoriosCreados, recordatoriosOmitidos}`. `PUT` y `DELETE /api/eventos/{id}/serie` = esta ocurrencia y las siguientes (409 si es suelta); el PUT/DELETE de siempre es «solo este». `EventoResponse.serieId` (null = suelto). «Toda la serie» pisa lo editado a mano y la regla no se cambia; «Todo el día» no admite series (400). **Frontend (otra rebanada):** «Repetir» en `EventoDialog` (oculto con «Todo el día»), aviso de recordatorios omitidos, «solo este / toda la serie» al editar y borrar (avisar que se pisan las ediciones a mano), invalidar `['eventos']` y `['recordatorios']`.
 
 ## Orden de rebanadas
 - Hechas (con su commit): 8.0 Esqueleto `07c1c25`; 8.1 Agenda del día en lectura `e9ba44d`; 8.2a Crear y editar tareas `58d3df1`; 8.2b Acciones rápidas `fadac2b`; 8.3 Recomendación `f2d0052`; 8.2c Posponer con opciones `2a78695`; refactor previo al cofre `1e3256f`; 8.3b Cofre `a33fcce`; 8.2d Subtareas `ceab9d9`; 5d (backend) Borrar con subtareas `dc6c3c1`; 8.2e Diálogo de borrado con opciones `be0913b`; 8.2f Cambiar o quitar la madre `f195a8b`; 8.2g Vincular una tarea existente como subtarea `c6afad8`; P1 Pulido 1 (P1a `1642c9a` aviso flotante, `color-scheme`, aviso de subtarea sin fecha; P1b `4ff8cc8` chips de filtros activos); 8.4a Proyectos y Objetivos `a388d07`; 8.4a2 Vincular proyectos a un objetivo `0655bf0`; 5e (backend) Borrar proyectos y objetivos eligiendo por categoría `f17aa98` (semántica en el brief); 5f (backend) Vista previa del impacto del borrado `43ecec5`; 8.4a3 Diálogo de borrado con «Mover / Borrar» por categoría `9fd2703`; 8.4b Vincular tareas a proyectos y objetivos `0417230`; 8.4c Página de Ideas `3548350`; 8.4d Ideas ligadas en el detalle `8c447ca`; 8.5a Aviso de recordatorios vencidos `76719fd`; 8.5b Crear, editar y borrar recordatorios `2780858`; 8.5c Mover el recordatorio al posponer `e7aa911`; 9a Calendario mensual `26c36bd`; 9b Vista semanal `7f10dce`; 9c CRUD de eventos `ffa1562`; 9d Recordatorios de evento `1da4b2e`; 9e Mover el recordatorio al mover el evento `d949a6b` (con ella queda completa la fase 9); 5c (backend) + 8.3c Tareas futuras en la recomendación `c3ff1dc` y `7a3dd9e`.
 - Pulido 2a Aspecto y tema: hecha (`eed9465`). Pulido 2b Foco, avisos y errores: hecha (`fea13c6`, `6666020`).
 - Pulido 2c Foco desde «⋯» y limpieza técnica: hecha (`c56d5ad` tanda A, `f9ec6bc` tanda B).
 - Pulido 3 Revisión de usabilidad: hecha (p2d `69d5fcf`, p3a `646228b`, p3b `0bd4cf1`, p3c `df3310c`). 1534 tests de frontend (97 archivos).
-- Siguiente: eventos recurrentes (backend, luego frontend); después login, despliegue y móvil (PWA).
+- Eventos recurrentes, backend: hecho (`5417722`; 845 tests de backend).
+- Siguiente: eventos recurrentes (frontend); después login, despliegue y móvil (PWA).
 - Opcional: 9f Vista de día (ver «Pulido 2»).
 
 Sesiones con Sonnet; `/clear` entre rebanadas. Escritorio primero, móvil después (layout responsive desde el inicio, PWA más adelante).
