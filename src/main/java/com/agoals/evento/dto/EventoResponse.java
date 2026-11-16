@@ -10,5 +10,6 @@ public record EventoResponse(
 		String descripcion,
 		OffsetDateTime fechaHoraInicio,
 		OffsetDateTime fechaHoraFin,
-		Prioridad prioridad) {
+		Prioridad prioridad,
+		Long serieId) {
 }

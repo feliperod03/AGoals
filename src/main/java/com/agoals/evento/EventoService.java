@@ -1,5 +1,6 @@
 package com.agoals.evento;
 
+import com.agoals.evento.dto.EventoDeSerie;
 import com.agoals.evento.dto.EventoRequest;
 import com.agoals.evento.dto.EventoResponse;
 import org.springframework.stereotype.Service;
@@ -76,6 +77,63 @@ public class EventoService {
 		repository.delete(buscar(id));
 	}
 
+	// ---- Series (los usa el módulo serie; EventoService no conoce a serie ni a recordatorio) ----
+	// No validan que la serie exista: lo hace quien llama (como TareaService con proyectos y objetivos).
+
+	/** Crea las ocurrencias ya calculadas de una serie, en el orden recibido. */
+	public List<EventoResponse> crearDeSerie(Long serieId, List<EventoDeSerie> ocurrencias) {
+		return ocurrencias.stream().map(o -> {
+			if (!o.fechaHoraFin().isAfter(o.fechaHoraInicio())) {
+				throw new EventoInvalidoException("'fechaHoraFin' debe ser posterior a 'fechaHoraInicio'");
+			}
+			Evento evento = new Evento();
+			evento.setUsuarioId(USUARIO_ID);
+			evento.setSerieId(serieId);
+			evento.setTitulo(o.titulo());
+			evento.setDescripcion(o.descripcion() != null ? o.descripcion() : "");
+			evento.setFechaHoraInicio(o.fechaHoraInicio());
+			evento.setFechaHoraFin(o.fechaHoraFin());
+			evento.setPrioridad(o.prioridad());
+			return aRespuesta(repository.saveAndFlush(evento));
+		}).toList();
+	}
+
+	/** Las ocurrencias de la serie con inicio >= desde (instante), por inicio e id. La elegida entra; las anteriores no. */
+	@Transactional(readOnly = true)
+	public List<EventoResponse> ocurrenciasDeSerieDesde(Long serieId, OffsetDateTime desde) {
+		return repository.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
+				serieId, USUARIO_ID, desde).stream().map(this::aRespuesta).toList();
+	}
+
+	/** Reemplaza los datos de una ocurrencia sin tocar su serie_id. */
+	public EventoResponse actualizarDeSerie(Long id, EventoDeSerie datos) {
+		Evento evento = buscar(id);
+		if (!datos.fechaHoraFin().isAfter(datos.fechaHoraInicio())) {
+			throw new EventoInvalidoException("'fechaHoraFin' debe ser posterior a 'fechaHoraInicio'");
+		}
+		evento.setTitulo(datos.titulo());
+		evento.setDescripcion(datos.descripcion() != null ? datos.descripcion() : "");
+		evento.setFechaHoraInicio(datos.fechaHoraInicio());
+		evento.setFechaHoraFin(datos.fechaHoraFin());
+		evento.setPrioridad(datos.prioridad());
+		return aRespuesta(repository.saveAndFlush(evento));
+	}
+
+	/** Borra las ocurrencias de la serie con inicio >= desde (los recordatorios, en cascada en la base). */
+	public int eliminarDeSerieDesde(Long serieId, OffsetDateTime desde) {
+		List<Evento> aBorrar = repository
+				.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
+						serieId, USUARIO_ID, desde);
+		repository.deleteAll(aBorrar);
+		repository.flush();
+		return aBorrar.size();
+	}
+
+	@Transactional(readOnly = true)
+	public boolean existenDeSerie(Long serieId) {
+		return repository.existsBySerieIdAndUsuarioId(serieId, USUARIO_ID);
+	}
+
 	private Evento buscar(Long id) {
 		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
 				.orElseThrow(() -> new EventoNoEncontradoException(id));
@@ -98,6 +156,6 @@ public class EventoService {
 
 	private EventoResponse aRespuesta(Evento e) {
 		return new EventoResponse(e.getId(), e.getTitulo(), e.getDescripcion(), e.getFechaHoraInicio(),
-				e.getFechaHoraFin(), e.getPrioridad());
+				e.getFechaHoraFin(), e.getPrioridad(), e.getSerieId());
 	}
 }

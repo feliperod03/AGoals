@@ -1,6 +1,7 @@
 package com.agoals.evento;
 
 import com.agoals.common.Prioridad;
+import com.agoals.evento.dto.EventoDeSerie;
 import com.agoals.evento.dto.EventoRequest;
 import com.agoals.evento.dto.EventoResponse;
 import org.junit.jupiter.api.Test;
@@ -355,5 +356,102 @@ class EventoServiceTest {
 		// Mismo instante escrito con desfases distintos.
 		assertThatThrownBy(() -> service.listar(t("2026-11-10T00:00:00-03:00"), t("2026-11-10T03:00:00Z")))
 				.isInstanceOf(EventoInvalidoException.class);
+	}
+
+	// ---- Series (los usa el módulo serie) ----
+
+	private static EventoDeSerie deSerie(String titulo, String inicio, String fin) {
+		return new EventoDeSerie(titulo, null, t(inicio), t(fin), Prioridad.BAJA);
+	}
+
+	@Test
+	void editarUnEventoDeUnaSerieSoloEsteConservaSuSerieId() {
+		Evento e = evento(1, "2026-11-10T15:00:00-03:00", "2026-11-10T16:00:00-03:00");
+		e.setSerieId(7L);
+		existe(e);
+		when(repository.saveAndFlush(any(Evento.class))).thenAnswer(i -> i.getArgument(0));
+
+		EventoResponse r = service.actualizar(1L, request("2026-11-12T15:00:00-03:00", "2026-11-12T16:00:00-03:00"));
+
+		assertThat(e.getSerieId()).isEqualTo(7L);
+		assertThat(r.serieId()).isEqualTo(7L);
+	}
+
+	@Test
+	void unEventoSueltoRespondeConSerieIdNull() {
+		existe(evento(1, "2026-11-10T15:00:00-03:00", "2026-11-10T16:00:00-03:00"));
+
+		assertThat(service.obtener(1L).serieId()).isNull();
+	}
+
+	@Test
+	void crearDeSerieGuardaCadaOcurrenciaConSuSerieIdYElUsuario() {
+		when(repository.saveAndFlush(any(Evento.class))).thenAnswer(i -> i.getArgument(0));
+
+		List<EventoResponse> r = service.crearDeSerie(7L, List.of(
+				deSerie("a", "2026-11-18T18:00:00-03:00", "2026-11-18T20:00:00-03:00"),
+				deSerie("a", "2026-11-25T18:00:00-03:00", "2026-11-25T20:00:00-03:00")));
+
+		assertThat(r).hasSize(2);
+		ArgumentCaptor<Evento> captor = ArgumentCaptor.forClass(Evento.class);
+		verify(repository, org.mockito.Mockito.times(2)).saveAndFlush(captor.capture());
+		assertThat(captor.getAllValues()).allSatisfy(e -> {
+			assertThat(e.getSerieId()).isEqualTo(7L);
+			assertThat(e.getUsuarioId()).isEqualTo(U);
+			assertThat(e.getDescripcion()).isEmpty();
+			assertThat(e.getPrioridad()).isEqualTo(Prioridad.BAJA);
+		});
+	}
+
+	@Test
+	void crearDeSerieConFinNoPosteriorResponde400() {
+		assertThatThrownBy(() -> service.crearDeSerie(7L,
+				List.of(deSerie("a", "2026-11-18T18:00:00-03:00", "2026-11-18T18:00:00-03:00"))))
+				.isInstanceOf(EventoInvalidoException.class);
+		verify(repository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void ocurrenciasDeSerieDesdeUsaElInstanteYDevuelveLasSiguientes() {
+		Evento e = evento(2, "2026-11-25T18:00:00-03:00", "2026-11-25T20:00:00-03:00");
+		e.setSerieId(7L);
+		when(repository.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
+				7L, U, t("2026-11-25T18:00:00-03:00"))).thenReturn(List.of(e));
+
+		assertThat(ids(service.ocurrenciasDeSerieDesde(7L, t("2026-11-25T18:00:00-03:00")))).containsExactly(2L);
+	}
+
+	@Test
+	void actualizarDeSerieReemplazaLosDatosYNoTocaLaSerie() {
+		Evento e = evento(2, "2026-11-25T18:00:00-03:00", "2026-11-25T20:00:00-03:00");
+		e.setSerieId(7L);
+		existe(e);
+		when(repository.saveAndFlush(any(Evento.class))).thenAnswer(i -> i.getArgument(0));
+
+		service.actualizarDeSerie(2L, deSerie("nuevo", "2026-11-25T19:00:00-03:00", "2026-11-25T21:00:00-03:00"));
+
+		assertThat(e.getTitulo()).isEqualTo("nuevo");
+		assertThat(e.getFechaHoraInicio().toInstant()).isEqualTo(t("2026-11-25T22:00:00Z").toInstant());
+		assertThat(e.getPrioridad()).isEqualTo(Prioridad.BAJA);
+		assertThat(e.getSerieId()).isEqualTo(7L);
+	}
+
+	@Test
+	void eliminarDeSerieDesdeBorraSoloLasEncontradasYDevuelveCuantas() {
+		Evento a = evento(2, "2026-11-25T18:00:00-03:00", "2026-11-25T20:00:00-03:00");
+		Evento b = evento(3, "2026-12-02T18:00:00-03:00", "2026-12-02T20:00:00-03:00");
+		when(repository.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
+				7L, U, t("2026-11-25T18:00:00-03:00"))).thenReturn(List.of(a, b));
+
+		assertThat(service.eliminarDeSerieDesde(7L, t("2026-11-25T18:00:00-03:00"))).isEqualTo(2);
+
+		verify(repository).deleteAll(List.of(a, b));
+	}
+
+	@Test
+	void existenDeSerieConsultaPorSerieYUsuario() {
+		when(repository.existsBySerieIdAndUsuarioId(7L, U)).thenReturn(true);
+
+		assertThat(service.existenDeSerie(7L)).isTrue();
 	}
 }

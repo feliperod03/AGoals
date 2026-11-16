@@ -14,6 +14,9 @@ import com.agoals.proyecto.ProyectoNoEncontradoException;
 import com.agoals.recordatorio.RecordatorioConflictoException;
 import com.agoals.recordatorio.RecordatorioInvalidoException;
 import com.agoals.recordatorio.RecordatorioNoEncontradoException;
+import com.agoals.serie.SerieEventoConflictoException;
+import com.agoals.serie.SerieEventoInvalidaException;
+import com.agoals.serie.SerieEventoNoEncontradaException;
 import com.agoals.tarea.TareaConDependenciasException;
 import com.agoals.tarea.TareaEstadoInvalidaException;
 import com.agoals.tarea.TareaInvalidaException;
@@ -122,6 +125,21 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(RecordatorioConflictoException.class)
 	public ResponseEntity<ErrorResponse> recordatorioConflicto(RecordatorioConflictoException e) {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(SerieEventoNoEncontradaException.class)
+	public ResponseEntity<ErrorResponse> serieNoEncontrada(SerieEventoNoEncontradaException e) {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(SerieEventoInvalidaException.class)
+	public ResponseEntity<ErrorResponse> serieInvalida(SerieEventoInvalidaException e) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	@ExceptionHandler(SerieEventoConflictoException.class)
+	public ResponseEntity<ErrorResponse> serieConflicto(SerieEventoConflictoException e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
 	}
 

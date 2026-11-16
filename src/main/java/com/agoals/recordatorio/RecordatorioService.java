@@ -1,6 +1,7 @@
 package com.agoals.recordatorio;
 
 import com.agoals.evento.EventoService;
+import com.agoals.recordatorio.dto.RecordatorioDeEvento;
 import com.agoals.recordatorio.dto.RecordatorioRequest;
 import com.agoals.recordatorio.dto.RecordatorioResponse;
 import com.agoals.tarea.TareaService;
@@ -9,7 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -106,6 +110,45 @@ public class RecordatorioService {
 
 	public void eliminar(Long id) {
 		repository.delete(buscar(id));
+	}
+
+	/**
+	 * Para el módulo serie: deja el recordatorio de cada evento como se pide. No valida que los eventos existan ni da 409
+	 * (quien llama lo garantiza; el UNIQUE de la base queda de red de seguridad). Por evento:
+	 * <ul>
+	 *   <li>ya enviado: no se toca nunca (es historia);</li>
+	 *   <li>pendiente + fechaHora: se mueve (sigue enviado = false);</li>
+	 *   <li>pendiente + null: se borra;</li>
+	 *   <li>sin recordatorio + fechaHora: se crea (canal APP, descripción vacía);</li>
+	 *   <li>sin recordatorio + null: nada.</li>
+	 * </ul>
+	 */
+	public void sincronizarDeEventos(List<RecordatorioDeEvento> pedidos) {
+		if (pedidos.isEmpty()) {
+			return;
+		}
+		Map<Long, Recordatorio> existentes = repository
+				.findByEventoIdInAndUsuarioId(pedidos.stream().map(RecordatorioDeEvento::eventoId).toList(), USUARIO_ID)
+				.stream().collect(Collectors.toMap(Recordatorio::getEventoId, Function.identity()));
+		for (RecordatorioDeEvento pedido : pedidos) {
+			Recordatorio actual = existentes.get(pedido.eventoId());
+			if (actual != null && actual.isEnviado()) {
+				continue;
+			}
+			if (actual != null && pedido.fechaHora() == null) {
+				repository.delete(actual);
+			} else if (actual != null) {
+				actual.setFechaHora(pedido.fechaHora());
+				repository.save(actual);
+			} else if (pedido.fechaHora() != null) {
+				Recordatorio nuevo = new Recordatorio();
+				nuevo.setUsuarioId(USUARIO_ID);
+				nuevo.setEventoId(pedido.eventoId());
+				nuevo.setFechaHora(pedido.fechaHora());
+				repository.save(nuevo);
+			}
+		}
+		repository.flush();
 	}
 
 	private Recordatorio buscar(Long id) {

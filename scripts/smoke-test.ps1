@@ -1,4 +1,4 @@
-# Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
+﻿# Prueba de humo de la API: tareas (agenda del dia, marcar hecha, posponer), proyectos
 # (jerarquia, ciclos, asignar tareas, borrado con 409) y objetivos (jerarquia, ciclos,
 # proyectos y tareas ligados, borrado con 409 segun el motivo), atrasadas, reabrir, recomendacion
 # y agendar una tarea con sus subtareas, e ideas (libres o ligadas a un proyecto/objetivo, concluir,
@@ -9,14 +9,17 @@
 # y la vista previa de solo lectura de ese borrado (GET .../impacto-borrado: conteos por categoria, sin 409, sin borrar nada).
 # Requiere la app corriendo (docker compose up -d y .\mvnw spring-boot:run).
 # Uso:  .\scripts\smoke-test.ps1
-# Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*", y los borra al terminar.
+# y series de eventos recurrentes (semanal, cada 2 semanas, mensual; recordatorio por ocurrencia; 400 por reglas invalidas,
+# tope de 260 y "todo el dia"; editar y borrar "solo este" o "toda la serie"; 409 sobre eventos sueltos).
+# Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*" y series "ZZ-rec" (en 2098), y los borra al terminar.
 param(
     [string]$Base = "http://localhost:8080/api/tareas",
     [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
     [string]$BaseObjetivos = "http://localhost:8080/api/objetivos",
     [string]$BaseIdeas = "http://localhost:8080/api/ideas",
     [string]$BaseEventos = "http://localhost:8080/api/eventos",
-    [string]$BaseRecordatorios = "http://localhost:8080/api/recordatorios"
+    [string]$BaseRecordatorios = "http://localhost:8080/api/recordatorios",
+    [string]$BaseSeries = "http://localhost:8080/api/series-eventos"
 )
 
 $fecha = "2099-12-31"
@@ -27,6 +30,7 @@ $objetivoIds = @()
 $ideaIds = @()
 $eventoIds = @()
 $recordatorioIds = @()
+$serieEventoPrimeros = @()
 
 function Llamar($metodo, $url, $body = $null) {
     $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
@@ -1019,6 +1023,170 @@ try {
     Verificar "borrar recordatorio -> 204" ($rd1.Status -eq 204) "status $($rd1.Status)"
     $rd2 = Llamar "DELETE" ($BaseRecordatorios + "/" + $rc3.Json.id)
     Verificar "borrar recordatorio ya borrado -> 404" ($rd2.Status -eq 404) "status $($rd2.Status)"
+
+    # --- Series de eventos recurrentes (/api/series-eventos y /api/eventos/{id}/serie) ---
+    # Datos "ZZ-rec" en 2098. "ahora" lo manda el cliente: 2098-03-11 (martes) 10:00-03:00; 2098-03-12 es miercoles.
+    # Se verifica por ids propios y por instantes (UTC), nunca por tamaño de lista.
+    $zona = "America/Argentina/Buenos_Aires"
+    $ahoraS = "2098-03-11T10:00:00-03:00"
+    function Es($v, $iso) { return ((Inst $v) -eq [DateTimeOffset]::Parse($iso).UtcDateTime) }
+    function NuevaSerie($json) {
+        $r = Llamar "POST" $BaseSeries $json
+        if ($r.Json -and $r.Json.eventos) {
+            foreach ($e in $r.Json.eventos) { $script:eventoIds += $e.id }
+            $script:serieEventoPrimeros += $r.Json.eventos[0].id
+        }
+        return $r
+    }
+    # Cuerpo base de una serie semanal de miercoles; $extra se agrega tal cual (ya con coma inicial si hace falta).
+    function CuerpoSerie($titulo, $hi, $hf, $ahora, $frecuenciaYReglas, $final, $recordatorio) {
+        return '{"titulo":"' + $titulo + '","descripcion":"Aula 3","prioridad":"MEDIA","horaInicio":"' + $hi + '","horaFin":"' + $hf + '","zonaHoraria":"' + $zona + '","ahora":"' + $ahora + '",' + $frecuenciaYReglas + ',' + $final + $recordatorio + '}'
+    }
+    $reglaMie = '"frecuencia":"SEMANAL","diasSemana":["MIERCOLES"]'
+    $recDefecto = ',"recordatorio":{}'
+
+    # Crear: 4 miercoles, recordatorio por defecto (60 min antes)
+    $s1 = NuevaSerie (CuerpoSerie "ZZ-rec clase" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":4' $recDefecto)
+    $e1 = @($s1.Json.eventos)
+    Verificar "serie semanal: 201 con serie y 4 eventos, todos con su serieId" (($s1.Status -eq 201) -and ($e1.Count -eq 4) -and ($s1.Json.serie.id) -and (@($e1 | Where-Object { $_.serieId -ne $s1.Json.serie.id }).Count -eq 0)) $s1.Raw
+    Verificar "serie semanal: empieza el miercoles 12/03 18:00-20:00 y termina el 02/04" (($e1.Count -eq 4) -and (Es $e1[0].fechaHoraInicio "2098-03-12T18:00:00-03:00") -and (Es $e1[0].fechaHoraFin "2098-03-12T20:00:00-03:00") -and (Es $e1[1].fechaHoraInicio "2098-03-19T18:00:00-03:00") -and (Es $e1[3].fechaHoraInicio "2098-04-02T18:00:00-03:00")) $s1.Raw
+    Verificar "serie semanal: 4 recordatorios creados, 0 omitidos" (($s1.Json.recordatoriosCreados -eq 4) -and ($s1.Json.recordatoriosOmitidos -eq 0)) $s1.Raw
+    $r1 = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[0].id)
+    Verificar "serie semanal: el recordatorio de la 1.a ocurrencia es 60 min antes" ((@($r1.Json).Count -eq 1) -and (Es $r1.Json[0].fechaHora "2098-03-12T17:00:00-03:00") -and ($r1.Json[0].enviado -eq $false)) $r1.Raw
+    $g1 = Llamar "GET" ($BaseSeries + "/" + $s1.Json.serie.id)
+    Verificar "GET de la serie: regla, fecha de inicio, final y zona" (($g1.Status -eq 200) -and ($g1.Json.frecuencia -eq "SEMANAL") -and (@($g1.Json.diasSemana) -contains "MIERCOLES") -and ($g1.Json.intervaloSemanas -eq 1) -and ($g1.Json.fechaInicio -eq "2098-03-12") -and ($g1.Json.repeticiones -eq 4) -and (-not $g1.Json.hasta) -and ($g1.Json.zonaHoraria -eq $zona)) $g1.Raw
+    $g1e = Llamar "GET" ($BaseEventos + "/" + $e1[1].id)
+    Verificar "GET de un evento de la serie trae serieId" (($g1e.Status -eq 200) -and ($g1e.Json.serieId -eq $s1.Json.serie.id)) $g1e.Raw
+    $g0 = Llamar "GET" ($BaseSeries + "/999999")
+    Verificar "GET de una serie inexistente -> 404" ($g0.Status -eq 404) "status $($g0.Status)"
+
+    # Hoy es dia de la regla y el aviso de la de hoy ya paso: la ocurrencia se crea, su recordatorio se omite
+    $s2 = NuevaSerie (CuerpoSerie "ZZ-rec hoy" "18:00" "20:00" "2098-03-12T17:30:00-03:00" $reglaMie '"repeticiones":3' $recDefecto)
+    $e2 = @($s2.Json.eventos)
+    Verificar "hoy es miercoles: empieza hoy; el recordatorio de hoy se omite (2 creados, 1 omitido)" (($s2.Status -eq 201) -and ($e2.Count -eq 3) -and (Es $e2[0].fechaHoraInicio "2098-03-12T18:00:00-03:00") -and ($s2.Json.recordatoriosCreados -eq 2) -and ($s2.Json.recordatoriosOmitidos -eq 1)) $s2.Raw
+    $r2 = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e2[0].id)
+    Verificar "la ocurrencia de hoy no tiene recordatorio" (@($r2.Json).Count -eq 0) $r2.Raw
+    $s2b = NuevaSerie (CuerpoSerie "ZZ-rec sin aviso" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":2' '')
+    $r2b = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $s2b.Json.eventos[0].id)
+    Verificar "sin 'recordatorio' en el pedido: no se crean recordatorios" (($s2b.Status -eq 201) -and ($s2b.Json.recordatoriosCreados -eq 0) -and (@($r2b.Json).Count -eq 0)) $s2b.Raw
+
+    # Mensual: dia 31 -> ultimo dia de cada mes (2098 no es bisiesto)
+    $s3 = NuevaSerie (CuerpoSerie "ZZ-rec mensual" "09:00" "10:00" "2098-01-10T10:00:00-03:00" '"frecuencia":"MENSUAL","diaMes":31' '"repeticiones":3' '')
+    $e3 = @($s3.Json.eventos)
+    Verificar "mensual dia 31: 31/01, 28/02 y 31/03" (($s3.Status -eq 201) -and ($e3.Count -eq 3) -and (Es $e3[0].fechaHoraInicio "2098-01-31T09:00:00-03:00") -and (Es $e3[1].fechaHoraInicio "2098-02-28T09:00:00-03:00") -and (Es $e3[2].fechaHoraInicio "2098-03-31T09:00:00-03:00")) $s3.Raw
+
+    # Cada 2 semanas, lunes y miercoles: la semana ancla es la de la primera ocurrencia (miercoles 12/03, semana del lunes 10/03)
+    $s4 = NuevaSerie (CuerpoSerie "ZZ-rec quincenal" "18:00" "19:00" $ahoraS '"frecuencia":"SEMANAL","diasSemana":["LUNES","MIERCOLES"],"intervaloSemanas":2' '"repeticiones":4' '')
+    $e4 = @($s4.Json.eventos)
+    Verificar "cada 2 semanas lun/mie: 12/03, 24/03, 26/03 y 07/04" (($s4.Status -eq 201) -and ($e4.Count -eq 4) -and (Es $e4[0].fechaHoraInicio "2098-03-12T18:00:00-03:00") -and (Es $e4[1].fechaHoraInicio "2098-03-24T18:00:00-03:00") -and (Es $e4[2].fechaHoraInicio "2098-03-26T18:00:00-03:00") -and (Es $e4[3].fechaHoraInicio "2098-04-07T18:00:00-03:00")) $s4.Raw
+
+    # Cruza la medianoche, y 'hasta' inclusive
+    $s5 = NuevaSerie (CuerpoSerie "ZZ-rec noche" "23:00" "01:00" $ahoraS $reglaMie '"hasta":"2098-03-19"' '')
+    $e5 = @($s5.Json.eventos)
+    Verificar "cruza la medianoche y 'hasta' es inclusive: 12/03 y 19/03, fin al dia siguiente" (($s5.Status -eq 201) -and ($e5.Count -eq 2) -and (Es $e5[0].fechaHoraInicio "2098-03-12T23:00:00-03:00") -and (Es $e5[0].fechaHoraFin "2098-03-13T01:00:00-03:00") -and (Es $e5[1].fechaHoraInicio "2098-03-19T23:00:00-03:00")) $s5.Raw
+
+    # 400 (no crean nada)
+    $v = @()
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":null' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":3,"hasta":"2098-06-01"' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":261' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" "2098-03-13T10:00:00-03:00" $reglaMie '"hasta":"2098-03-17"' ''))
+    $v += , (Llamar "POST" $BaseSeries ((CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":3' '').Replace($zona, "Marte/Olympus")))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "09:00" "09:00" $ahoraS $reglaMie '"repeticiones":3' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS '"frecuencia":"SEMANAL","diasSemana":["LUNES","MARTES","MIERCOLES","JUEVES","VIERNES"]' '"hasta":"2103-12-31"' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS '"frecuencia":"SEMANAL","diasSemana":["MIERCOLE"]' '"repeticiones":3' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS '"frecuencia":"MENSUAL","diaMes":32' '"repeticiones":3' ''))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "ZZ-rec x" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":3' ',"recordatorio":{"minutosAntes":10081}'))
+    $v += , (Llamar "POST" $BaseSeries (CuerpoSerie "" "18:00" "20:00" $ahoraS $reglaMie '"repeticiones":3' ''))
+    foreach ($x in $v) { if ($x.Json -and $x.Json.eventos) { foreach ($ev in $x.Json.eventos) { $eventoIds += $ev.id }; $serieEventoPrimeros += $x.Json.eventos[0].id } }
+    Verificar "serie sin final -> 400" ($v[0].Status -eq 400) "status $($v[0].Status) $($v[0].Raw)"
+    Verificar "serie con 'hasta' y 'repeticiones' -> 400" (($v[1].Status -eq 400) -and ($v[1].Raw -match "no ambos")) "status $($v[1].Status) $($v[1].Raw)"
+    Verificar "261 repeticiones (supera el tope) -> 400" (($v[2].Status -eq 400) -and ($v[2].Raw -match "260")) "status $($v[2].Status) $($v[2].Raw)"
+    Verificar "'hasta' anterior a la primera ocurrencia -> 400" (($v[3].Status -eq 400) -and ($v[3].Raw -match "ninguna ocurrencia")) "status $($v[3].Status) $($v[3].Raw)"
+    Verificar "zona horaria invalida -> 400" (($v[4].Status -eq 400) -and ($v[4].Raw -match "Zona horaria")) "status $($v[4].Status) $($v[4].Raw)"
+    Verificar "'todo el dia' (hora de fin igual a la de inicio) queda fuera de las series -> 400" (($v[5].Status -eq 400) -and ($v[5].Raw -match "todo el d")) "status $($v[5].Status) $($v[5].Raw)"
+    Verificar "una serie que genera mas de 260 eventos con 'hasta' -> 400" (($v[6].Status -eq 400) -and ($v[6].Raw -match "260")) "status $($v[6].Status) $($v[6].Raw)"
+    Verificar "dia de la semana inexistente -> 400" ($v[7].Status -eq 400) "status $($v[7].Status)"
+    Verificar "'diaMes' 32 -> 400" ($v[8].Status -eq 400) "status $($v[8].Status) $($v[8].Raw)"
+    Verificar "'minutosAntes' fuera de rango -> 400" ($v[9].Status -eq 400) "status $($v[9].Status)"
+    Verificar "titulo vacio -> 400" ($v[10].Status -eq 400) "status $($v[10].Status)"
+
+    # Solo este: el PUT de siempre mueve la 3.a al jueves 27/03 y conserva la serie
+    $pSolo = Llamar "PUT" ($BaseEventos + "/" + $e1[2].id) '{"titulo":"ZZ-rec clase","fechaHoraInicio":"2098-03-27T10:00:00-03:00","fechaHoraFin":"2098-03-27T11:00:00-03:00"}'
+    Verificar "'solo este': el PUT normal conserva el serieId" (($pSolo.Status -eq 200) -and ($pSolo.Json.serieId -eq $s1.Json.serie.id)) $pSolo.Raw
+
+    # El recordatorio de la 2.a ya se envio: la edicion de toda la serie no debe tocarlo
+    $rEnv = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[1].id)
+    [void](Llamar "PATCH" ($BaseRecordatorios + "/" + $rEnv.Json[0].id + "/marcar-enviado"))
+
+    # Toda la serie desde la 2.a: titulo, horas, prioridad y recordatorio 30 min antes
+    $edit = '{"titulo":"ZZ-rec clase nueva","descripcion":"nueva","prioridad":"ALTA","horaInicio":"19:00","horaFin":"21:00","ahora":"' + $ahoraS + '","recordatorio":{"minutosAntes":30}}'
+    $pSerie = Llamar "PUT" ($BaseEventos + "/" + $e1[1].id + "/serie") $edit
+    $ids1 = @($pSerie.Json.eventos | ForEach-Object { $_.id })
+    Verificar "toda la serie desde la 2.a: devuelve la 2.a, la 3.a y la 4.a (no la 1.a)" (($pSerie.Status -eq 200) -and ($ids1.Count -eq 3) -and ($ids1 -contains $e1[1].id) -and ($ids1 -contains $e1[2].id) -and ($ids1 -contains $e1[3].id) -and ($ids1 -notcontains $e1[0].id) -and ($pSerie.Json.recordatoriosOmitidos -eq 0)) $pSerie.Raw
+    $a1 = Llamar "GET" ($BaseEventos + "/" + $e1[0].id)
+    Verificar "la 1.a (anterior) no se toca" (($a1.Json.titulo -eq "ZZ-rec clase") -and (Es $a1.Json.fechaHoraInicio "2098-03-12T18:00:00-03:00")) $a1.Raw
+    $a2 = Llamar "GET" ($BaseEventos + "/" + $e1[1].id)
+    Verificar "la 2.a cambia titulo, horas y prioridad" (($a2.Json.titulo -eq "ZZ-rec clase nueva") -and ($a2.Json.descripcion -eq "nueva") -and ($a2.Json.prioridad -eq "ALTA") -and (Es $a2.Json.fechaHoraInicio "2098-03-19T19:00:00-03:00") -and (Es $a2.Json.fechaHoraFin "2098-03-19T21:00:00-03:00")) $a2.Raw
+    $a3 = Llamar "GET" ($BaseEventos + "/" + $e1[2].id)
+    Verificar "la 3.a (editada a mano) se pisa pero conserva su fecha: jueves 27/03 a las 19:00" ((Es $a3.Json.fechaHoraInicio "2098-03-27T19:00:00-03:00") -and ($a3.Json.titulo -eq "ZZ-rec clase nueva") -and ($a3.Json.serieId -eq $s1.Json.serie.id)) $a3.Raw
+    $b = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[0].id)
+    Verificar "recordatorio de la 1.a intacto (17:00)" ((@($b.Json).Count -eq 1) -and (Es $b.Json[0].fechaHora "2098-03-12T17:00:00-03:00")) $b.Raw
+    $b = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[1].id)
+    Verificar "recordatorio ya enviado de la 2.a: no se toca (sigue enviado y a las 17:00 del 19/03)" ((@($b.Json).Count -eq 1) -and ($b.Json[0].enviado -eq $true) -and (Es $b.Json[0].fechaHora "2098-03-19T17:00:00-03:00")) $b.Raw
+    $b = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[2].id)
+    Verificar "recordatorio pendiente de la 3.a: pasa a 30 min antes del nuevo horario" ((@($b.Json).Count -eq 1) -and ($b.Json[0].enviado -eq $false) -and (Es $b.Json[0].fechaHora "2098-03-27T18:30:00-03:00")) $b.Raw
+
+    # Si el aviso nuevo ya paso, el pendiente existente no se toca y cuenta como omitido
+    $edPasado = '{"titulo":"ZZ-rec clase nueva","descripcion":"nueva","prioridad":"ALTA","horaInicio":"19:00","horaFin":"21:00","ahora":"2098-04-02T18:45:00-03:00","recordatorio":{"minutosAntes":20}}'
+    $pPas = Llamar "PUT" ($BaseEventos + "/" + $e1[3].id + "/serie") $edPasado
+    $b = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[3].id)
+    Verificar "aviso nuevo ya pasado: omitido y el recordatorio pendiente queda como estaba" (($pPas.Status -eq 200) -and ($pPas.Json.recordatoriosOmitidos -eq 1) -and (@($b.Json).Count -eq 1) -and (Es $b.Json[0].fechaHora "2098-04-02T18:30:00-03:00")) "$($pPas.Raw) $($b.Raw)"
+
+    # Sin recordatorio pedido: se borran los pendientes (no el enviado)
+    $edSin = '{"titulo":"ZZ-rec clase nueva","descripcion":"nueva","prioridad":"ALTA","horaInicio":"19:00","horaFin":"21:00","ahora":"' + $ahoraS + '"}'
+    $pSin = Llamar "PUT" ($BaseEventos + "/" + $e1[1].id + "/serie") $edSin
+    $b2 = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[1].id)
+    $b3 = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[2].id)
+    $b4 = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[3].id)
+    Verificar "toda la serie sin recordatorio: borra los pendientes y conserva el enviado" (($pSin.Status -eq 200) -and (@($b2.Json).Count -eq 1) -and ($b2.Json[0].enviado -eq $true) -and (@($b3.Json).Count -eq 0) -and (@($b4.Json).Count -eq 0)) "$($pSin.Raw)"
+    $pTodo = Llamar "PUT" ($BaseEventos + "/" + $e1[1].id + "/serie") '{"titulo":"ZZ-rec x","horaInicio":"09:00","horaFin":"09:00","ahora":"2098-03-11T10:00:00-03:00"}'
+    Verificar "editar toda la serie con horas iguales ('todo el dia') -> 400" (($pTodo.Status -eq 400) -and ($pTodo.Raw -match "todo el d")) "status $($pTodo.Status) $($pTodo.Raw)"
+
+    # Borrar toda la serie desde la 3.a: quedan la 1.a y la 2.a; la serie se recorta al dia anterior (jueves 27 -> hasta el 26)
+    $dSerie = Llamar "DELETE" ($BaseEventos + "/" + $e1[2].id + "/serie")
+    $c3 = Llamar "GET" ($BaseEventos + "/" + $e1[2].id)
+    $c4 = Llamar "GET" ($BaseEventos + "/" + $e1[3].id)
+    $c1 = Llamar "GET" ($BaseEventos + "/" + $e1[0].id)
+    $c2 = Llamar "GET" ($BaseEventos + "/" + $e1[1].id)
+    Verificar "borrar toda la serie desde la 3.a: 204; se van la 3.a y la 4.a, quedan la 1.a y la 2.a" (($dSerie.Status -eq 204) -and ($c3.Status -eq 404) -and ($c4.Status -eq 404) -and ($c1.Status -eq 200) -and ($c2.Status -eq 200)) "status $($dSerie.Status)"
+    $gRec = Llamar "GET" ($BaseSeries + "/" + $s1.Json.serie.id)
+    Verificar "la serie queda recortada: hasta el 26/03 y sin 'repeticiones'" (($gRec.Status -eq 200) -and ($gRec.Json.hasta -eq "2098-03-26") -and (-not $gRec.Json.repeticiones)) $gRec.Raw
+    $rBorr = Llamar "GET" ($BaseRecordatorios + "?eventoId=" + $e1[2].id)
+    Verificar "los recordatorios de las ocurrencias borradas desaparecen (cascada)" (@($rBorr.Json).Count -eq 0) $rBorr.Raw
+
+    # 409 / 404 sobre eventos sueltos e inexistentes
+    $suelto = NuevoEv '{"titulo":"ZZ-rec suelto","fechaHoraInicio":"2098-03-12T10:00:00-03:00","fechaHoraFin":"2098-03-12T11:00:00-03:00"}'
+    $k1 = Llamar "PUT" ($BaseEventos + "/" + $suelto.Json.id + "/serie") $edit
+    $k2 = Llamar "DELETE" ($BaseEventos + "/" + $suelto.Json.id + "/serie")
+    Verificar "toda la serie sobre un evento suelto -> 409 (PUT y DELETE)" (($k1.Status -eq 409) -and ($k2.Status -eq 409) -and ($k1.Raw -match "no pertenece a una serie")) "status $($k1.Status)/$($k2.Status) $($k1.Raw)"
+    $k3 = Llamar "PUT" ($BaseEventos + "/999999/serie") $edit
+    $k4 = Llamar "DELETE" ($BaseEventos + "/999999/serie")
+    Verificar "toda la serie sobre un evento inexistente -> 404 (PUT y DELETE)" (($k3.Status -eq 404) -and ($k4.Status -eq 404)) "status $($k3.Status)/$($k4.Status)"
+    $k5 = Llamar "GET" ($BaseEventos + "/" + $suelto.Json.id)
+    Verificar "el evento suelto sigue intacto tras el 409" (($k5.Status -eq 200) -and (-not $k5.Json.serieId)) $k5.Raw
+
+    # Borrar desde la 1.a: no queda nada y la serie desaparece
+    $dTodo = Llamar "DELETE" ($BaseEventos + "/" + $e1[0].id + "/serie")
+    $gGone = Llamar "GET" ($BaseSeries + "/" + $s1.Json.serie.id)
+    $c1b = Llamar "GET" ($BaseEventos + "/" + $e1[0].id)
+    $c2b = Llamar "GET" ($BaseEventos + "/" + $e1[1].id)
+    Verificar "borrar desde la 1.a: 204, no queda ninguna ocurrencia y la serie desaparece (404)" (($dTodo.Status -eq 204) -and ($c1b.Status -eq 404) -and ($c2b.Status -eq 404) -and ($gGone.Status -eq 404)) "status $($dTodo.Status)/$($gGone.Status)"
+
+    # "Solo este" en DELETE: borra una sola ocurrencia, las demas siguen en la serie
+    $dSolo = Llamar "DELETE" ($BaseEventos + "/" + $e4[1].id)
+    $s4a = Llamar "GET" ($BaseEventos + "/" + $e4[2].id)
+    Verificar "'solo este' en DELETE: borra una ocurrencia y las otras siguen en la serie" (($dSolo.Status -eq 204) -and ($s4a.Status -eq 200) -and ($s4a.Json.serieId -eq $s4.Json.serie.id)) "status $($dSolo.Status)"
 }
 catch {
     Write-Host ("ERROR en la prueba: " + $_) -ForegroundColor Red
@@ -1027,6 +1195,9 @@ catch {
 finally {
     # Los recordatorios primero (los ya borrados, o borrados en cascada con su tarea/evento, dan 404 y se ignoran).
     foreach ($id in $recordatorioIds) { [void](Llamar "DELETE" ($BaseRecordatorios + "/" + $id)) }
+    # Las series de prueba (ZZ-rec): "toda la serie" desde su primera ocurrencia borra las ocurrencias y la fila de la serie
+    # (si ya se habia borrado, da 404 y se ignora).
+    foreach ($id in $serieEventoPrimeros) { [void](Llamar "DELETE" ($BaseEventos + "/" + $id + "/serie")) }
     # Los eventos no tienen dependencias: se borran sin orden especial (los ya borrados dan 404, se ignora).
     foreach ($id in $eventoIds) { [void](Llamar "DELETE" ($BaseEventos + "/" + $id)) }
     # Las ideas primero: la API da 409 al borrar un proyecto u objetivo que todavia las tiene.

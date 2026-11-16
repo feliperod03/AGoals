@@ -42,10 +42,18 @@ public class Evento {
 	@Column(length = 10)
 	private Prioridad prioridad;
 
+	// Serie recurrente a la que pertenece (id simple, como los demás vínculos entre módulos); null = evento suelto.
+	// Editar o borrar "solo este" no lo toca: la ocurrencia sigue en su serie.
+	@Column(name = "serie_id")
+	private Long serieId;
+
 	public Evento() {
 	}
 
 	public Long getId() { return id; }
+
+	public Long getSerieId() { return serieId; }
+	public void setSerieId(Long serieId) { this.serieId = serieId; }
 
 	public Long getUsuarioId() { return usuarioId; }
 	public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }

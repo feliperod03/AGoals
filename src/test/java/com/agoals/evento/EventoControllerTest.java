@@ -47,7 +47,7 @@ class EventoControllerTest {
 	}
 
 	private static EventoResponse respuesta(Long id, String titulo) {
-		return new EventoResponse(id, titulo, "", t("2026-11-10T15:00:00-03:00"), t("2026-11-10T16:00:00-03:00"), null);
+		return new EventoResponse(id, titulo, "", t("2026-11-10T15:00:00-03:00"), t("2026-11-10T16:00:00-03:00"), null, null);
 	}
 
 	private static final String CUERPO_VALIDO = """
@@ -65,6 +65,16 @@ class EventoControllerTest {
 				.andExpect(jsonPath("$.titulo").value("Dentista"))
 				.andExpect(jsonPath("$.fechaHoraInicio").isNotEmpty())
 				.andExpect(jsonPath("$.fechaHoraFin").isNotEmpty());
+	}
+
+	@Test
+	void getIncluyeElSerieIdSiPerteneceAUnaSerieYNullSiEsSuelto() throws Exception {
+		when(service.obtener(1L)).thenReturn(new EventoResponse(1L, "De serie", "", t("2026-11-10T15:00:00-03:00"),
+				t("2026-11-10T16:00:00-03:00"), null, 7L));
+		when(service.obtener(2L)).thenReturn(respuesta(2L, "Suelto"));
+
+		mvc.perform(get("/api/eventos/1")).andExpect(status().isOk()).andExpect(jsonPath("$.serieId").value(7));
+		mvc.perform(get("/api/eventos/2")).andExpect(status().isOk()).andExpect(jsonPath("$.serieId").doesNotExist());
 	}
 
 	@Test

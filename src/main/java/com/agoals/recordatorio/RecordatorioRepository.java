@@ -3,6 +3,7 @@ package com.agoals.recordatorio;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,8 @@ public interface RecordatorioRepository extends JpaRepository<Recordatorio, Long
 	Optional<Recordatorio> findByIdAndUsuarioId(Long id, Long usuarioId);
 
 	List<Recordatorio> findByUsuarioIdOrderByFechaHoraAscIdAsc(Long usuarioId);
+
+	List<Recordatorio> findByEventoIdInAndUsuarioId(Collection<Long> eventoIds, Long usuarioId);
 
 	boolean existsByTareaIdAndUsuarioId(Long tareaId, Long usuarioId);
 
