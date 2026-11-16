@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   avisoYaNoEsDeSerieAlBorrar,
+  avisoYaNoEsDeSerieAlEditar,
   diaSemanaDe,
   diasDelMes,
   formatearDiaDeSerie,
   mensajeSerieBorrada,
   mensajeSerieCreada,
+  mensajeSerieEditada,
   zonaHoraria,
 } from './fechas'
 import {
@@ -911,6 +913,45 @@ describe('series de eventos', () => {
         /\. 3 recordatorios no se crearon porque su hora ya había pasado \(los eventos sí se crearon\)\.$/,
       )
     })
+  })
+
+  describe('mensajeSerieEditada', () => {
+    const PRIMERO = '2026-11-16T07:00:00-03:00'
+    const ULTIMO = '2026-12-16T07:00:00-03:00'
+
+    it('cuántos eventos y entre qué días, sin recordatorio', () => {
+      expect(mensajeSerieEditada('Gimnasio', PRIMERO, ULTIMO, 5, null, 0)).toBe(
+        'Serie «Gimnasio» actualizada: 5 eventos, del lun 16 nov al mié 16 dic, sin recordatorio',
+      )
+    })
+
+    it('un solo evento', () => {
+      expect(mensajeSerieEditada('Gimnasio', PRIMERO, PRIMERO, 1, null, 0)).toBe('Serie «Gimnasio» actualizada: 1 evento, el lun 16 nov, sin recordatorio')
+    })
+
+    it('con recordatorio', () => {
+      expect(mensajeSerieEditada('Gimnasio', PRIMERO, ULTIMO, 5, 30, 0)).toBe(
+        'Serie «Gimnasio» actualizada: 5 eventos, del lun 16 nov al mié 16 dic, con recordatorio 30 min antes',
+      )
+    })
+
+    it('un recordatorio omitido dice que quedó como estaba y que el evento sí se actualizó', () => {
+      expect(mensajeSerieEditada('Gimnasio', PRIMERO, ULTIMO, 5, 30, 1)).toMatch(
+        /\. 1 recordatorio quedó como estaba porque su nueva hora ya había pasado \(el evento sí se actualizó\)\.$/,
+      )
+    })
+
+    it('varios recordatorios omitidos, en plural', () => {
+      expect(mensajeSerieEditada('Gimnasio', PRIMERO, ULTIMO, 5, 30, 3)).toMatch(
+        /\. 3 recordatorios quedaron como estaban porque su nueva hora ya había pasado \(los eventos sí se actualizaron\)\.$/,
+      )
+    })
+  })
+
+  it('aviso del 409 al editar desde aquí', () => {
+    expect(avisoYaNoEsDeSerieAlEditar()).toBe(
+      'Este evento ya no forma parte de una serie: revisa los cambios y guarda de nuevo; se guardará solo él.',
+    )
   })
 
   it('mensajes de borrado desde aquí', () => {

@@ -602,6 +602,32 @@ export function mensajeSerieCreada(
     : `${conRecordatorio}. ${omitidos} recordatorios no se crearon porque su hora ya había pasado (los eventos sí se crearon).`
 }
 
+/**
+ * Aviso tras editar «este y los siguientes» de una serie. Con recordatorios omitidos se agrega qué pasó con ellos (el
+ * backend no los borra ni los mueve: el pendiente queda como estaba) y el aviso es persistente.
+ */
+export function mensajeSerieEditada(
+  titulo: string,
+  primeroIso: string,
+  ultimoIso: string,
+  cantidad: number,
+  minutosAntes: number | null,
+  omitidos: number,
+): string {
+  const lapso =
+    cantidad === 1 ? `el ${formatearDiaDeSerie(primeroIso)}` : `del ${formatearDiaDeSerie(primeroIso)} al ${formatearDiaDeSerie(ultimoIso)}`
+  const base = `Serie «${titulo}» actualizada: ${plural(cantidad, 'evento', 'eventos')}, ${lapso}`
+  const conRecordatorio = minutosAntes === null ? `${base}, sin recordatorio` : `${base}, con recordatorio ${minutosAntes} min antes`
+  if (omitidos === 0) return conRecordatorio
+  return omitidos === 1
+    ? `${conRecordatorio}. 1 recordatorio quedó como estaba porque su nueva hora ya había pasado (el evento sí se actualizó).`
+    : `${conRecordatorio}. ${omitidos} recordatorios quedaron como estaban porque su nueva hora ya había pasado (los eventos sí se actualizaron).`
+}
+
+/** 409 al editar «este y los siguientes»: el evento dejó de pertenecer a una serie. El diálogo sigue abierto. */
+export const avisoYaNoEsDeSerieAlEditar = () =>
+  'Este evento ya no forma parte de una serie: revisa los cambios y guarda de nuevo; se guardará solo él.'
+
 /** Aviso tras borrar «este y los siguientes» de una serie. */
 export const mensajeSerieBorrada = (titulo: string) => `Borrados el evento «${titulo}» y los siguientes de la serie`
 

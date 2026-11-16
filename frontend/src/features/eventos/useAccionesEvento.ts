@@ -4,10 +4,11 @@ import { useRef, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { actualizarEvento, borrarEvento, crearEvento } from '@/api/eventos'
 import { actualizarRecordatorio } from '@/api/recordatorios'
-import { borrarSerieDesde, crearSerie } from '@/api/series'
+import { borrarSerieDesde, crearSerie, editarSerieDesde } from '@/api/series'
 import { requestMovido } from '@/features/agenda/recordatorioForm'
 import {
   avisoYaNoEsDeSerieAlBorrar,
+  avisoYaNoEsDeSerieAlEditar,
   mensajeEventoBorrado,
   mensajeEventoCreado,
   mensajeEventoGuardado,
@@ -17,10 +18,11 @@ import {
   mensajeEventoYaNoExistia,
   mensajeSerieBorrada,
   mensajeSerieCreada,
+  mensajeSerieEditada,
 } from '@/lib/fechas'
 import type { Evento, EventoRequest } from '@/types/evento'
 import type { Recordatorio } from '@/types/recordatorio'
-import type { SerieEventoRequest } from '@/types/serie'
+import type { SerieEventoEdicionRequest, SerieEventoRequest } from '@/types/serie'
 import type { Alcance } from './ElegirAlcance'
 import type { ValoresEvento } from './formularioEvento'
 import type { AlMensaje } from '@/features/agenda/useMensajeTemporal'
@@ -43,9 +45,17 @@ export interface AccionesEvento {
   guardar: (request: EventoRequest, recordatorio?: Recordatorio, quedaEn?: string) => void
   /** Crea una serie (diálogo de creación con «Repetir»): una sola llamada atómica que crea todos los eventos. */
   guardarSerie: (request: SerieEventoRequest) => void
+  /**
+   * Edita el evento abierto y los siguientes de su serie («Este y los siguientes»). Si el servidor dice 409 (el evento ya
+   * no es de una serie) el diálogo sigue abierto con `serieId: null` y se llama `alYaNoEsDeSerie`, para que el formulario
+   * vuelva a «solo este evento». No se guarda nada a ciegas.
+   */
+  guardarSerieDesde: (request: SerieEventoEdicionRequest, alYaNoEsDeSerie?: () => void) => void
   guardando: boolean
   /** Mensaje del servidor tal cual; el diálogo queda abierto con él. */
   errorGuardar: string | null
+  /** Aviso del 409 al guardar «este y los siguientes»: el diálogo sigue abierto y hay que revisar y guardar de nuevo. */
+  avisoGuardar: string | null
   /** Confirmación de borrado, abierta encima de la edición. */
   borrado: Evento | null
   pedirBorrado: (evento: Evento) => void
@@ -142,6 +152,7 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
   const [aBorrar, setABorrar] = useState<Evento | null>(null)
   const [recordatorioDe, setRecordatorioDe] = useState<Evento | null>(null)
   const [avisoBorrar, setAvisoBorrar] = useState<string | null>(null)
+  const [avisoGuardar, setAvisoGuardar] = useState<string | null>(null)
   const enCurso = useRef(false)
   const disparador = useRef<HTMLElement | null>(null)
   const disparadorBorrado = useRef<HTMLElement | null>(null)
@@ -212,6 +223,52 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
     onSettled: liberar,
   })
 
+  /**
+   * Editar este evento y los siguientes: una sola llamada atómica (o se editan todos o ninguno). Un 404 (el evento o su
+   * serie ya no existe) cierra el diálogo con «ya no existía»; un 409 (ya no es de una serie) deja el diálogo abierto.
+   */
+  const serieDesdeMutacion = useMutation({
+    mutationFn: async ({ evento, request }: { evento: Evento; request: SerieEventoEdicionRequest; alYaNoEsDeSerie?: () => void }) => {
+      try {
+        return { tipo: 'editada' as const, ...(await editarSerieDesde(evento.id, request)) }
+      } catch (e) {
+        if (esStatus(e, 404)) return { tipo: 'yaNoExistia' as const }
+        if (esStatus(e, 409)) return { tipo: 'yaNoEsDeSerie' as const }
+        throw e
+      }
+    },
+    onSuccess: async (resultado, { evento, request, alYaNoEsDeSerie }) => {
+      if (resultado.tipo === 'yaNoExistia') {
+        await invalidarTrasBorrar(evento.id)
+        setDialogo(null)
+        alMensaje(mensajeEventoYaNoExistia(evento.titulo))
+        return
+      }
+      if (resultado.tipo === 'yaNoEsDeSerie') {
+        await invalidarTodo()
+        setDialogo((d) => (d?.evento && d.evento.id === evento.id ? { evento: { ...d.evento, serieId: null } } : d))
+        setAvisoGuardar(avisoYaNoEsDeSerieAlEditar())
+        alYaNoEsDeSerie?.()
+        return
+      }
+      // Los recordatorios de las ocurrencias cambian con la serie: banner, Próximos y consultas por evento.
+      await invalidarTodo()
+      setDialogo(null)
+      const { eventos, recordatoriosOmitidos } = resultado
+      const primero = eventos[0]
+      const ultimo = eventos[eventos.length - 1]
+      if (!primero || !ultimo) return
+      const minutosAntes = request.recordatorio ? (request.recordatorio.minutosAntes ?? 60) : null
+      // Un recordatorio omitido quedó a su hora vieja: lo principal salió pero algo pedido no (R3), aviso persistente.
+      alMensaje(
+        mensajeSerieEditada(request.titulo, primero.fechaHoraInicio, ultimo.fechaHoraInicio, eventos.length, minutosAntes, recordatoriosOmitidos),
+        { persistente: recordatoriosOmitidos > 0 },
+      )
+      alGuardar?.(primero)
+    },
+    onSettled: liberar,
+  })
+
   const borrarMutacion = useMutation({
     // Un 404 al borrar no es un error para el usuario: el evento ya no está. Un 409 de «este y los siguientes» es que
     // el evento dejó de ser de una serie: no se borra nada y se pide confirmar de nuevo (solo él).
@@ -257,6 +314,8 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
     disparador.current = enfocado()
     guardarMutacion.reset()
     serieMutacion.reset()
+    serieDesdeMutacion.reset()
+    setAvisoGuardar(null)
     setABorrar(null)
     setRecordatorioDe(null)
     setDialogo(estado)
@@ -272,8 +331,19 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
         guardarMutacion.mutate({ id: dialogo?.evento?.id, request, inicioViejo: dialogo?.evento?.fechaHoraInicio, recordatorio, quedaEn }),
       ),
     guardarSerie: (request) => lanzar(() => serieMutacion.mutate(request)),
-    guardando: guardarMutacion.isPending || serieMutacion.isPending,
-    errorGuardar: guardarMutacion.error?.message ?? serieMutacion.error?.message ?? null,
+    guardarSerieDesde: (request, alYaNoEsDeSerie) => {
+      const evento = dialogo?.evento
+      // Sin evento abierto, o ya suelto (409 previo): no hay serie que editar. El formulario no debería llamarlo así.
+      if (!evento || evento.serieId === null) return
+      lanzar(() => {
+        // El aviso del 409 vale para el intento anterior: al reintentar se limpia.
+        setAvisoGuardar(null)
+        serieDesdeMutacion.mutate({ evento, request, alYaNoEsDeSerie })
+      })
+    },
+    guardando: guardarMutacion.isPending || serieMutacion.isPending || serieDesdeMutacion.isPending,
+    errorGuardar: guardarMutacion.error?.message ?? serieMutacion.error?.message ?? serieDesdeMutacion.error?.message ?? null,
+    avisoGuardar,
     borrado: aBorrar,
     pedirBorrado: (evento) => {
       disparadorBorrado.current = enfocado()

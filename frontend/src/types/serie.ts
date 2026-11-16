@@ -36,6 +36,31 @@ export interface SerieEventoRequest {
   recordatorio?: RecordatorioSerieRequest
 }
 
+/**
+ * Cuerpo de PUT /api/eventos/{id}/serie (SerieEventoEdicionRequest): edita este evento y los siguientes de su serie.
+ * Reemplazo completo: `recordatorio: null` BORRA los recordatorios pendientes de todas esas ocurrencias; `{}` = 60 min.
+ * La regla (días, intervalo, final) no se cambia, y cada ocurrencia conserva su día.
+ */
+export interface SerieEventoEdicionRequest {
+  titulo: string
+  descripcion: string
+  prioridad: Prioridad | null
+  /** `HH:mm`. Si `horaFin` < `horaInicio`, termina al día siguiente; iguales (todo el día) = 400. */
+  horaInicio: string
+  horaFin: string
+  /** ISO con desfase, del reloj del cliente. */
+  ahora: string
+  recordatorio: RecordatorioSerieRequest | null
+}
+
+/** Respuesta de PUT /api/eventos/{id}/serie. */
+export interface SerieEventoEditada {
+  /** Las ocurrencias modificadas (la elegida y las siguientes). */
+  eventos: Evento[]
+  /** Ocurrencias cuyo nuevo recordatorio ya habría pasado: su recordatorio pendiente quedó como estaba. */
+  recordatoriosOmitidos: number
+}
+
 export interface SerieEvento {
   id: number
   frecuencia: Frecuencia

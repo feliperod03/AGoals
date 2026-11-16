@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Recordatorio } from '@/types/recordatorio'
 import type { ValoresEvento } from './formularioEvento'
 import {
+  aRequestEdicionSerie,
   aRequestSerie,
   calcularSerie,
   fechasDeSerie,
   hoyDe,
   minutosAntesDe,
+  motivoSinSiguientes,
+  precargaRecordatorioSerie,
   textoVistaPrevia,
   valoresSerieIniciales,
   volverASuelto,
@@ -306,6 +310,135 @@ describe('minutosAntesDe', () => {
     expect(minutosAntesDe(INICIO, '2026-12-15T09:30:00-03:00')).toBeNull()
     expect(minutosAntesDe(INICIO, '2026-12-08T09:00:00-03:00')).toBe(10080)
     expect(minutosAntesDe(INICIO, '2026-12-08T08:59:00-03:00')).toBeNull()
+  })
+})
+
+describe('motivoSinSiguientes (P6: ≥ 24 h)', () => {
+  const lapso = (inicio: string, fin: string) => motivoSinSiguientes({ fechaHoraInicio: inicio, fechaHoraFin: fin })
+
+  it('un evento normal, o que cruza la medianoche sin llegar a 24 h, está disponible', () => {
+    expect(lapso('2026-11-16T07:00:00-03:00', '2026-11-16T08:00:00-03:00')).toBeUndefined()
+    expect(lapso('2026-11-16T22:00:00-03:00', '2026-11-17T01:00:00-03:00')).toBeUndefined()
+    expect(lapso('2026-11-16T10:00:00-03:00', '2026-11-17T09:59:00-03:00')).toBeUndefined()
+  })
+
+  it('exactamente 24 h (misma hora de inicio y de fin al día siguiente): no disponible', () => {
+    expect(lapso('2026-11-16T10:00:00-03:00', '2026-11-17T10:00:00-03:00')).toMatch(/dura 24 horas o más/)
+  })
+
+  it('más de 24 h: no disponible', () => {
+    expect(lapso('2026-11-16T10:00:00-03:00', '2026-11-18T08:00:00-03:00')).toMatch(/dura 24 horas o más/)
+  })
+
+  it('todo el día (un día o varios): no disponible, con su propio motivo', () => {
+    expect(lapso('2026-11-16T00:00:00-03:00', '2026-11-17T00:00:00-03:00')).toMatch(/de todo el día/)
+    expect(lapso('2026-11-16T00:00:00-03:00', '2026-11-19T00:00:00-03:00')).toMatch(/de todo el día/)
+  })
+})
+
+describe('precargaRecordatorioSerie', () => {
+  const INICIO = '2026-12-15T09:00:00-03:00'
+  const recordatorio = (fechaHora: string, enviado = false): Recordatorio => ({
+    id: 1,
+    tareaId: null,
+    eventoId: 9,
+    fechaHora,
+    canal: 'APP',
+    enviado,
+    descripcion: null,
+  })
+
+  it('sin recordatorio: sin casilla y 60 minutos preparados', () => {
+    expect(precargaRecordatorioSerie(INICIO, null)).toEqual({ conRecordatorio: false, minutosAntes: '60', nota: null })
+  })
+
+  it('pendiente: usa la distancia al inicio, sin nota', () => {
+    expect(precargaRecordatorioSerie(INICIO, recordatorio('2026-12-15T08:30:00-03:00'))).toEqual({ conRecordatorio: true, minutosAntes: '30', nota: null })
+  })
+
+  it('pendiente a 0 minutos y a 7 días justos caben', () => {
+    expect(precargaRecordatorioSerie(INICIO, recordatorio(INICIO)).minutosAntes).toBe('0')
+    expect(precargaRecordatorioSerie(INICIO, recordatorio('2026-12-08T09:00:00-03:00')).minutosAntes).toBe('10080')
+  })
+
+  it('después del inicio o a más de 7 días: se propone 60, con casilla y con una nota', () => {
+    for (const fecha of ['2026-12-15T09:30:00-03:00', '2026-12-08T08:59:00-03:00']) {
+      const p = precargaRecordatorioSerie(INICIO, recordatorio(fecha))
+      expect(p).toMatchObject({ conRecordatorio: true, minutosAntes: '60' })
+      expect(p.nota).toMatch(/no cabe en 0–10080 minutos antes: se propone 60/)
+    }
+  })
+
+  it('ya enviado: sirve de modelo y la nota dice que ese no cambia', () => {
+    const p = precargaRecordatorioSerie(INICIO, recordatorio('2026-12-15T08:00:00-03:00', true))
+    expect(p).toMatchObject({ conRecordatorio: true, minutosAntes: '60' })
+    expect(p.nota).toMatch(/ya se envió y no cambia/)
+  })
+
+  it('ya enviado y fuera de rango: gana la nota del rango', () => {
+    expect(precargaRecordatorioSerie(INICIO, recordatorio('2026-12-15T10:00:00-03:00', true)).nota).toMatch(/no cabe/)
+  })
+})
+
+describe('aRequestEdicionSerie', () => {
+  const valores = (parcial: Partial<ValoresEvento> = {}) => ({
+    titulo: '  Gimnasio  ',
+    descripcion: '  fuerza ',
+    prioridad: '' as const,
+    horaInicio: '07:30:00',
+    horaFin: '08:30',
+    todoElDia: false,
+    ...parcial,
+  })
+  const SIN = { conRecordatorio: false, minutosAntes: '60' }
+
+  it('recorta, convierte prioridad vacía en null, corta las horas a HH:mm y manda recordatorio null sin casilla', () => {
+    expect(aRequestEdicionSerie(valores(), SIN, { ahora: AHORA })).toEqual({
+      ok: true,
+      request: { titulo: 'Gimnasio', descripcion: 'fuerza', prioridad: null, horaInicio: '07:30', horaFin: '08:30', ahora: AHORA, recordatorio: null },
+    })
+  })
+
+  it('con casilla manda los minutos como número', () => {
+    const r = aRequestEdicionSerie(valores({ prioridad: 'ALTA' }), { conRecordatorio: true, minutosAntes: '30' }, { ahora: AHORA })
+    expect(r).toMatchObject({ ok: true, request: { prioridad: 'ALTA', recordatorio: { minutosAntes: 30 } } })
+  })
+
+  it('0 minutos es válido (a la hora del evento)', () => {
+    expect(aRequestEdicionSerie(valores(), { conRecordatorio: true, minutosAntes: '0' }, { ahora: AHORA })).toMatchObject({
+      ok: true,
+      request: { recordatorio: { minutosAntes: 0 } },
+    })
+  })
+
+  it('fin anterior al inicio es válido: termina al día siguiente', () => {
+    expect(aRequestEdicionSerie(valores({ horaInicio: '22:00', horaFin: '01:00' }), SIN, { ahora: AHORA })).toMatchObject({
+      ok: true,
+      request: { horaInicio: '22:00', horaFin: '01:00' },
+    })
+  })
+
+  it('título vacío', () => {
+    expect(aRequestEdicionSerie(valores({ titulo: '  ' }), SIN, { ahora: AHORA })).toMatchObject({ ok: false, errores: { titulo: 'El título es obligatorio' } })
+  })
+
+  it.each([
+    ['', '08:00', 'Indica la hora de inicio'],
+    ['07:00', '', 'Indica la hora de fin'],
+    ['07:00', '07:00', 'La hora de fin debe ser distinta de la de inicio'],
+  ])('horas %j–%j: %s', (horaInicio, horaFin, mensaje) => {
+    expect(aRequestEdicionSerie(valores({ horaInicio, horaFin }), SIN, { ahora: AHORA })).toMatchObject({ ok: false, erroresSerie: { horas: mensaje } })
+  })
+
+  it.each(['', 'abc', '-5', '10081', '1.5'])('minutos %j fuera de 0..10080', (minutosAntes) => {
+    expect(aRequestEdicionSerie(valores(), { conRecordatorio: true, minutosAntes }, { ahora: AHORA })).toMatchObject({
+      ok: false,
+      erroresSerie: { minutos: 'Indica entre 0 y 10080 minutos' },
+    })
+  })
+
+  it('minutos inválidos no molestan si la casilla está desmarcada', () => {
+    expect(aRequestEdicionSerie(valores(), { conRecordatorio: false, minutosAntes: 'abc' }, { ahora: AHORA }).ok).toBe(true)
   })
 })
 

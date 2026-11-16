@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './client'
-import { borrarSerieDesde, crearSerie } from './series'
-import type { SerieEventoRequest } from '@/types/serie'
+import { borrarSerieDesde, crearSerie, editarSerieDesde } from './series'
+import type { SerieEventoEdicionRequest, SerieEventoRequest } from '@/types/serie'
 
 const fetchMock = vi.fn()
 
@@ -48,6 +48,59 @@ describe('api/series', () => {
     expect(url).toBe('/api/eventos/7/serie')
     expect(init.method).toBe('DELETE')
     expect(init.body).toBeUndefined()
+  })
+
+  it('editarSerieDesde hace PUT a /api/eventos/{id}/serie con el cuerpo tal cual (recordatorio null incluido)', async () => {
+    const respuesta = { eventos: [], recordatoriosOmitidos: 2 }
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(respuesta), { status: 200 }))
+    const edicion: SerieEventoEdicionRequest = {
+      titulo: 'Gimnasio',
+      descripcion: '',
+      prioridad: null,
+      horaInicio: '07:30',
+      horaFin: '08:30',
+      ahora: '2090-01-02T08:00:00-03:00',
+      recordatorio: null,
+    }
+    await expect(editarSerieDesde(7, edicion)).resolves.toEqual(respuesta)
+    const [url, init] = llamada()
+    expect(url).toBe('/api/eventos/7/serie')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body as string)).toEqual(edicion)
+  })
+
+  it('editarSerieDesde manda los minutos del recordatorio', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ eventos: [], recordatoriosOmitidos: 0 }), { status: 200 }))
+    await editarSerieDesde(7, {
+      titulo: 'G',
+      descripcion: '',
+      prioridad: 'ALTA',
+      horaInicio: '22:00',
+      horaFin: '01:00',
+      ahora: '2090-01-02T08:00:00-03:00',
+      recordatorio: { minutosAntes: 30 },
+    })
+    expect(JSON.parse(llamada()[1].body as string)).toMatchObject({ recordatorio: { minutosAntes: 30 }, prioridad: 'ALTA' })
+  })
+
+  it.each([
+    [400, 'Las series no admiten eventos de todo el día: la hora de fin debe ser distinta de la de inicio'],
+    [404, 'Evento 7 no encontrado'],
+    [409, 'El evento 7 no pertenece a una serie: usa la edición normal'],
+  ])('editarSerieDesde: un %i llega como ApiError con el mensaje del servidor', async (status, mensaje) => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ mensaje, errores: [] }), { status }))
+    const error = await editarSerieDesde(7, {
+      titulo: 'G',
+      descripcion: '',
+      prioridad: null,
+      horaInicio: '07:00',
+      horaFin: '08:00',
+      ahora: '2090-01-02T08:00:00-03:00',
+      recordatorio: null,
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(status)
+    expect((error as ApiError).message).toBe(mensaje)
   })
 
   it.each([

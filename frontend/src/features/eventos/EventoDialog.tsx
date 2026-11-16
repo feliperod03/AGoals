@@ -1,6 +1,5 @@
 import { parseISO } from 'date-fns'
-import { Repeat } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
@@ -34,10 +33,14 @@ import {
   type ErroresEvento,
   type ValoresEvento,
 } from './formularioEvento'
+import { ElegirAlcance, type Alcance } from './ElegirAlcance'
 import {
+  aRequestEdicionSerie,
   aRequestSerie,
   calcularSerie,
   hoyDe,
+  motivoSinSiguientes,
+  precargaRecordatorioSerie,
   textoVistaPrevia,
   valoresSerieIniciales,
   volverASuelto,
@@ -45,6 +48,7 @@ import {
   type ValoresSerie,
 } from './formularioSerie'
 import { instanteMovido } from './moverRecordatorio'
+import { RecordatorioSerieCampo } from './RecordatorioSerieCampo'
 import { RepetirCampos } from './RepetirCampos'
 import type { AccionesEvento } from './useAccionesEvento'
 
@@ -149,8 +153,20 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
   const [serie, setSerie] = useState(() => valoresSerieIniciales(iniciales.fechaInicio))
   const [serieActivada, setSerieActivada] = useState(false)
   const [erroresSerie, setErroresSerie] = useState<ErroresSerie>({})
-  const diasPrevios = useRef<{ fechaInicio: string; fechaFin: string } | null>(null)
+  // Estado (no ref): lo leen handlers que se pasan a otras funciones, y el valor del render en que se pulsó es el correcto.
+  const [diasPrevios, setDiasPrevios] = useState<{ fechaInicio: string; fechaFin: string } | null>(null)
   const repite = evento === undefined && serie.repetir !== 'no'
+
+  // «Este y los siguientes» (solo al editar un evento de una serie). Como al repetir, los campos de día no se muestran: cada
+  // ocurrencia conserva el suyo y solo se editan las horas. El alcance se deriva: un 409 deja el evento sin serie (`serieId`
+  // pasa a null) y el alcance vuelve a «este» aunque estuviera elegido el otro. Lo escrito no se pierde al cambiar de alcance.
+  const [elegido, setElegido] = useState<Alcance>('este')
+  const deSerie = evento !== undefined && evento.serieId !== null
+  const alcance: Alcance = deSerie ? elegido : 'este'
+  const siguientes = alcance === 'siguientes'
+  const soloHoras = repite || siguientes
+  // Recordatorio de la serie: `null` = el usuario no lo tocó (se ve la precarga derivada del recordatorio de ESTE evento).
+  const [recSerie, setRecSerie] = useState<Pick<ValoresSerie, 'conRecordatorio' | 'minutosAntes'> | null>(null)
   // «Hoy» sale de la misma `ahora` que viaja en el request (se recalcula en cada render; es barato).
   const ahoraActual = ahora()
   const calculoSerie = repite ? calcularSerie(serie, horaInicio, horaFin, hoyDe(ahoraActual), todoElDia) : null
@@ -169,8 +185,18 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
   const yaEnviado = consulta && !consulta.fallo && consulta.recordatorio?.enviado ? consulta.recordatorio : null
   const aMover = evento && pendiente && inicioFormulario ? instanteMovido(pendiente, evento.fechaHoraInicio, inicioFormulario) : null
   // Si cambió el inicio y aún no se sabe si hay recordatorio, `Guardar` espera (si no cambió, nunca espera).
-  const esperando = cambioInicio && consulta?.cargando === true
+  // (En «este y los siguientes» no hay mover recordatorio: el de cada ocurrencia se recalcula con los minutos.)
+  const esperando = !siguientes && cambioInicio && consulta?.cargando === true
   const seguiraVencido = aMover !== null && yaPaso(aValorDatetimeLocal(aMover), new Date())
+
+  // «Este y los siguientes» no está disponible si este evento dura 24 h o más (P6) o si el formulario tiene «Todo el día».
+  const motivoSiguientes = deSerie ? (motivoSinSiguientes(evento) ?? (todoElDia ? 'Para editar los siguientes, desmarca «Todo el día».' : undefined)) : undefined
+  // Precarga: solo con la consulta resuelta (una fallida pero con datos viejos NO cuenta: nunca se escribe a ciegas).
+  const consultaLista = consulta !== null && !consulta.cargando && !consulta.fallo
+  const precarga = evento && consultaLista ? precargaRecordatorioSerie(evento.fechaHoraInicio, consulta.recordatorio) : null
+  const recordatorioSerie = recSerie ?? precarga ?? { conRecordatorio: false, minutosAntes: '60' }
+  // Sin precarga y sin que el usuario haya decidido, guardar podría borrar recordatorios pendientes sin que nadie lo pida.
+  const esperandoSerie = siguientes && recSerie === null && !consultaLista
 
   // Errores de fecha y hora (dependen de varios campos): se calculan al enviar y se limpian al tocar una fecha u hora.
   const [erroresFecha, setErroresFecha] = useState<Pick<ErroresEvento, 'inicio' | 'fin'>>({})
@@ -182,7 +208,7 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
   function alCambiarInicio() {
     setErroresFecha({})
     // En una serie el fin sale de las horas: no se corre ni se toca el día.
-    if (repite) {
+    if (soloHoras) {
       setErroresSerie({})
       return
     }
@@ -202,23 +228,54 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
     if (pasaA !== undefined && pasaA !== serie.repetir) {
       const actuales = getValues()
       if (serie.repetir === 'no') {
-        diasPrevios.current = { fechaInicio: actuales.fechaInicio, fechaFin: actuales.fechaFin }
+        setDiasPrevios({ fechaInicio: actuales.fechaInicio, fechaFin: actuales.fechaFin })
         if (!serieActivada) {
           // Primera vez: los valores por defecto salen del día que tiene el formulario ahora.
           setSerieActivada(true)
           setSerie({ ...valoresSerieIniciales(actuales.fechaInicio), ...parcial })
           return
         }
-      } else if (pasaA === 'no' && diasPrevios.current) {
-        const dias = volverASuelto(actuales, diasPrevios.current)
-        setValue('fechaInicio', dias.fechaInicio)
-        setValue('fechaFin', dias.fechaFin)
-        setInicioAnterior({ fechaInicio: dias.fechaInicio, horaInicio: actuales.horaInicio })
-        setErroresFecha({})
-        diasPrevios.current = null
+      } else if (pasaA === 'no') {
+        restaurarDias()
       }
     }
     setSerie((s) => ({ ...s, ...parcial }))
+  }
+
+  /** Vuelve a mostrar los días que tenía el formulario antes de ocultarlos (las horas quedan como se editaron). */
+  function restaurarDias() {
+    if (!diasPrevios) return
+    const actuales = getValues()
+    const dias = volverASuelto(actuales, diasPrevios)
+    setValue('fechaInicio', dias.fechaInicio)
+    setValue('fechaFin', dias.fechaFin)
+    setInicioAnterior({ fechaInicio: dias.fechaInicio, horaInicio: actuales.horaInicio })
+    setErroresFecha({})
+    setDiasPrevios(null)
+  }
+
+  function alCambiarAlcance(nuevo: Alcance) {
+    if (nuevo === elegido) return
+    setErroresSerie({})
+    setErroresFecha({})
+    if (nuevo === 'siguientes') {
+      const actuales = getValues()
+      setDiasPrevios({ fechaInicio: actuales.fechaInicio, fechaFin: actuales.fechaFin })
+    } else {
+      restaurarDias()
+    }
+    setElegido(nuevo)
+  }
+
+  /** 409 al guardar «este y los siguientes»: el evento quedó suelto. Se vuelve a «solo este evento» con sus días a la vista. */
+  function alYaNoEsDeSerie() {
+    restaurarDias()
+    setElegido('este')
+  }
+
+  function alCambiarRecordatorioSerie(parcial: { conRecordatorio?: boolean; minutosAntes?: string }) {
+    setErroresSerie({})
+    setRecSerie({ ...recordatorioSerie, ...parcial })
   }
 
   function alAlternarTodoElDia(activar: boolean) {
@@ -241,6 +298,17 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         acciones.guardarSerie(resultadoSerie.request)
         return
       }
+      if (siguientes) {
+        const resultadoEdicion = aRequestEdicionSerie(valores, recordatorioSerie, { ahora: ahora() })
+        if (!resultadoEdicion.ok) {
+          setErroresSerie(resultadoEdicion.erroresSerie)
+          enfocarErrorSerie(resultadoEdicion.erroresSerie, serie)
+          return
+        }
+        if (esperandoSerie) return
+        acciones.guardarSerieDesde(resultadoEdicion.request, () => alYaNoEsDeSerie())
+        return
+      }
       const resultado = aRequestEvento(valores)
       if (!resultado.ok) {
         setErroresFecha({ inicio: resultado.errores.inicio, fin: resultado.errores.fin })
@@ -260,6 +328,11 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         if (!resultadoSerie.ok) setErroresSerie(resultadoSerie.erroresSerie)
         return
       }
+      if (siguientes) {
+        const resultadoEdicion = aRequestEdicionSerie(getValues(), recordatorioSerie, { ahora: ahora() })
+        if (!resultadoEdicion.ok) setErroresSerie(resultadoEdicion.erroresSerie)
+        return
+      }
       const resultado = aRequestEvento(getValues())
       if (!resultado.ok) setErroresFecha({ inicio: resultado.errores.inicio, fin: resultado.errores.fin })
     },
@@ -271,15 +344,32 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
     <form onSubmit={enviar} noValidate className="flex flex-col gap-4">
       <div>
         <DialogTitle>{evento ? 'Editar evento' : 'Nuevo evento'}</DialogTitle>
-        <DialogDescription>{evento ? 'Cambia lo que necesites y guarda.' : 'Anota la cita o el compromiso.'}</DialogDescription>
-        {variosDias && <p className="mt-1 text-sm text-mut">Dura varios días: los cambios valen para todo el evento.</p>}
-        {evento && evento.serieId !== null && (
-          <p className="mt-1 flex items-start gap-1.5 text-sm text-mut">
-            <Repeat className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            Forma parte de una serie. Los cambios valen solo para este evento.
-          </p>
-        )}
+        <DialogDescription>
+          {siguientes
+            ? 'Se cambian este evento y los siguientes de la serie; los anteriores se conservan y cada uno mantiene su día.'
+            : evento
+              ? 'Cambia lo que necesites y guarda.'
+              : 'Anota la cita o el compromiso.'}
+        </DialogDescription>
+        {variosDias && !siguientes && <p className="mt-1 text-sm text-mut">Dura varios días: los cambios valen para todo el evento.</p>}
       </div>
+
+      {deSerie && (
+        <ElegirAlcance
+          idBase="editar-evento"
+          leyenda="¿Qué eventos se editan?"
+          valor={alcance}
+          alCambiar={alCambiarAlcance}
+          bloqueado={bloqueado}
+          motivoSiguientesNoDisponible={motivoSiguientes}
+        />
+      )}
+
+      {acciones.avisoGuardar && (
+        <p role="status" className="text-sm text-tx">
+          {acciones.avisoGuardar}
+        </p>
+      )}
 
       <Campo id="evento-titulo" etiqueta="Título" error={errors.titulo?.message}>
         <input
@@ -311,15 +401,15 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
             type="checkbox"
             className="size-4 accent-acc"
             checked={todoElDia}
-            disabled={repite}
-            aria-describedby={repite ? 'evento-todo-el-dia-ayuda' : undefined}
+            disabled={soloHoras}
+            aria-describedby={soloHoras ? 'evento-todo-el-dia-ayuda' : undefined}
             onChange={(e) => alAlternarTodoElDia(e.target.checked)}
           />
           Todo el día
         </label>
-        {repite && (
+        {soloHoras && (
           <p id="evento-todo-el-dia-ayuda" className="text-xs text-mut">
-            Para marcar «Todo el día», elige «No se repite».
+            {repite ? 'Para marcar «Todo el día», elige «No se repite».' : 'Para marcar «Todo el día», elige «Solo este evento».'}
           </p>
         )}
       </div>
@@ -335,7 +425,7 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         />
       )}
 
-      {repite ? (
+      {soloHoras ? (
         <HorasSerie
           inicio={register('horaInicio', { onChange: alCambiarInicio })}
           fin={register('horaFin', { onChange: alCambiarInicio })}
@@ -366,7 +456,36 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         </>
       )}
 
-      {pendiente && aMover && (
+      {siguientes && consulta && (
+        <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
+          <RecordatorioSerieCampo
+            modo="editar"
+            conRecordatorio={recordatorioSerie.conRecordatorio}
+            minutosAntes={recordatorioSerie.minutosAntes}
+            error={erroresSerie.minutos}
+            bloqueado={bloqueado || (recSerie === null && consulta.cargando)}
+            nota={recSerie === null ? (precarga?.nota ?? null) : null}
+            alCambiar={alCambiarRecordatorioSerie}
+          />
+          {recSerie === null && consulta.cargando && (
+            <p role="status" className="text-xs text-mut">
+              Comprobando el recordatorio de este evento…
+            </p>
+          )}
+          {recSerie === null && consulta.fallo && !consulta.cargando && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-tx">
+                No se pudo comprobar el recordatorio de este evento. Marca o desmarca la casilla para elegir qué pasa con los recordatorios de los siguientes.
+              </p>
+              <Button type="button" variant="secondary" className="max-sm:h-11" onClick={consulta.reintentar} disabled={bloqueado}>
+                Reintentar
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!siguientes && pendiente && aMover && (
         <div className="flex flex-col gap-1 rounded-xl border border-input px-3 py-2">
           <label className="flex min-h-11 items-start gap-2 py-1 text-sm">
             <input
@@ -392,11 +511,11 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
         </div>
       )}
 
-      {cambioInicio && yaEnviado && <p className="text-xs text-mut">{notaRecordatorioEventoYaEnviado(yaEnviado.fechaHora)}</p>}
+      {!siguientes && cambioInicio && yaEnviado && <p className="text-xs text-mut">{notaRecordatorioEventoYaEnviado(yaEnviado.fechaHora)}</p>}
 
-      {cambioInicio && consulta?.fallo && <p className="text-xs text-mut">{notaRecordatorioEventoNoConsultado()}</p>}
+      {!siguientes && cambioInicio && consulta?.fallo && <p className="text-xs text-mut">{notaRecordatorioEventoNoConsultado()}</p>}
 
-      {evento && (
+      {evento && !siguientes && (
         // Se abre ENCIMA: este formulario no se desmonta y lo escrito se conserva. Tamaño por defecto (40 px; 44 px en móvil), nunca `sm`.
         <Button
           type="button"
@@ -424,8 +543,8 @@ function Formulario({ evento, iniciales, acciones, consulta }: FormularioProps &
           <Button type="button" variant="secondary" onClick={acciones.cerrarDialogo} disabled={bloqueado}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={bloqueado || esperando}>
-            {acciones.guardando ? 'Guardando…' : repite ? 'Crear serie' : 'Guardar'}
+          <Button type="submit" disabled={bloqueado || esperando || esperandoSerie}>
+            {acciones.guardando ? 'Guardando…' : repite ? 'Crear serie' : siguientes ? 'Guardar todos' : 'Guardar'}
           </Button>
         </div>
       </div>

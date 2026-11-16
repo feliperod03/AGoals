@@ -369,9 +369,10 @@ describe('EventoDialog: errores y doble envío al crear una serie', () => {
 })
 
 describe('EventoDialog: editar un evento de una serie', () => {
-  it('avisa que forma parte de una serie y que los cambios valen solo para este evento; guarda con el PUT de siempre', async () => {
+  it('ofrece el alcance (por defecto «Solo este evento», sin la nota provisional); guarda con el PUT de siempre', async () => {
     const { user } = await montar({ evento: evento() })
-    expect(screen.getByText('Forma parte de una serie. Los cambios valen solo para este evento.')).toBeInTheDocument()
+    expect(screen.queryByText(/Los cambios valen solo para este evento/)).not.toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Solo este evento' })).toBeChecked()
     await user.type(campo('Título'), ' (tarde)')
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     await waitFor(() => expect(dialogo()).not.toBeInTheDocument())
@@ -379,8 +380,9 @@ describe('EventoDialog: editar un evento de una serie', () => {
     expect(crearSerie).not.toHaveBeenCalled()
   })
 
-  it('un evento suelto no lleva la nota', async () => {
+  it('un evento suelto no tiene selector de alcance ni nota', async () => {
     await montar({ evento: evento({ serieId: null }) })
     expect(screen.queryByText(/Forma parte de una serie/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: 'Solo este evento' })).not.toBeInTheDocument()
   })
 })

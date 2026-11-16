@@ -5,14 +5,18 @@ import {
   esFechaValida,
   esHoraValida,
   formatearDiaDeSerie,
+  formatearFechaHoraCorta,
   limitesDeSemana,
   mesDe,
   minutosEntre,
+  partesLocales,
   sumarDias,
   sumarMeses,
 } from '@/lib/fechas'
-import type { DiaSemana, Frecuencia, SerieEventoRequest } from '@/types/serie'
-import { validarTitulo, type ErroresEvento, type ValoresEvento } from './formularioEvento'
+import type { Evento } from '@/types/evento'
+import type { Recordatorio } from '@/types/recordatorio'
+import type { DiaSemana, Frecuencia, SerieEventoEdicionRequest, SerieEventoRequest } from '@/types/serie'
+import { esTodoElDia, validarTitulo, type ErroresEvento, type ValoresEvento } from './formularioEvento'
 
 // Lógica pura del formulario «Repetir» (crear una serie): valores por defecto, generador de fechas del cliente,
 // validación y cuerpo del POST /api/series-eventos. Sin Spring ni reloj: «hoy» sale SIEMPRE de la misma `ahora` (ISO con
@@ -180,16 +184,30 @@ function reglaDe(serie: ValoresSerie): ReglaSerie | null {
 
 export type FechasDeSerie = { ok: true; fechas: string[] } | { ok: false; errores: ErroresSerie }
 
+/** Error de las horas de una serie (crear o editar «este y los siguientes»), o `undefined` si están bien. */
+function errorHoras(horaInicio: string, horaFin: string, todoElDia: boolean): string | undefined {
+  if (todoElDia) return 'Los eventos de todo el día no se pueden repetir'
+  if (!esHoraValida(horaInicio)) return 'Indica la hora de inicio'
+  if (!esHoraValida(horaFin)) return 'Indica la hora de fin'
+  if (horaInicio.slice(0, 5) === horaFin.slice(0, 5)) return 'La hora de fin debe ser distinta de la de inicio'
+  return undefined
+}
+
+/** Error de los minutos del recordatorio (solo si hay recordatorio), o `undefined`. */
+function errorMinutos(rec: Pick<ValoresSerie, 'conRecordatorio' | 'minutosAntes'>): string | undefined {
+  if (!rec.conRecordatorio) return undefined
+  const m = aEntero(rec.minutosAntes)
+  return m === null || m > MINUTOS_MAX_RECORDATORIO ? `Indica entre 0 y ${MINUTOS_MAX_RECORDATORIO} minutos` : undefined
+}
+
 /**
  * Valida «Repetir» y calcula las fechas. Textos: los mismos motivos por los que el servidor daría 400, para no llegar
  * a él cuando se puede evitar. `hoy` sale de la `ahora` del request.
  */
 export function calcularSerie(serie: ValoresSerie, horaInicio: string, horaFin: string, hoy: string, todoElDia = false): FechasDeSerie {
   const errores: ErroresSerie = {}
-  if (todoElDia) errores.horas = 'Los eventos de todo el día no se pueden repetir'
-  else if (!esHoraValida(horaInicio)) errores.horas = 'Indica la hora de inicio'
-  else if (!esHoraValida(horaFin)) errores.horas = 'Indica la hora de fin'
-  else if (horaInicio.slice(0, 5) === horaFin.slice(0, 5)) errores.horas = 'La hora de fin debe ser distinta de la de inicio'
+  const errorDeHoras = errorHoras(horaInicio, horaFin, todoElDia)
+  if (errorDeHoras) errores.horas = errorDeHoras
 
   if (serie.repetir === 'SEMANAL' && serie.diasSemana.length === 0) errores.dias = 'Elige al menos un día de la semana'
   if (serie.repetir === 'MENSUAL') {
@@ -206,10 +224,8 @@ export function calcularSerie(serie: ValoresSerie, horaInicio: string, horaFin: 
     errores.final = 'La fecha final no puede ser anterior a hoy'
   }
 
-  if (serie.conRecordatorio) {
-    const m = aEntero(serie.minutosAntes)
-    if (m === null || m > MINUTOS_MAX_RECORDATORIO) errores.minutos = `Indica entre 0 y ${MINUTOS_MAX_RECORDATORIO} minutos`
-  }
+  const errorDeMinutos = errorMinutos(serie)
+  if (errorDeMinutos) errores.minutos = errorDeMinutos
 
   const regla = reglaDe(serie)
   if (!errores.final && regla) {
@@ -277,4 +293,92 @@ export function aRequestSerie(
     ...(serie.conRecordatorio ? { recordatorio: { minutosAntes: aEntero(serie.minutosAntes) as number } } : {}),
   }
   return { ok: true, request, fechas: calculo.fechas }
+}
+
+// --- Editar «este y los siguientes» ---
+
+const MINUTOS_EN_UN_DIA = 1440
+
+/**
+ * Por qué «Este y los siguientes» no está disponible para `evento`, o `undefined` si lo está. El backend deriva el fin de
+ * cada ocurrencia de las dos horas (HH:mm), así que solo representa duraciones de 0 a 24 h exclusivo: con 24 h o más
+ * serían la misma hora de inicio y de fin (= «todo el día», 400) o se acortaría en silencio. Se mide sobre el evento tal
+ * como está guardado (no sobre lo que se escribe), con los días y horas locales de inicio y fin.
+ */
+export function motivoSinSiguientes(evento: Pick<Evento, 'fechaHoraInicio' | 'fechaHoraFin'>): string | undefined {
+  if (esTodoElDia(evento)) {
+    return 'Este evento es de todo el día: una serie solo guarda la hora de inicio y la de fin, así que solo se puede editar este evento.'
+  }
+  const minutos = minutosEntre(partesLocales(evento.fechaHoraInicio), partesLocales(evento.fechaHoraFin))
+  if (minutos !== null && minutos >= MINUTOS_EN_UN_DIA) {
+    return 'Este evento dura 24 horas o más: una serie solo guarda la hora de inicio y la de fin, así que solo se puede editar este evento.'
+  }
+  return undefined
+}
+
+/** Lo que muestra `RecordatorioSerieCampo` al editar: casilla, minutos (texto) y una nota si hace falta explicar la precarga. */
+export interface PrecargaRecordatorioSerie {
+  conRecordatorio: boolean
+  minutosAntes: string
+  nota: string | null
+}
+
+/**
+ * Precarga del recordatorio de «este y los siguientes» a partir del recordatorio de ESTE evento (`null` = no tiene).
+ * La distancia es `minutosAntes` entre su inicio y su recordatorio. Si no cabe en 0..10080 (después del inicio o a más de
+ * 7 días) se propone 60 con una nota. Un recordatorio ya enviado también sirve de modelo (la nota dice que ese no
+ * cambia). Ante la duda se precarga CON recordatorio: sin él, guardar borraría los pendientes de los siguientes.
+ */
+export function precargaRecordatorioSerie(inicioIso: string, recordatorio: Recordatorio | null): PrecargaRecordatorioSerie {
+  if (!recordatorio) return { conRecordatorio: false, minutosAntes: String(MINUTOS_POR_DEFECTO), nota: null }
+  const minutos = minutosAntesDe(inicioIso, recordatorio.fechaHora)
+  if (minutos === null) {
+    return {
+      conRecordatorio: true,
+      minutosAntes: String(MINUTOS_POR_DEFECTO),
+      nota: `Su recordatorio (${formatearFechaHoraCorta(recordatorio.fechaHora)}) no cabe en 0–${MINUTOS_MAX_RECORDATORIO} minutos antes: se propone ${MINUTOS_POR_DEFECTO}.`,
+    }
+  }
+  return {
+    conRecordatorio: true,
+    minutosAntes: String(minutos),
+    nota: recordatorio.enviado ? 'El recordatorio de este evento ya se envió y no cambia; esta distancia vale para los siguientes.' : null,
+  }
+}
+
+export type ResultadoEdicionSerie =
+  | { ok: true; request: SerieEventoEdicionRequest }
+  | { ok: false; errores: ErroresEvento; erroresSerie: ErroresSerie }
+
+/**
+ * Valida el título, las horas y el recordatorio y arma el cuerpo del PUT /api/eventos/{id}/serie. Sin recordatorio va
+ * `recordatorio: null` (el servidor borra los pendientes de este evento y los siguientes).
+ */
+export function aRequestEdicionSerie(
+  valores: Pick<ValoresEvento, 'titulo' | 'descripcion' | 'prioridad' | 'horaInicio' | 'horaFin' | 'todoElDia'>,
+  recordatorio: Pick<ValoresSerie, 'conRecordatorio' | 'minutosAntes'>,
+  { ahora }: { ahora: string },
+): ResultadoEdicionSerie {
+  const errorTitulo = validarTitulo(valores.titulo)
+  const horas = errorHoras(valores.horaInicio, valores.horaFin, valores.todoElDia)
+  const minutos = errorMinutos(recordatorio)
+  if (errorTitulo || horas || minutos) {
+    return {
+      ok: false,
+      errores: errorTitulo ? { titulo: errorTitulo } : {},
+      erroresSerie: { ...(horas ? { horas } : {}), ...(minutos ? { minutos } : {}) },
+    }
+  }
+  return {
+    ok: true,
+    request: {
+      titulo: valores.titulo.trim(),
+      descripcion: valores.descripcion.trim(),
+      prioridad: valores.prioridad === '' ? null : valores.prioridad,
+      horaInicio: valores.horaInicio.slice(0, 5),
+      horaFin: valores.horaFin.slice(0, 5),
+      ahora,
+      recordatorio: recordatorio.conRecordatorio ? { minutosAntes: aEntero(recordatorio.minutosAntes) as number } : null,
+    },
+  }
 }
