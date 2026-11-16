@@ -145,6 +145,7 @@ describe('CuadriculaMes: contenido de las celdas', () => {
       fechaHoraInicio: '2026-11-09T22:00:00-03:00',
       fechaHoraFin: '2026-11-10T06:00:00-03:00',
       prioridad: null,
+      serieId: null,
     }
 
     it('el primer día lleva la hora de inicio; el día de continuación solo flecha y título', () => {
@@ -175,7 +176,7 @@ describe('CuadriculaMes: contenido de las celdas', () => {
 
   it('el title de un evento normal y el de una tarea con hora incluyen su rango; el de una tarea sin hora, solo el título', () => {
     montar({
-      eventos: [{ id: 8, titulo: 'Reunión', descripcion: null, fechaHoraInicio: '2026-11-10T09:00:00-03:00', fechaHoraFin: '2026-11-10T10:00:00-03:00', prioridad: null }],
+      eventos: [{ id: 8, titulo: 'Reunión', descripcion: null, fechaHoraInicio: '2026-11-10T09:00:00-03:00', fechaHoraFin: '2026-11-10T10:00:00-03:00', prioridad: null, serieId: null }],
       tareas: [tarea(1, 'Llamar', HOY, { horaInicio: '12:45:00', horaFin: '13:30:00' }), tarea(2, 'Sin hora', HOY)],
     })
     const boton = celda(/martes 10 de noviembre/)

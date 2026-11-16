@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { Plus, Repeat } from 'lucide-react'
 
 import { PrioridadChip } from '@/components/PrioridadChip'
 import { Tarjeta, TextoVacio } from '@/components/Tarjeta'
@@ -91,6 +91,12 @@ export function FilaDetalle({ elemento, hoy, alAbrirEvento }: { elemento: Elemen
           {esEvento ? 'EVENTO' : 'TAREA'}
         </span>
         {hora && <span className="text-mut">{hora}</span>}
+        {elemento.tipo === 'evento' && elemento.evento.serieId !== null && (
+          <span className="inline-flex items-center gap-1 text-mut">
+            <Repeat className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Se repite</span>
+          </span>
+        )}
         {atrasada && <span className="font-semibold text-alta">Atrasada</span>}
         {elemento.prioridad && <PrioridadChip prioridad={elemento.prioridad} />}
       </div>

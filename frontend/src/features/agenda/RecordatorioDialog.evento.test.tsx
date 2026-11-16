@@ -26,6 +26,7 @@ const EVENTO: Evento = {
   fechaHoraInicio: '2026-11-12T15:00:00-03:00',
   fechaHoraFin: '2026-11-12T16:00:00-03:00',
   prioridad: null,
+  serieId: null,
 }
 const TODO_EL_DIA: Evento = { ...EVENTO, fechaHoraInicio: '2026-11-13T00:00:00-03:00', fechaHoraFin: '2026-11-14T00:00:00-03:00' }
 

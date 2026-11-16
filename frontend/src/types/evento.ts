@@ -8,6 +8,8 @@ export interface Evento {
   fechaHoraInicio: string
   fechaHoraFin: string
   prioridad: Prioridad | null
+  /** Serie a la que pertenece; `null` = evento suelto. */
+  serieId: number | null
 }
 
 /**

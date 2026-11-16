@@ -55,7 +55,7 @@ function tarea(extra: Partial<Tarea> = {}): Tarea {
 }
 
 function evento(inicio: string, fin: string, extra: Partial<Evento> = {}): Evento {
-  return { id: siguienteId++, titulo: 'Evento', descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, ...extra }
+  return { id: siguienteId++, titulo: 'Evento', descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, serieId: null, ...extra }
 }
 
 const DIAS = ['2026-11-09', '2026-11-10', '2026-11-11']

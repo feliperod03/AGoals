@@ -142,6 +142,7 @@ describe('valor inicial de un evento', () => {
     fechaHoraInicio: inicio,
     fechaHoraFin: fin,
     prioridad: null,
+    serieId: null,
   })
 
   it('el aviso va 60 minutos antes del inicio', () => {

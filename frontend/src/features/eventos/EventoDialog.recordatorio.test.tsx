@@ -30,6 +30,7 @@ const EVENTO: Evento = {
   fechaHoraInicio: '2026-12-15T09:00:00-03:00',
   fechaHoraFin: '2026-12-15T10:00:00-03:00',
   prioridad: 'MEDIA',
+  serieId: null,
 }
 
 function recordatorio(parcial: Partial<Recordatorio> = {}): Recordatorio {
@@ -80,7 +81,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-12-10T12:00:00-03:00'))
   vi.resetAllMocks()
-  vi.mocked(actualizarEvento).mockImplementation(async (id, r) => ({ id, ...r }))
+  vi.mocked(actualizarEvento).mockImplementation(async (id, r) => ({ id, serieId: null, ...r }))
   vi.mocked(getRecordatoriosDeEvento).mockImplementation(async (id) => servidor.filter((r) => r.eventoId === id))
   vi.mocked(crearRecordatorio).mockImplementation(async (req) => {
     const nuevo = recordatorio({ id: 77, ...req })

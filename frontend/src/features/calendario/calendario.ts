@@ -330,10 +330,10 @@ export function textoHoraBloque(e: ElementoConHora): string {
 
 // --- Edición y atajos de mouse (9c) ---
 
-/** Nombre del botón que abre la edición de un evento: «Editar evento: Reunión, 09:00–10:00» (o «…, Todo el día»). */
+/** Nombre del botón que abre la edición de un evento: «Editar evento: Reunión, 09:00–10:00» (o «…, Todo el día»); de una serie suma «, se repite». */
 export function etiquetaEditarEvento(e: Extract<ElementoDia, { tipo: 'evento' }>): string {
   const hora = textoHora(e)
-  return `Editar evento: ${e.titulo}${hora ? `, ${hora}` : ''}`
+  return `Editar evento: ${e.titulo}${hora ? `, ${hora}` : ''}${e.evento.serieId !== null ? ', se repite' : ''}`
 }
 
 /** Atributo que marca lo que abre un evento con el mouse (chips del mes, bloques y chips de la semana, filas del panel). */

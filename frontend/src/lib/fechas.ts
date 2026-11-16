@@ -8,6 +8,7 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  getDaysInMonth,
   isValid,
   parseISO,
   startOfDay,
@@ -15,6 +16,8 @@ import {
   startOfWeek,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+import type { DiaSemana } from '@/types/serie'
 
 // Todo el manejo de fechas del frontend vive aquí. Regla: nunca `toISOString()`,
 // que convierte a UTC y desplaza el día de la agenda.
@@ -309,6 +312,11 @@ export function esFechaValida(valor: string | null): valor is string {
   return isValid(fecha) && format(fecha, FORMATO_FECHA) === valor
 }
 
+/** Cuántos días tiene un mes `YYYY-MM` (28 a 31). */
+export function diasDelMes(mes: string): number {
+  return getDaysInMonth(parseISO(`${mes}-01`))
+}
+
 /** Suma (o resta) meses a un `YYYY-MM`. */
 export function sumarMeses(mes: string, n: number): string {
   return format(addMonths(parseISO(`${mes}-01`), n), FORMATO_MES)
@@ -550,3 +558,52 @@ export const mensajeEventoEmpieza = (inicioIso: string, finIso: string) =>
   esDeDiasCompletos(inicioIso, finIso)
     ? `El evento es ${formatearRangoEvento(inicioIso, finIso)}`
     : `El evento empieza el ${formatearFechaHoraCorta(inicioIso)}`
+
+// --- Series de eventos (rebanada recurrencia-front) ---
+
+/** Id IANA de la zona del navegador (p. ej. `America/Argentina/Buenos_Aires`): lo que pide `zonaHoraria` de la serie, nunca un desfase. */
+export function zonaHoraria(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+const DIAS_SEMANA: DiaSemana[] = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO']
+
+/** El día de la semana de una fecha `YYYY-MM-DD`, con el nombre que usa la API (`LUNES`…`DOMINGO`). */
+export function diaSemanaDe(fecha: string): DiaSemana {
+  return DIAS_SEMANA[parseISO(fecha).getDay()] as DiaSemana
+}
+
+/** `lun 16 nov` (día local de un ISO con desfase o de una fecha `YYYY-MM-DD`). */
+export function formatearDiaDeSerie(valor: string): string {
+  return format(parseISO(valor), 'EEE d MMM', { locale: es })
+}
+
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
+
+/**
+ * Aviso tras crear una serie: cuántos eventos y entre qué días. Con recordatorios omitidos se agrega por qué (el aviso
+ * es entonces persistente: lo principal salió, pero algo de lo pedido no).
+ */
+export function mensajeSerieCreada(
+  titulo: string,
+  primeroIso: string,
+  ultimoIso: string,
+  cantidad: number,
+  minutosAntes: number | null,
+  omitidos: number,
+): string {
+  const lapso =
+    cantidad === 1 ? `el ${formatearDiaDeSerie(primeroIso)}` : `del ${formatearDiaDeSerie(primeroIso)} al ${formatearDiaDeSerie(ultimoIso)}`
+  const base = `Serie «${titulo}» creada: ${plural(cantidad, 'evento', 'eventos')}, ${lapso}`
+  const conRecordatorio = minutosAntes === null ? base : `${base}, con recordatorio ${minutosAntes} min antes`
+  if (omitidos === 0) return conRecordatorio
+  return omitidos === 1
+    ? `${conRecordatorio}. 1 recordatorio no se creó porque su hora ya había pasado (el evento sí se creó).`
+    : `${conRecordatorio}. ${omitidos} recordatorios no se crearon porque su hora ya había pasado (los eventos sí se crearon).`
+}
+
+/** Aviso tras borrar «este y los siguientes» de una serie. */
+export const mensajeSerieBorrada = (titulo: string) => `Borrados el evento «${titulo}» y los siguientes de la serie`
+
+/** 409 al borrar desde aquí: el evento dejó de pertenecer a una serie. El diálogo sigue abierto y hay que confirmar de nuevo. */
+export const avisoYaNoEsDeSerieAlBorrar = () => 'Este evento ya no forma parte de una serie: se borrará solo él.'

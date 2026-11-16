@@ -12,7 +12,7 @@ import { CuadriculaMes } from './CuadriculaMes'
 const HOY = '2026-11-10'
 
 function evento(id: number, titulo: string, inicio: string, fin: string): Evento {
-  return { id, titulo, descripcion: '', fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null }
+  return { id, titulo, descripcion: '', fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, serieId: null }
 }
 
 function tarea(id: number, titulo: string, fecha: string): Tarea {

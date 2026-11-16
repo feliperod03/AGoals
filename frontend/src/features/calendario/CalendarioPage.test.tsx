@@ -36,7 +36,7 @@ function tarea(extra: Partial<Tarea> = {}): Tarea {
 }
 
 function evento(titulo: string, inicio: string, fin: string, extra: Partial<Evento> = {}): Evento {
-  return { id: siguienteId++, titulo, descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, ...extra }
+  return { id: siguienteId++, titulo, descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, serieId: null, ...extra }
 }
 
 /** Muestra la ubicación y permite «atrás» del historial, para comprobar push y replace. */

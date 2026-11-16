@@ -29,7 +29,7 @@ function tarea(extra: Partial<Tarea> = {}): Tarea {
 }
 
 function evento(titulo: string, inicio: string, fin: string): Evento {
-  return { id: siguienteId++, titulo, descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null }
+  return { id: siguienteId++, titulo, descripcion: null, fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, serieId: null }
 }
 
 const SEMANA = ['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11', '2026-12-12', '2026-12-13']

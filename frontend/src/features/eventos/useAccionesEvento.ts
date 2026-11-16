@@ -4,8 +4,10 @@ import { useRef, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { actualizarEvento, borrarEvento, crearEvento } from '@/api/eventos'
 import { actualizarRecordatorio } from '@/api/recordatorios'
+import { borrarSerieDesde, crearSerie } from '@/api/series'
 import { requestMovido } from '@/features/agenda/recordatorioForm'
 import {
+  avisoYaNoEsDeSerieAlBorrar,
   mensajeEventoBorrado,
   mensajeEventoCreado,
   mensajeEventoGuardado,
@@ -13,9 +15,13 @@ import {
   mensajeEventoGuardadoRecordatorioQueda,
   mensajeEventoRecordatorioNoMovido,
   mensajeEventoYaNoExistia,
+  mensajeSerieBorrada,
+  mensajeSerieCreada,
 } from '@/lib/fechas'
 import type { Evento, EventoRequest } from '@/types/evento'
 import type { Recordatorio } from '@/types/recordatorio'
+import type { SerieEventoRequest } from '@/types/serie'
+import type { Alcance } from './ElegirAlcance'
 import type { ValoresEvento } from './formularioEvento'
 import type { AlMensaje } from '@/features/agenda/useMensajeTemporal'
 import { instanteMovido } from './moverRecordatorio'
@@ -35,6 +41,8 @@ export interface AccionesEvento {
    * `quedaEn` (solo al editar, con la casilla desmarcada): cuándo queda el recordatorio sin moverse; solo se usa para el aviso.
    */
   guardar: (request: EventoRequest, recordatorio?: Recordatorio, quedaEn?: string) => void
+  /** Crea una serie (diálogo de creación con «Repetir»): una sola llamada atómica que crea todos los eventos. */
+  guardarSerie: (request: SerieEventoRequest) => void
   guardando: boolean
   /** Mensaje del servidor tal cual; el diálogo queda abierto con él. */
   errorGuardar: string | null
@@ -42,10 +50,15 @@ export interface AccionesEvento {
   borrado: Evento | null
   pedirBorrado: (evento: Evento) => void
   cancelarBorrado: () => void
-  /** `conRecordatorio`: lo que se sabía al confirmar, solo para el texto del aviso. */
-  borrar: (conRecordatorio: boolean) => void
+  /**
+   * `conRecordatorio`: lo que se sabía al confirmar, solo para el texto del aviso. `alcance` (por defecto `'este'`):
+   * `'siguientes'` borra este evento y los siguientes de su serie.
+   */
+  borrar: (conRecordatorio: boolean, alcance?: Alcance) => void
   borrando: boolean
   errorBorrar: string | null
+  /** Si el evento dejó de ser de una serie (409): el diálogo sigue abierto, sin alcance, y pide confirmar de nuevo. */
+  avisoBorrar: string | null
   /**
    * Elemento que tenía el foco al abrir el diálogo. Al cerrar, Radix lo devuelve ahí; si ya no está en la página
    * (el bloque se borró o cambió de día), la página decide a dónde va.
@@ -128,6 +141,7 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
   const [dialogo, setDialogo] = useState<EstadoEventoDialog | null>(null)
   const [aBorrar, setABorrar] = useState<Evento | null>(null)
   const [recordatorioDe, setRecordatorioDe] = useState<Evento | null>(null)
+  const [avisoBorrar, setAvisoBorrar] = useState<string | null>(null)
   const enCurso = useRef(false)
   const disparador = useRef<HTMLElement | null>(null)
   const disparadorBorrado = useRef<HTMLElement | null>(null)
@@ -178,22 +192,54 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
     onSettled: liberar,
   })
 
+  /** Crear una serie: el servidor la crea entera o no crea nada, así que no hay fallo parcial posible. */
+  const serieMutacion = useMutation({
+    mutationFn: (request: SerieEventoRequest) => crearSerie(request),
+    onSuccess: async ({ eventos, recordatoriosOmitidos }, request) => {
+      // Los recordatorios de cada ocurrencia se crean con la serie: banner, Próximos y consultas por evento.
+      await Promise.all([invalidarEventos(), queryClient.invalidateQueries({ queryKey: ['recordatorios'] })])
+      setDialogo(null)
+      const primero = eventos[0]
+      const ultimo = eventos[eventos.length - 1]
+      if (!primero || !ultimo) return
+      const minutosAntes = request.recordatorio ? (request.recordatorio.minutosAntes ?? 60) : null
+      // Si algún recordatorio se omitió, lo principal salió pero algo pedido no: aviso persistente (R3).
+      alMensaje(mensajeSerieCreada(request.titulo, primero.fechaHoraInicio, ultimo.fechaHoraInicio, eventos.length, minutosAntes, recordatoriosOmitidos), {
+        persistente: recordatoriosOmitidos > 0,
+      })
+      alCrear?.(primero)
+    },
+    onSettled: liberar,
+  })
+
   const borrarMutacion = useMutation({
-    // Un 404 al borrar no es un error para el usuario: el evento ya no está.
-    mutationFn: async ({ evento }: { evento: Evento; conRecordatorio: boolean }) => {
+    // Un 404 al borrar no es un error para el usuario: el evento ya no está. Un 409 de «este y los siguientes» es que
+    // el evento dejó de ser de una serie: no se borra nada y se pide confirmar de nuevo (solo él).
+    mutationFn: async ({ evento, alcance }: { evento: Evento; conRecordatorio: boolean; alcance: Alcance }) => {
       try {
-        await borrarEvento(evento.id)
-        return 'borrado' as const
+        if (alcance === 'siguientes') await borrarSerieDesde(evento.id)
+        else await borrarEvento(evento.id)
+        return alcance === 'siguientes' ? ('serieBorrada' as const) : ('borrado' as const)
       } catch (e) {
         if (esStatus(e, 404)) return 'yaNoExistia' as const
+        if (alcance === 'siguientes' && esStatus(e, 409)) return 'yaNoEsDeSerie' as const
         throw e
       }
     },
     onSuccess: async (resultado, { evento, conRecordatorio }) => {
+      if (resultado === 'yaNoEsDeSerie') {
+        await invalidarEventos()
+        const suelto = (e: Evento | null) => (e && e.id === evento.id ? { ...e, serieId: null } : e)
+        setABorrar(suelto)
+        setDialogo((d) => (d?.evento && d.evento.id === evento.id ? { evento: { ...d.evento, serieId: null } } : d))
+        setAvisoBorrar(avisoYaNoEsDeSerieAlBorrar())
+        return
+      }
       await invalidarTrasBorrar(evento.id)
       setABorrar(null)
       setDialogo(null)
-      alMensaje(resultado === 'borrado' ? mensajeEventoBorrado(evento.titulo, conRecordatorio) : mensajeEventoYaNoExistia(evento.titulo))
+      if (resultado === 'serieBorrada') alMensaje(mensajeSerieBorrada(evento.titulo))
+      else alMensaje(resultado === 'borrado' ? mensajeEventoBorrado(evento.titulo, conRecordatorio) : mensajeEventoYaNoExistia(evento.titulo))
     },
     onSettled: liberar,
   })
@@ -210,6 +256,7 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
   function abrir(estado: EstadoEventoDialog) {
     disparador.current = enfocado()
     guardarMutacion.reset()
+    serieMutacion.reset()
     setABorrar(null)
     setRecordatorioDe(null)
     setDialogo(estado)
@@ -224,21 +271,27 @@ export function useAccionesEvento({ alMensaje, alCrear, alGuardar }: Opciones): 
       lanzar(() =>
         guardarMutacion.mutate({ id: dialogo?.evento?.id, request, inicioViejo: dialogo?.evento?.fechaHoraInicio, recordatorio, quedaEn }),
       ),
-    guardando: guardarMutacion.isPending,
-    errorGuardar: guardarMutacion.error?.message ?? null,
+    guardarSerie: (request) => lanzar(() => serieMutacion.mutate(request)),
+    guardando: guardarMutacion.isPending || serieMutacion.isPending,
+    errorGuardar: guardarMutacion.error?.message ?? serieMutacion.error?.message ?? null,
     borrado: aBorrar,
     pedirBorrado: (evento) => {
       disparadorBorrado.current = enfocado()
       borrarMutacion.reset()
+      setAvisoBorrar(null)
       setABorrar(evento)
     },
     cancelarBorrado: () => setABorrar(null),
-    borrar: (conRecordatorio) => {
+    borrar: (conRecordatorio, alcance = 'este') => {
       const evento = aBorrar
-      if (evento) lanzar(() => borrarMutacion.mutate({ evento, conRecordatorio }))
+      if (!evento) return
+      // El aviso del 409 vale para la confirmación anterior: al reintentar se limpia (R2).
+      setAvisoBorrar(null)
+      lanzar(() => borrarMutacion.mutate({ evento, conRecordatorio, alcance: evento.serieId === null ? 'este' : alcance }))
     },
     borrando: borrarMutacion.isPending,
     errorBorrar: borrarMutacion.error?.message ?? null,
+    avisoBorrar,
     disparador,
     disparadorBorrado,
     recordatorioDe,

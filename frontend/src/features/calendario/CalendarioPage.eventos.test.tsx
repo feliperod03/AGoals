@@ -40,6 +40,7 @@ const evento = (titulo: string, inicio: string, fin: string): Evento => ({
   fechaHoraInicio: inicio,
   fechaHoraFin: fin,
   prioridad: null,
+  serieId: null,
 })
 
 function Auxiliar() {
@@ -89,14 +90,14 @@ beforeEach(() => {
   vi.mocked(crearEvento)
     .mockReset()
     .mockImplementation(async (r: EventoRequest) => {
-      const nuevo = { id: siguienteId++, ...r }
+      const nuevo = { id: siguienteId++, serieId: null, ...r }
       servidor.push(nuevo)
       return nuevo
     })
   vi.mocked(actualizarEvento)
     .mockReset()
     .mockImplementation(async (id: number, r: EventoRequest) => {
-      const nuevo = { id, ...r }
+      const nuevo = { id, serieId: null, ...r }
       servidor = servidor.map((e) => (e.id === id ? nuevo : e))
       return nuevo
     })

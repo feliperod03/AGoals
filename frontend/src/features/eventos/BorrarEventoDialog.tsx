@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -6,6 +6,7 @@ import { ErrorDialogo } from '@/features/agenda/ErrorDialogo'
 import { useRecordatorioDeEvento } from '@/features/agenda/useRecordatorioDeEvento'
 import { formatearFechaHoraCorta, formatearRangoEvento } from '@/lib/fechas'
 import type { Evento } from '@/types/evento'
+import { ElegirAlcance, type Alcance } from './ElegirAlcance'
 import { esDeVariosDias } from './formularioEvento'
 import type { AccionesEvento } from './useAccionesEvento'
 
@@ -41,23 +42,44 @@ export function BorrarEventoDialog({ acciones }: { acciones: AccionesEvento }) {
 function Contenido({ evento, acciones, cancelar }: { evento: Evento; acciones: AccionesEvento; cancelar: RefObject<HTMLButtonElement | null> }) {
   const { recordatorio, cargando, fallo, reintentar } = useRecordatorioDeEvento(evento.id)
   const pendiente = acciones.borrando
+  const [elegido, setElegido] = useState<Alcance>('este')
+  // Un evento suelto no tiene alcance; si un 409 lo dejó sin serie, vuelve a «solo este» aunque estuviera elegido el otro.
+  const deSerie = evento.serieId !== null
+  const alcance: Alcance = deSerie ? elegido : 'este'
+  const rango = formatearRangoEvento(evento.fechaHoraInicio, evento.fechaHoraFin)
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <DialogTitle>Borrar evento</DialogTitle>
         <DialogDescription>
-          ¿Borrar el evento «{evento.titulo}» ({formatearRangoEvento(evento.fechaHoraInicio, evento.fechaHoraFin)})? Es definitivo: no se puede
-          deshacer.
+          {alcance === 'siguientes'
+            ? `¿Borrar «${evento.titulo}» (${rango}) y todos los siguientes de la serie? Los anteriores se conservan. Es definitivo: no se puede deshacer.`
+            : `¿Borrar el evento «${evento.titulo}» (${rango})? Es definitivo: no se puede deshacer.`}
         </DialogDescription>
       </div>
-      {esDeVariosDias(evento) && <p className="text-sm text-tx">Se borra el evento entero, no solo este día.</p>}
+      {deSerie && (
+        <ElegirAlcance
+          idBase="borrar-evento"
+          leyenda="¿Qué eventos se borran?"
+          valor={alcance}
+          alCambiar={setElegido}
+          bloqueado={pendiente}
+        />
+      )}
+      {acciones.avisoBorrar && (
+        <p role="status" className="text-sm text-tx">
+          {acciones.avisoBorrar}
+        </p>
+      )}
+      {alcance === 'este' && esDeVariosDias(evento) && <p className="text-sm text-tx">Se borra el evento entero, no solo este día.</p>}
 
-      {cargando && <p className="text-sm text-mut">Comprobando si tiene recordatorio…</p>}
-      {!cargando && recordatorio && (
+      {alcance === 'siguientes' && <p className="text-sm text-tx">También se borrarán los recordatorios de esos eventos.</p>}
+      {alcance === 'este' && cargando && <p className="text-sm text-mut">Comprobando si tiene recordatorio…</p>}
+      {alcance === 'este' && !cargando && recordatorio && (
         <p className="text-sm text-tx">También se borrará su recordatorio ({formatearFechaHoraCorta(recordatorio.fechaHora)}).</p>
       )}
-      {!cargando && fallo && (
+      {alcance === 'este' && !cargando && fallo && (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-tx">No se pudo comprobar si tiene recordatorio: si tiene uno, también se borrará.</p>
           <Button type="button" variant="secondary" size="sm" onClick={reintentar} disabled={pendiente}>
@@ -72,8 +94,14 @@ function Contenido({ evento, acciones, cancelar }: { evento: Evento; acciones: A
         <Button ref={cancelar} type="button" variant="secondary" onClick={acciones.cancelarBorrado} disabled={pendiente}>
           Cancelar
         </Button>
-        <Button type="button" variant="destructive" onClick={() => acciones.borrar(recordatorio !== null)} disabled={pendiente || cargando}>
-          {pendiente ? 'Borrando…' : 'Borrar'}
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={() => acciones.borrar(recordatorio !== null, alcance)}
+          // La consulta del recordatorio solo importa al borrar un evento: «este y los siguientes» no depende de ella.
+          disabled={pendiente || (alcance === 'este' && cargando)}
+        >
+          {pendiente ? 'Borrando…' : alcance === 'siguientes' ? 'Borrar todos' : 'Borrar'}
         </Button>
       </div>
     </div>

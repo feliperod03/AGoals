@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  avisoYaNoEsDeSerieAlBorrar,
+  diaSemanaDe,
+  diasDelMes,
+  formatearDiaDeSerie,
+  mensajeSerieBorrada,
+  mensajeSerieCreada,
+  zonaHoraria,
+} from './fechas'
+import {
   deFechaYHoraLocal,
   esDeDiasCompletos,
   esHoraValida,
@@ -844,5 +853,68 @@ describe('recordatorio de evento (H-35)', () => {
     expect(mensajeEventoGuardadoRecordatorioQueda('Dentista', '2026-12-15T10:00:00-03:00', '2026-12-15T11:00:00-03:00', '2026-12-15T08:00:00-03:00')).toBe(
       'Evento «Dentista» guardado (mar 15 dic, 10:00–11:00); el recordatorio queda el mar 15 dic · 08:00',
     )
+  })
+})
+
+describe('series de eventos', () => {
+  it('zonaHoraria es el id IANA de la zona del navegador, no un desfase', () => {
+    // Es lo que resuelve el entorno (Node puede dar un alias como `America/Buenos_Aires`); lo que importa es que sea una región, no `-03:00`.
+    expect(zonaHoraria()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    expect(zonaHoraria()).toMatch(/^[A-Za-z_]+\/[A-Za-z_/]+$/)
+  })
+
+  it('diaSemanaDe da el nombre que usa la API', () => {
+    expect(diaSemanaDe('2026-11-16')).toBe('LUNES')
+    expect(diaSemanaDe('2026-11-18')).toBe('MIERCOLES')
+    expect(diaSemanaDe('2026-11-21')).toBe('SABADO')
+    expect(diaSemanaDe('2026-11-22')).toBe('DOMINGO')
+  })
+
+  it('diasDelMes: febrero común, bisiesto y meses de 30 y 31', () => {
+    expect(diasDelMes('2027-02')).toBe(28)
+    expect(diasDelMes('2028-02')).toBe(29)
+    expect(diasDelMes('2026-04')).toBe(30)
+    expect(diasDelMes('2026-12')).toBe(31)
+  })
+
+  it('formatearDiaDeSerie acepta una fecha o un instante', () => {
+    expect(formatearDiaDeSerie('2026-11-16')).toBe('lun 16 nov')
+    expect(formatearDiaDeSerie('2026-11-16T07:00:00-03:00')).toBe('lun 16 nov')
+  })
+
+  describe('mensajeSerieCreada', () => {
+    const PRIMERO = '2026-11-16T07:00:00-03:00'
+    const ULTIMO = '2026-12-16T07:00:00-03:00'
+
+    it('cuántos eventos y entre qué días', () => {
+      expect(mensajeSerieCreada('Gimnasio', PRIMERO, ULTIMO, 10, null, 0)).toBe('Serie «Gimnasio» creada: 10 eventos, del lun 16 nov al mié 16 dic')
+    })
+
+    it('un solo evento', () => {
+      expect(mensajeSerieCreada('Gimnasio', PRIMERO, PRIMERO, 1, null, 0)).toBe('Serie «Gimnasio» creada: 1 evento, el lun 16 nov')
+    })
+
+    it('con recordatorio', () => {
+      expect(mensajeSerieCreada('Gimnasio', PRIMERO, ULTIMO, 10, 60, 0)).toBe(
+        'Serie «Gimnasio» creada: 10 eventos, del lun 16 nov al mié 16 dic, con recordatorio 60 min antes',
+      )
+    })
+
+    it('un recordatorio omitido dice por qué y que el evento sí se creó', () => {
+      expect(mensajeSerieCreada('Gimnasio', PRIMERO, ULTIMO, 10, 60, 1)).toBe(
+        'Serie «Gimnasio» creada: 10 eventos, del lun 16 nov al mié 16 dic, con recordatorio 60 min antes. 1 recordatorio no se creó porque su hora ya había pasado (el evento sí se creó).',
+      )
+    })
+
+    it('varios recordatorios omitidos, en plural', () => {
+      expect(mensajeSerieCreada('Gimnasio', PRIMERO, ULTIMO, 10, 60, 3)).toMatch(
+        /\. 3 recordatorios no se crearon porque su hora ya había pasado \(los eventos sí se crearon\)\.$/,
+      )
+    })
+  })
+
+  it('mensajes de borrado desde aquí', () => {
+    expect(mensajeSerieBorrada('Gimnasio')).toBe('Borrados el evento «Gimnasio» y los siguientes de la serie')
+    expect(avisoYaNoEsDeSerieAlBorrar()).toBe('Este evento ya no forma parte de una serie: se borrará solo él.')
   })
 })

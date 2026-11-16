@@ -54,6 +54,7 @@ function evento(parcial: Partial<Evento>): Evento {
     fechaHoraInicio: '2026-11-10T15:00:00-03:00',
     fechaHoraFin: '2026-11-10T16:00:00-03:00',
     prioridad: null,
+    serieId: null,
     ...parcial,
   }
 }

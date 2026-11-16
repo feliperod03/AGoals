@@ -22,6 +22,7 @@ const EVENTO: Evento = {
   fechaHoraInicio: '2026-12-15T09:00:00-03:00',
   fechaHoraFin: '2026-12-15T10:00:00-03:00',
   prioridad: 'MEDIA',
+  serieId: null,
 }
 
 const alMensaje = vi.fn()
@@ -67,8 +68,8 @@ function pendiente<T>() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(crearEvento).mockImplementation(async (r) => ({ id: 50, ...r }))
-  vi.mocked(actualizarEvento).mockImplementation(async (id, r) => ({ id, ...r }))
+  vi.mocked(crearEvento).mockImplementation(async (r) => ({ id: 50, serieId: null, ...r }))
+  vi.mocked(actualizarEvento).mockImplementation(async (id, r) => ({ id, serieId: null, ...r }))
   vi.mocked(getRecordatoriosDeEvento).mockResolvedValue([])
 })
 

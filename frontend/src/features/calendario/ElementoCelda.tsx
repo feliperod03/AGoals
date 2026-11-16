@@ -24,7 +24,9 @@ const CLASES_HORA = 'hidden shrink-0 font-semibold @min-[980px]:inline'
 export function ElementoCelda({ elemento }: { elemento: ElementoDia }) {
   const hora = textoHoraCelda(elemento)
   const horaCompleta = textoHora(elemento)
-  const titulo = horaCompleta ? `${elemento.titulo} — ${horaCompleta}` : elemento.titulo
+  const base = horaCompleta ? `${elemento.titulo} — ${horaCompleta}` : elemento.titulo
+  // Un evento de una serie lo dice en el `title`: el chip no tiene espacio para un ícono.
+  const titulo = elemento.tipo === 'evento' && elemento.evento.serieId !== null ? `${base} (se repite)` : base
   const continuacion = elemento.tipo === 'evento' && elemento.empiezaAntes
 
   if (elemento.tipo === 'evento') {

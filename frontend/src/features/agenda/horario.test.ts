@@ -132,7 +132,7 @@ describe('armarBloques', () => {
   })
   const evento = (parcial: Partial<Evento>): Evento => ({
     id: 5, titulo: 'E', descripcion: null, fechaHoraInicio: '2026-11-10T15:00:00-03:00',
-    fechaHoraFin: '2026-11-10T16:00:00-03:00', prioridad: null, ...parcial,
+    fechaHoraFin: '2026-11-10T16:00:00-03:00', prioridad: null, serieId: null, ...parcial,
   })
 
   it('convierte tareas y eventos en bloques y recorta los eventos al día', () => {

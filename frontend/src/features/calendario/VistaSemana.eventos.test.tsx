@@ -12,7 +12,7 @@ import { VistaSemana } from './VistaSemana'
 let siguienteId = 100
 
 function evento(titulo: string, inicio: string, fin: string): Evento {
-  return { id: siguienteId++, titulo, descripcion: '', fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null }
+  return { id: siguienteId++, titulo, descripcion: '', fechaHoraInicio: inicio, fechaHoraFin: fin, prioridad: null, serieId: null }
 }
 
 function tarea(extra: Partial<Tarea> = {}): Tarea {

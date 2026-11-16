@@ -21,6 +21,7 @@ const EVENTO: Evento = {
   fechaHoraInicio: '2026-12-15T09:00:00-03:00',
   fechaHoraFin: '2026-12-15T10:00:00-03:00',
   prioridad: null,
+  serieId: null,
 }
 const REQUEST: EventoRequest = {
   titulo: 'Dentista',

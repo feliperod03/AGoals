@@ -22,6 +22,7 @@ const evento = (inicio: string, fin: string, extra: Partial<Evento> = {}): Event
   fechaHoraInicio: inicio,
   fechaHoraFin: fin,
   prioridad: null,
+  serieId: null,
   ...extra,
 })
 

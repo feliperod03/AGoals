@@ -12,7 +12,9 @@ import { useAccionesEvento } from './useAccionesEvento'
 
 vi.mock('@/api/eventos', () => ({ crearEvento: vi.fn(), actualizarEvento: vi.fn(), borrarEvento: vi.fn() }))
 vi.mock('@/api/recordatorios', () => ({ getRecordatoriosDeEvento: vi.fn() }))
+vi.mock('@/api/series', () => ({ crearSerie: vi.fn(), borrarSerieDesde: vi.fn() }))
 import { borrarEvento } from '@/api/eventos'
+import { borrarSerieDesde } from '@/api/series'
 import { getRecordatoriosDeEvento } from '@/api/recordatorios'
 
 const EVENTO: Evento = {
@@ -22,6 +24,7 @@ const EVENTO: Evento = {
   fechaHoraInicio: '2026-12-15T09:00:00-03:00',
   fechaHoraFin: '2026-12-15T10:00:00-03:00',
   prioridad: null,
+  serieId: null,
 }
 
 const RECORDATORIO: Recordatorio = {
@@ -92,6 +95,7 @@ function pendiente<T>() {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(borrarEvento).mockResolvedValue(undefined)
+  vi.mocked(borrarSerieDesde).mockResolvedValue(undefined)
   vi.mocked(getRecordatoriosDeEvento).mockResolvedValue([])
 })
 
@@ -220,5 +224,128 @@ describe('BorrarEventoDialog', () => {
     await user.click(confirmacion().getByRole('button', { name: 'Borrar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(alMensaje).toHaveBeenCalledWith('El evento «Dentista» ya no existía')
+  })
+})
+
+describe('BorrarEventoDialog: eventos de una serie', () => {
+  const DE_SERIE: Evento = { ...EVENTO, serieId: 5 }
+  const solo = () => confirmacion().getByRole('radio', { name: 'Solo este evento' })
+  const siguientes = () => confirmacion().getByRole('radio', { name: 'Este y los siguientes' })
+
+  it('un evento suelto no muestra el alcance', async () => {
+    await abrirBorrado()
+    expect(confirmacion().queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  it('un evento de serie ofrece «Solo este evento» (elegido) y «Este y los siguientes»; el foco sigue en «Cancelar»', async () => {
+    await abrirBorrado(DE_SERIE)
+    expect(solo()).toBeChecked()
+    expect(siguientes()).not.toBeChecked()
+    expect(confirmacion().getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    expect(confirmacion().getByText('¿Borrar el evento «Dentista» (mar 15 dic, 09:00–10:00)? Es definitivo: no se puede deshacer.')).toBeInTheDocument()
+  })
+
+  it('«Solo este evento» manda el DELETE de siempre y no toca la serie', async () => {
+    const user = await abrirBorrado(DE_SERIE)
+    await waitFor(() => expect(confirmacion().getByRole('button', { name: 'Borrar' })).toBeEnabled())
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarEvento).toHaveBeenCalledWith(9)
+    expect(borrarSerieDesde).not.toHaveBeenCalled()
+    expect(alMensaje).toHaveBeenCalledWith('Evento «Dentista» borrado')
+  })
+
+  it('«Este y los siguientes» cambia el texto y el botón, y manda el DELETE de la serie', async () => {
+    const user = await abrirBorrado(DE_SERIE)
+    await user.click(siguientes())
+    expect(
+      confirmacion().getByText(
+        '¿Borrar «Dentista» (mar 15 dic, 09:00–10:00) y todos los siguientes de la serie? Los anteriores se conservan. Es definitivo: no se puede deshacer.',
+      ),
+    ).toBeInTheDocument()
+    expect(confirmacion().getByText('También se borrarán los recordatorios de esos eventos.')).toBeInTheDocument()
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarSerieDesde).toHaveBeenCalledWith(9)
+    expect(borrarEvento).not.toHaveBeenCalled()
+    expect(alMensaje).toHaveBeenCalledWith('Borrados el evento «Dentista» y los siguientes de la serie')
+  })
+
+  it('«Este y los siguientes» no espera la consulta del recordatorio de este evento', async () => {
+    vi.mocked(getRecordatoriosDeEvento).mockReturnValue(pendiente<Recordatorio[]>().promesa)
+    const user = await abrirBorrado(DE_SERIE)
+    expect(confirmacion().getByRole('button', { name: 'Borrar' })).toBeDisabled()
+    await user.click(siguientes())
+    expect(confirmacion().getByRole('button', { name: 'Borrar todos' })).toBeEnabled()
+    expect(confirmacion().queryByText('Comprobando si tiene recordatorio…')).not.toBeInTheDocument()
+  })
+
+  it('refresca eventos y recordatorios al borrar desde aquí', async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidar = vi.spyOn(queryClient, 'invalidateQueries')
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Pagina evento={DE_SERIE} />
+      </QueryClientProvider>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Abrir' }))
+    await user.click(screen.getByRole('button', { name: 'Borrar evento' }))
+    await screen.findByRole('heading', { name: 'Borrar evento' })
+    await user.click(siguientes())
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['eventos'] })
+    expect(invalidar).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['recordatorios'] }))
+  })
+
+  it('doble clic en «Borrar todos» = un solo DELETE de serie', async () => {
+    const respuesta = pendiente<void>()
+    vi.mocked(borrarSerieDesde).mockReturnValue(respuesta.promesa)
+    const user = await abrirBorrado(DE_SERIE)
+    await user.click(siguientes())
+    await user.dblClick(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    expect(await confirmacion().findByRole('button', { name: 'Borrando…' })).toBeDisabled()
+    expect(solo()).toBeDisabled()
+    respuesta.resolver()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarSerieDesde).toHaveBeenCalledTimes(1)
+  })
+
+  it('un 404 cierra con «ya no existía»', async () => {
+    vi.mocked(borrarSerieDesde).mockRejectedValue(new ApiError(404, 'No existe el evento con id 9'))
+    const user = await abrirBorrado(DE_SERIE)
+    await user.click(siguientes())
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(alMensaje).toHaveBeenCalledWith('El evento «Dentista» ya no existía')
+  })
+
+  it('un 409 (ya no es de una serie) no borra nada: avisa, quita el alcance y pide confirmar de nuevo', async () => {
+    vi.mocked(borrarSerieDesde).mockRejectedValue(new ApiError(409, 'El evento 9 no pertenece a una serie: usa la edición normal'))
+    const user = await abrirBorrado(DE_SERIE)
+    await user.click(siguientes())
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    expect(await confirmacion().findByText('Este evento ya no forma parte de una serie: se borrará solo él.')).toBeInTheDocument()
+    expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(2)
+    expect(confirmacion().queryByRole('radio')).not.toBeInTheDocument()
+    expect(borrarEvento).not.toHaveBeenCalled()
+    expect(alMensaje).not.toHaveBeenCalled()
+    // Nada se reenvía solo: el usuario confirma y entonces se borra solo él.
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarEvento).toHaveBeenCalledWith(9)
+    expect(alMensaje).toHaveBeenCalledWith('Evento «Dentista» borrado')
+  })
+
+  it('un 500 deja la confirmación abierta con el mensaje y se puede reintentar', async () => {
+    vi.mocked(borrarSerieDesde).mockRejectedValueOnce(new ApiError(500, 'Error del servidor (500). Inténtalo de nuevo más tarde.'))
+    const user = await abrirBorrado(DE_SERIE)
+    await user.click(siguientes())
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    expect(await confirmacion().findByText('Error del servidor (500). Inténtalo de nuevo más tarde.')).toBeInTheDocument()
+    await user.click(confirmacion().getByRole('button', { name: 'Borrar todos' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(borrarSerieDesde).toHaveBeenCalledTimes(2)
   })
 })
