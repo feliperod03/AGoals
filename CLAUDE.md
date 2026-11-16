@@ -25,6 +25,7 @@ Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: qu
 - Capas: componentes → hooks de `features/` → `api/`. Solo `api/` llama a `fetch`.
 - Todo el manejo de fechas va en `src/lib/fechas.ts` (con tests). Nunca `toISOString()`: da UTC y desplaza el día.
 - Idioma: interfaz en español. Código en inglés para lo técnico/genérico (`Button`, `ApiError`, `useTema`, `formatDate`) y en español para el dominio y lo que viene de la API (`Tarea`, `useAgendaDelDia`, `fechaHoraInicio`).
+- Eventos recurrentes: `features/eventos/` tiene `RepetirCampos`, `RecordatorioSerieCampo`, `ElegirAlcance` y `formularioSerie.ts` (copia del generador de ocurrencias del backend: si cambia la regla allí, cambiar las dos); la API vive en `api/series.ts` y los tipos en `types/serie.ts`.
 - Colores solo con los tokens de `src/index.css` (`bg-card`, `text-mut`, ...), nunca hex sueltos.
 - Cada funcionalidad nueva lleva tests (Vitest + Testing Library).
 - **Lista cerrada de dependencias.** Cualquier otra requiere consultarla antes con Felipe.
@@ -44,6 +45,7 @@ com.agoals
 ├── idea
 ├── evento
 ├── recordatorio
+├── serie        (series de eventos recurrentes; orquesta evento y recordatorio)
 └── usuario
 ```
 
@@ -58,6 +60,7 @@ Reglas:
 Dependencias entre módulos (en un solo sentido, sin ciclos de beans):
 - `proyecto → tarea`: `TareaService` no conoce a `ProyectoService`; los métodos de tarea para proyecto/objetivo no validan que existan, lo hace quien llama.
 - `proyecto ↔ objetivo` sería circular (Proyecto valida que su `objetivoId` exista; Objetivo necesita saber si tiene proyectos para el 409 al borrar). Se resuelve con `ObjetivoConsultaService`: un service de solo lectura (`validarExiste`) que usa únicamente `ObjetivoRepository`. Así `ProyectoService → ObjetivoConsultaService` y `ObjetivoService → ProyectoService`, sin ciclo.
+- `serie → evento` y `serie → recordatorio`: `SerieEventoService` orquesta a `EventoService` y `RecordatorioService`; evento y recordatorio NO conocen a serie (la migración V3 ya está aplicada: no editarla).
 - Las comprobaciones de jerarquía (padre existente, sin ciclos) están en `common.Jerarquia`; cada módulo pasa cómo buscar y qué excepción lanzar.
 
 ## Modelo de datos
@@ -81,4 +84,4 @@ Resumen de la idea central: una sola entidad `Tarea` cubre actividad de agenda, 
 - Un commit por rebanada, mensaje claro en español.
 
 ## Fuera de alcance en la v1
-Microservicios, eventos recurrentes, login/autenticación, vista anual del calendario, notificaciones por correo (empezar con notificación dentro de la app).
+Microservicios, tareas y recordatorios sueltos recurrentes (los eventos recurrentes ya están hechos), login/autenticación, vista anual del calendario, notificaciones por correo (empezar con notificación dentro de la app).
