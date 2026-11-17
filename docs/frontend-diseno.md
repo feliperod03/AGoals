@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 15/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos: backend y frontend A y B; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 17/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos; login en curso: L1a backend `6a2ec6e`; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -218,11 +218,10 @@ Entran en la v1. Una serie guarda la regla y MATERIALIZA eventos reales desde ho
 
 ## Orden de rebanadas
 - Hechas (con su commit): 8.0 `07c1c25`; 8.1 `e9ba44d`; 8.2a `58d3df1`; 8.2b `fadac2b`; 8.3 `f2d0052`; 8.2c `2a78695`; refactor previo al cofre `1e3256f`; 8.3b Cofre `a33fcce`; 8.2d `ceab9d9`; 5d (backend) `dc6c3c1`; 8.2e `be0913b`; 8.2f `f195a8b`; 8.2g `c6afad8`; Pulido 1 (P1a `1642c9a`, P1b `4ff8cc8`); 8.4a `a388d07`; 8.4a2 `0655bf0`; 5e (backend) `f17aa98` (semántica en el brief); 5f (backend) `43ecec5`; 8.4a3 `9fd2703`; 8.4b `0417230`; 8.4c `3548350`; 8.4d `8c447ca`; 8.5a `76719fd`; 8.5b `2780858`; 8.5c `e7aa911`; 9a `26c36bd`; 9b `7f10dce`; 9c `ffa1562`; 9d `1da4b2e`; 9e `d949a6b` (con ella queda completa la fase 9); 5c (backend) + 8.3c `c3ff1dc` y `7a3dd9e`.
-- Pulido 2a Aspecto y tema: hecha (`eed9465`). Pulido 2b Foco, avisos y errores: hecha (`fea13c6`, `6666020`).
-- Pulido 2c Foco desde «⋯» y limpieza técnica: hecha (`c56d5ad` tanda A, `f9ec6bc` tanda B).
+- Pulido 2: 2a `eed9465`; 2b `fea13c6`, `6666020`; 2c `c56d5ad`, `f9ec6bc`.
 - Pulido 3 Revisión de usabilidad: hecha (p2d `69d5fcf`, p3a `646228b`, p3b `0bd4cf1`, p3c `df3310c`). 1534 tests de frontend (97 archivos).
 - Eventos recurrentes (completos): backend `5417722` (845 tests de backend); frontend A `f5a79cb` y B `3e5749a` (1704 tests de frontend, 102 archivos).
-- Siguiente: login, despliegue y móvil (PWA), en otro chat; antes, editar `CLAUDE.md` a mano.
+- Login y multiusuario (17/11; detalle en el brief y `CLAUDE.md`): L1a `6a2ec6e` (backend) hecha; siguen L1b ← y L2 (backend) y F1 (frontend: `/login`, guard, «Salir», CSRF y 401 en `api/client.ts`). Luego despliegue, móvil y PWA.
 - Opcional: 9f Vista de día (ver «Pulido 2»).
 
 Sesiones con Sonnet; `/clear` entre rebanadas. Escritorio primero, móvil después (layout responsive desde el inicio, PWA más adelante).
