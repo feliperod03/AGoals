@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 17/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos; login en curso: L1a `6a2ec6e` y L1b `56fb197`, backend; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 17/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos; login: backend completo (L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`), falta F1; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -221,7 +221,7 @@ Entran en la v1. Una serie guarda la regla y MATERIALIZA eventos reales desde ho
 - Pulido 2: 2a `eed9465`; 2b `fea13c6`, `6666020`; 2c `c56d5ad`, `f9ec6bc`.
 - Pulido 3 Revisión de usabilidad: hecha (p2d `69d5fcf`, p3a `646228b`, p3b `0bd4cf1`, p3c `df3310c`). 1534 tests de frontend (97 archivos).
 - Eventos recurrentes (completos): backend `5417722` (845 tests de backend); frontend A `f5a79cb` y B `3e5749a` (1704 tests de frontend, 102 archivos).
-- Login y multiusuario (17/11; detalle en el brief y `CLAUDE.md`): L1a `6a2ec6e` y L1b `56fb197` (backend) hechas; siguen L2 ← (backend) y F1 (frontend: `/login`, guard, «Salir», CSRF con `GET /api/auth/csrf` y 401 en `api/client.ts`). Luego despliegue, móvil y PWA.
+- Login y multiusuario (17/11; detalle en el brief y `CLAUDE.md`): backend hecho (L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`: recordarme y freno 429); sigue F1 ← (frontend: `/login` con «Recordarme», guard, «Salir», CSRF con `GET /api/auth/csrf` y 401/429 en `api/client.ts`). Luego despliegue, móvil y PWA.
 - Opcional: 9f Vista de día (ver «Pulido 2»).
 
 Sesiones con Sonnet; `/clear` entre rebanadas. Escritorio primero, móvil después (layout responsive desde el inicio, PWA más adelante).
@@ -254,7 +254,7 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
 | evento bg / tx | #243350 / #F3ECDD | #D8C3A0 / #17202F |
 | ahora / tx | #B5452B / #FFFFFF | #F08A6A / #2A1007 |
 
-## Pulido 2 (plan acordado el 12/11: tres fases y la vista de día aparte; un commit por fase; 2c hecha)
+## Pulido 2 (plan del 12/11; las tres fases hechas)
 - **2a Aspecto y tema: hecha** (`eed9465`; ver su sección).
 - **2b Foco, avisos y errores: hecha** (`fea13c6`, `6666020`; ver su sección). Lectores de pantalla quedó fuera (A Futuro).
 - **2c Foco desde «⋯» y limpieza técnica: hecha** (`c56d5ad`, `f9ec6bc`; ver su sección).
