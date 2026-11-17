@@ -5,6 +5,7 @@ Proyecto de uso propio y de aprendizaje de desarrollo con agentes. Prioridad: qu
 
 ## Stack
 - Java 21, Spring Boot 4.1.x (Maven, wrapper `mvnw`), Spring Web MVC, Spring Data JPA, Validation
+- Dependencias de backend aprobadas el 17/11 para el login (aún sin instalar; entran en la rebanada L1b): `spring-boot-starter-security` y `spring-boot-starter-security-test` (test). Cualquier otra requiere consultarla antes con Felipe.
 - PostgreSQL 16 en Docker Compose, migraciones con Flyway
 - Frontend: Vite + React + TypeScript (strict) en `frontend/`, separado del backend. Decisiones de diseño en `docs/frontend-diseno.md`. Tailwind v4 + shadcn/ui, TanStack Query, React Router, date-fns. TypeScript fijado en 6.x (`typescript-eslint` aún no soporta 7).
 - Spring Boot 4 cambió paquetes y starters respecto a Boot 3: ante la duda, consulta la documentación de esta versión y no asumas APIs de Boot 3.
@@ -46,7 +47,7 @@ com.agoals
 ├── evento
 ├── recordatorio
 ├── serie        (series de eventos recurrentes; orquesta evento y recordatorio)
-└── usuario
+└── usuario      (todavía no existe: se crea en L1b con la cuenta, la contraseña y la sesión)
 ```
 
 Reglas:
@@ -62,6 +63,12 @@ Dependencias entre módulos (en un solo sentido, sin ciclos de beans):
 - `proyecto ↔ objetivo` sería circular (Proyecto valida que su `objetivoId` exista; Objetivo necesita saber si tiene proyectos para el 409 al borrar). Se resuelve con `ObjetivoConsultaService`: un service de solo lectura (`validarExiste`) que usa únicamente `ObjetivoRepository`. Así `ProyectoService → ObjetivoConsultaService` y `ObjetivoService → ProyectoService`, sin ciclo.
 - `serie → evento` y `serie → recordatorio`: `SerieEventoService` orquesta a `EventoService` y `RecordatorioService`; evento y recordatorio NO conocen a serie (la migración V3 ya está aplicada: no editarla).
 - Las comprobaciones de jerarquía (padre existente, sin ciclos) están en `common.Jerarquia`; cada módulo pasa cómo buscar y qué excepción lanzar.
+
+## Autenticación y multiusuario (decidido el 17/11)
+- Objetivo: varios usuarios (conocidos de Felipe y, quizá, un despliegue público), cada uno con sus datos aislados.
+- Sesión de Spring Security con cookie HttpOnly (sin JWT) y CSRF activado (token en cookie, cabecera en cada escritura). En producción el frontend y `/api` van bajo el mismo dominio (rewrite), así que sigue sin hacer falta CORS.
+- El usuario actual sale de un componente `UsuarioActual` (nunca de un id fijo). Hasta L1b devuelve el usuario 1; con L1b lo lee de la sesión. Toda consulta y escritura filtra por ese id; un recurso de otro usuario responde 404, igual que uno inexistente.
+- Rebanadas: L1a `UsuarioActual` y aislamiento (sin dependencias nuevas) → L1b login backend → L2 sesión persistente y freno de intentos → F1 login en el frontend → más adelante, altas de usuarios por invitación.
 
 ## Modelo de datos
 Ver `docs/modelo-datos.md` (entidades, relaciones, enums y reglas) y la migración `src/main/resources/db/migration/V1__esquema_inicial.sql`.
@@ -84,4 +91,4 @@ Resumen de la idea central: una sola entidad `Tarea` cubre actividad de agenda, 
 - Un commit por rebanada, mensaje claro en español.
 
 ## Fuera de alcance en la v1
-Microservicios, tareas y recordatorios sueltos recurrentes (los eventos recurrentes ya están hechos), login/autenticación, vista anual del calendario, notificaciones por correo (empezar con notificación dentro de la app).
+Microservicios, tareas y recordatorios sueltos recurrentes (los eventos recurrentes ya están hechos), registro abierto al público y recuperación de contraseña por correo (el login y el multiusuario sí entran; ver "Autenticación y multiusuario"), vista anual del calendario, notificaciones por correo (empezar con notificación dentro de la app).
