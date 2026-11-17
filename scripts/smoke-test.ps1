@@ -16,6 +16,10 @@
 # AGOALS_EMAIL_INICIAL (por defecto yo@agoals.local) y AGOALS_CLAVE_INICIAL; no hay claves escritas aqui. Usa una sesion web
 # (cookie) y manda X-XSRF-TOKEN en las escrituras. Ademas comprueba 401 sin sesion, 401 con clave mala, 403 sin CSRF y
 # logout seguido de 401.
+# Recordarme y freno (L2): el login principal pide "recordarme" y se comprueba que la cookie AGOALS_RECORDARME sea HttpOnly y
+# SameSite=Lax; una sesion web nueva con SOLO esa cookie entra (GET /yo -> 200) y, tras el logout, esa cookie da 401. El freno
+# de intentos se prueba con un email ZZ inexistente (429 tras 5 fallos) y despues del login real, porque comparten IP: cada
+# ejecucion suma 7 fallos a la IP (limite 20 en 15 min, variable AGOALS_LOGIN_MAX_FALLOS_IP al arrancar la app).
 param(
     [string]$BaseAuth = "http://localhost:8080/api/auth",
     [string]$Email = "",
@@ -59,7 +63,7 @@ function Llamar($metodo, $url, $body = $null, $sesion = $null, [bool]$sinCsrf = 
         $r = Invoke-WebRequest @p
         $json = $null
         if ($r.Content) { $json = $r.Content | ConvertFrom-Json }
-        return @{ Status = [int]$r.StatusCode; Raw = [string]$r.Content; Json = $json; SetCookie = [string]$r.Headers["Set-Cookie"] }
+        return @{ Status = [int]$r.StatusCode; Raw = [string]$r.Content; Json = $json; SetCookie = [string]$r.Headers["Set-Cookie"]; RetryAfter = [string]$r.Headers["Retry-After"] }
     } catch {
         $status = 0
         if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
@@ -75,8 +79,18 @@ function Llamar($metodo, $url, $body = $null, $sesion = $null, [bool]$sinCsrf = 
                 $reader.Close()
             } catch { }
         }
-        return @{ Status = $status; Raw = $raw; Json = $null; SetCookie = "" }
+        $retry = ""
+        if ($_.Exception.Response -and $_.Exception.Response.Headers) { $retry = [string]$_.Exception.Response.Headers["Retry-After"] }
+        return @{ Status = $status; Raw = $raw; Json = $null; SetCookie = ""; RetryAfter = $retry }
     }
+}
+
+# Un Set-Cookie de PowerShell 5.1 viene con todas las cookies juntas ("a=..., b=...") y el Expires lleva una coma: este
+# aislamiento corta en la siguiente cookie conocida y devuelve la ULTIMA que llega con ese nombre.
+function SegmentoCookie([string]$setCookie, [string]$nombre) {
+    $ms = [regex]::Matches($setCookie, [regex]::Escape($nombre) + '=.*?(?=, (?:AGOALS_SESION|XSRF-TOKEN|AGOALS_RECORDARME)=|$)')
+    if ($ms.Count -eq 0) { return "" }
+    return $ms[$ms.Count - 1].Value
 }
 
 function Verificar($nombre, [bool]$ok, $detalle = "") {
@@ -97,7 +111,7 @@ if (-not $Clave) {
     exit 2
 }
 $loginUrl = $BaseAuth + "/login"
-$cuerpoLogin = { param($e, $c) (@{ email = $e; clave = $c } | ConvertTo-Json -Compress) }
+$cuerpoLogin = { param($e, $c, $recordarme = $false) (@{ email = $e; clave = $c; recordarme = [bool]$recordarme } | ConvertTo-Json -Compress) }
 
 # --- Comprobar que la app responde (el endpoint del token CSRF es publico) ---
 $ping = Llamar "GET" ($BaseAuth + "/csrf")
@@ -119,15 +133,41 @@ Verificar "login sin token CSRF: 403" ($loginSinCsrf.Status -eq 403) "status $($
 
 # --- Login de verdad (sesion principal) ---
 [void](Llamar "GET" ($BaseAuth + "/csrf"))
-$login = Llamar "POST" $loginUrl (& $cuerpoLogin $Email $Clave)
+$login = Llamar "POST" $loginUrl (& $cuerpoLogin $Email $Clave $true)
 if ($login.Status -ne 200) {
     Write-Host "No se pudo iniciar sesion como $Email (status $($login.Status)): $($login.Raw)" -ForegroundColor Red
+    if ($login.Status -eq 429) {
+        Write-Host "El freno de intentos bloqueo esta IP (cada ejecucion del smoke suma 7 fallos; limite 20 cada 15 min). Espera lo que dice el mensaje, reinicia el backend, o arrancalo con AGOALS_LOGIN_MAX_FALLOS_IP mas alto." -ForegroundColor Red
+    }
     exit 2
 }
 Verificar "login correcto: 200 con id, nombreUsuario y email" (($login.Json.id -gt 0) -and $login.Json.email) $login.Raw
 Verificar "la cookie de sesion es HttpOnly y SameSite=Lax" (($login.SetCookie -like '*AGOALS_SESION=*') -and ($login.SetCookie -like '*HttpOnly*') -and ($login.SetCookie -like '*SameSite=Lax*')) $login.SetCookie
 $yo = Llamar "GET" ($BaseAuth + "/yo")
 Verificar "GET /api/auth/yo con sesion: 200 con el mismo email" (($yo.Status -eq 200) -and ($yo.Json.email -eq $login.Json.email)) "status $($yo.Status)"
+
+# --- Recordarme (L2): la cookie y una sesion web nueva que entra SOLO con ella ---
+$segRecordarme = SegmentoCookie $login.SetCookie "AGOALS_RECORDARME"
+Verificar "login con recordarme: la cookie AGOALS_RECORDARME es HttpOnly y SameSite=Lax" (($segRecordarme -like 'AGOALS_RECORDARME=*') -and ($segRecordarme -like '*HttpOnly*') -and ($segRecordarme -like '*SameSite=Lax*')) $segRecordarme
+$cookieRecordarme = $sesionPrincipal.Cookies.GetCookies([Uri]$BaseAuth)["AGOALS_RECORDARME"]
+$sesionSolo = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+if ($cookieRecordarme) {
+    $sesionSolo.Cookies.Add([Uri]$BaseAuth, (New-Object System.Net.Cookie("AGOALS_RECORDARME", $cookieRecordarme.Value, "/", ([Uri]$BaseAuth).Host)))
+}
+$yoSolo = Llamar "GET" ($BaseAuth + "/yo") $null $sesionSolo
+Verificar "sesion web nueva con solo la cookie de recordarme: GET /yo -> 200 con el mismo email" (($yoSolo.Status -eq 200) -and ($yoSolo.Json.email -eq $login.Json.email)) "status $($yoSolo.Status) $($yoSolo.Raw)"
+
+# --- Freno de intentos (L2): despues del login real, que comparte IP. Email ZZ inexistente, sesion anonima ---
+[void](Llamar "GET" ($BaseAuth + "/csrf") $null $anonima)
+$emailFreno = "zz-l2-smoke-" + ([guid]::NewGuid().ToString("N").Substring(0, 8)) + "@agoals.local"
+$estados = @()
+$bloqueo = $null
+for ($i = 1; $i -le 7; $i++) {
+    $t = Llamar "POST" $loginUrl (& $cuerpoLogin $emailFreno "clave-mala-smoke") $anonima
+    $estados += $t.Status
+    if ($t.Status -eq 429) { $bloqueo = $t; break }
+}
+Verificar "freno de intentos: 401 en los fallos y 429 en el intento 6 (o antes si la IP ya traia fallos), con 'Espera' y Retry-After" (($null -ne $bloqueo) -and ($estados.Count -le 6) -and (@($estados | Where-Object { $_ -ne 401 -and $_ -ne 429 }).Count -eq 0) -and (@($estados | Where-Object { $_ -eq 429 }).Count -eq 1) -and ($bloqueo.Raw -like '*Espera*') -and ([int]$bloqueo.RetryAfter -gt 0)) ("estados: " + ($estados -join ",") + " retry-after: " + $(if ($bloqueo) { $bloqueo.RetryAfter } else { "-" }))
 
 $ping = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha)
 if ($ping.Status -ne 200) {
@@ -1280,6 +1320,15 @@ finally {
     $salir = Llamar "POST" ($BaseAuth + "/logout")
     $trasSalir = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha)
     Verificar "logout: 204 y despues la API responde 401" (($salir.Status -eq 204) -and ($trasSalir.Status -eq 401)) "status $($salir.Status)/$($trasSalir.Status)"
+    # Recordarme: el logout borro el token de este dispositivo; la ultima cookie que tenia la sesion "solo cookie" ya no entra.
+    # Sesion web NUEVA con solo esa cookie (la "solo cookie" de antes guardo tambien una AGOALS_SESION valida).
+    $ultimaCookie = $sesionSolo.Cookies.GetCookies([Uri]$BaseAuth)["AGOALS_RECORDARME"]
+    $sesionTrasSalir = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    if ($ultimaCookie) {
+        $sesionTrasSalir.Cookies.Add([Uri]$BaseAuth, (New-Object System.Net.Cookie("AGOALS_RECORDARME", $ultimaCookie.Value, "/", ([Uri]$BaseAuth).Host)))
+    }
+    $trasSalirCookie = Llamar "GET" ($BaseAuth + "/yo") $null $sesionTrasSalir
+    Verificar "tras el logout, la cookie de recordarme da 401" ($trasSalirCookie.Status -eq 401) "status $($trasSalirCookie.Status)"
 }
 
 if ($fallos -eq 0) {
