@@ -1,6 +1,6 @@
 package com.agoals.tarea;
 
-import com.agoals.common.UsuarioActualFijo;
+import com.agoals.common.UsuarioActualFijoDePrueba;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // (así se limpia lo que crea) y se verifica por ids propios, nunca por tamaño de lista.
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TareaService.class, UsuarioActualFijo.class })
+@Import({ TareaService.class, UsuarioActualFijoDePrueba.class })
 class TareaServiceEliminarIntegracionTest {
 
 	@Autowired

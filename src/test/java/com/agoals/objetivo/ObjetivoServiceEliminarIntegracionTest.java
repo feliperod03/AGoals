@@ -1,6 +1,6 @@
 package com.agoals.objetivo;
 
-import com.agoals.common.UsuarioActualFijo;
+import com.agoals.common.UsuarioActualFijoDePrueba;
 import com.agoals.common.ConteoBorrado;
 import com.agoals.common.ModoBorrado;
 import com.agoals.idea.Idea;
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ ObjetivoService.class, ProyectoService.class, TareaService.class, IdeaService.class,
-		ObjetivoConsultaService.class, ProyectoConsultaService.class, UsuarioActualFijo.class })
+		ObjetivoConsultaService.class, ProyectoConsultaService.class, UsuarioActualFijoDePrueba.class })
 class ObjetivoServiceEliminarIntegracionTest {
 
 	private static final Long U = 1L;

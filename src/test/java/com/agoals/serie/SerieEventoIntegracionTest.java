@@ -1,6 +1,7 @@
 package com.agoals.serie;
 
 import com.agoals.common.Prioridad;
+import com.agoals.common.UsuarioActual;
 import com.agoals.evento.Evento;
 import com.agoals.evento.EventoNoEncontradoException;
 import com.agoals.evento.EventoRepository;
@@ -15,9 +16,11 @@ import com.agoals.serie.dto.SerieEventoCreadaResponse;
 import com.agoals.serie.dto.SerieEventoEdicionRequest;
 import com.agoals.serie.dto.SerieEventoRequest;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.LocalDate;
@@ -35,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 
 // Contra el PostgreSQL real, sin rollback automático: prueba la transacción de verdad. Datos "ZZ-rec" en 2098,
 // borrados al terminar. Se verifica por ids propios, nunca por tamaño de lista.
@@ -54,6 +58,10 @@ class SerieEventoIntegracionTest {
 	@MockitoSpyBean
 	RecordatorioService recordatorioService;
 
+	// Sin petición web no hay sesión: estos tests trabajan siempre como el usuario 1 (el de V2).
+	@MockitoBean
+	UsuarioActual usuarioActual;
+
 	@Autowired
 	EventoRepository eventos;
 
@@ -64,6 +72,11 @@ class SerieEventoIntegracionTest {
 	SerieEventoRepository series;
 
 	private final Set<Long> serieIds = new HashSet<>();
+
+	@BeforeEach
+	void comoUsuarioUno() {
+		when(usuarioActual.id()).thenReturn(1L);
+	}
 
 	@AfterEach
 	void limpiar() {

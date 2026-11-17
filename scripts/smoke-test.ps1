@@ -12,7 +12,14 @@
 # y series de eventos recurrentes (semanal, cada 2 semanas, mensual; recordatorio por ocurrencia; 400 por reglas invalidas,
 # tope de 260 y "todo el dia"; editar y borrar "solo este" o "toda la serie"; 409 sobre eventos sueltos).
 # Crea tareas con fecha 2099-12-31, y proyectos, objetivos, ideas y eventos "smoke-*" y series "ZZ-rec" (en 2098), y los borra al terminar.
+# Login (L1b): la API exige sesion. El script entra con -Email/-Clave o, si no se pasan, con las variables de entorno
+# AGOALS_EMAIL_INICIAL (por defecto yo@agoals.local) y AGOALS_CLAVE_INICIAL; no hay claves escritas aqui. Usa una sesion web
+# (cookie) y manda X-XSRF-TOKEN en las escrituras. Ademas comprueba 401 sin sesion, 401 con clave mala, 403 sin CSRF y
+# logout seguido de 401.
 param(
+    [string]$BaseAuth = "http://localhost:8080/api/auth",
+    [string]$Email = "",
+    [string]$Clave = "",
     [string]$Base = "http://localhost:8080/api/tareas",
     [string]$BaseProyectos = "http://localhost:8080/api/proyectos",
     [string]$BaseObjetivos = "http://localhost:8080/api/objetivos",
@@ -32,14 +39,27 @@ $eventoIds = @()
 $recordatorioIds = @()
 $serieEventoPrimeros = @()
 
-function Llamar($metodo, $url, $body = $null) {
-    $p = @{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true }
+# Sesion web principal (la del usuario que hace login): guarda las cookies AGOALS_SESION y XSRF-TOKEN.
+$sesionPrincipal = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+
+# $sesion: otra sesion web (por defecto la principal). $sinCsrf: no manda X-XSRF-TOKEN (para probar el 403).
+# En las escrituras manda la cabecera con el valor ACTUAL de la cookie XSRF-TOKEN (el login la renueva).
+function Llamar($metodo, $url, $body = $null, $sesion = $null, [bool]$sinCsrf = $false) {
+    if ($null -eq $sesion) { $sesion = $script:sesionPrincipal }
+    # Windows PowerShell 5.1 guarda en la sesion los -Headers de la llamada anterior: sin esto, un "sin CSRF" reenviaria
+    # el token viejo y la prueba pasaria (o fallaria) por casualidad.
+    [void]$sesion.Headers.Remove("X-XSRF-TOKEN")
+    $p =@{ Method = $metodo; Uri = $url; ContentType = "application/json"; UseBasicParsing = $true; WebSession = $sesion }
     if ($body) { $p.Body = $body }
+    if ($metodo -ne "GET" -and -not $sinCsrf) {
+        $cookie = $sesion.Cookies.GetCookies([Uri]$url)["XSRF-TOKEN"]
+        if ($cookie) { $p.Headers = @{ "X-XSRF-TOKEN" = $cookie.Value } }
+    }
     try {
         $r = Invoke-WebRequest @p
         $json = $null
         if ($r.Content) { $json = $r.Content | ConvertFrom-Json }
-        return @{ Status = [int]$r.StatusCode; Raw = [string]$r.Content; Json = $json }
+        return @{ Status = [int]$r.StatusCode; Raw = [string]$r.Content; Json = $json; SetCookie = [string]$r.Headers["Set-Cookie"] }
     } catch {
         $status = 0
         if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
@@ -55,7 +75,7 @@ function Llamar($metodo, $url, $body = $null) {
                 $reader.Close()
             } catch { }
         }
-        return @{ Status = $status; Raw = $raw; Json = $null }
+        return @{ Status = $status; Raw = $raw; Json = $null; SetCookie = "" }
     }
 }
 
@@ -68,12 +88,54 @@ function Verificar($nombre, [bool]$ok, $detalle = "") {
     }
 }
 
-# --- Comprobar que la app responde ---
-$ping = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha)
-if ($ping.Status -ne 200) {
-    Write-Host "La app no responde en $Base (status $($ping.Status)). Levanta la base y la app primero." -ForegroundColor Red
+# --- Credenciales: de parametros o de variables de entorno (nunca escritas en el script) ---
+if (-not $Email) { $Email = $env:AGOALS_EMAIL_INICIAL }
+if (-not $Email) { $Email = "yo@agoals.local" }
+if (-not $Clave) { $Clave = $env:AGOALS_CLAVE_INICIAL }
+if (-not $Clave) {
+    Write-Host "Falta la contrasena: pasa -Clave o define AGOALS_CLAVE_INICIAL (la misma con la que arranco la app)." -ForegroundColor Red
     exit 2
 }
+$loginUrl = $BaseAuth + "/login"
+$cuerpoLogin = { param($e, $c) (@{ email = $e; clave = $c } | ConvertTo-Json -Compress) }
+
+# --- Comprobar que la app responde (el endpoint del token CSRF es publico) ---
+$ping = Llamar "GET" ($BaseAuth + "/csrf")
+if ($ping.Status -ne 204) {
+    Write-Host "La app no responde en $BaseAuth (status $($ping.Status)). Levanta la base y la app primero." -ForegroundColor Red
+    exit 2
+}
+
+# --- Seguridad antes de entrar: sesion nueva y vacia ---
+$anonima = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$sinSesion = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha) $null $anonima
+Verificar "sin sesion: la API responde 401 (JSON, sin redireccion)" (($sinSesion.Status -eq 401) -and ($sinSesion.Raw -like '*mensaje*')) "status $($sinSesion.Status) $($sinSesion.Raw)"
+[void](Llamar "GET" ($BaseAuth + "/csrf") $null $anonima)
+$claveMala = Llamar "POST" $loginUrl (& $cuerpoLogin $Email ($Clave + "-mala")) $anonima
+$emailMalo = Llamar "POST" $loginUrl (& $cuerpoLogin ("nadie-" + $Email) $Clave) $anonima
+Verificar "login con contrasena incorrecta: 401 y el mismo mensaje que con un email inexistente" (($claveMala.Status -eq 401) -and ($emailMalo.Status -eq 401) -and ($claveMala.Raw -eq $emailMalo.Raw) -and ($claveMala.Raw -like '*Email o contrase*')) "status $($claveMala.Status)/$($emailMalo.Status) $($claveMala.Raw)"
+$loginSinCsrf = Llamar "POST" $loginUrl (& $cuerpoLogin $Email $Clave) $anonima $true
+Verificar "login sin token CSRF: 403" ($loginSinCsrf.Status -eq 403) "status $($loginSinCsrf.Status)"
+
+# --- Login de verdad (sesion principal) ---
+[void](Llamar "GET" ($BaseAuth + "/csrf"))
+$login = Llamar "POST" $loginUrl (& $cuerpoLogin $Email $Clave)
+if ($login.Status -ne 200) {
+    Write-Host "No se pudo iniciar sesion como $Email (status $($login.Status)): $($login.Raw)" -ForegroundColor Red
+    exit 2
+}
+Verificar "login correcto: 200 con id, nombreUsuario y email" (($login.Json.id -gt 0) -and $login.Json.email) $login.Raw
+Verificar "la cookie de sesion es HttpOnly y SameSite=Lax" (($login.SetCookie -like '*AGOALS_SESION=*') -and ($login.SetCookie -like '*HttpOnly*') -and ($login.SetCookie -like '*SameSite=Lax*')) $login.SetCookie
+$yo = Llamar "GET" ($BaseAuth + "/yo")
+Verificar "GET /api/auth/yo con sesion: 200 con el mismo email" (($yo.Status -eq 200) -and ($yo.Json.email -eq $login.Json.email)) "status $($yo.Status)"
+
+$ping = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha)
+if ($ping.Status -ne 200) {
+    Write-Host "La app no responde bien en $Base (status $($ping.Status))." -ForegroundColor Red
+    exit 2
+}
+$sinCsrf = Llamar "POST" $Base '{"titulo":"smoke-sin-csrf"}' $null $true
+Verificar "escritura con sesion pero sin X-XSRF-TOKEN: 403" ($sinCsrf.Status -eq 403) "status $($sinCsrf.Status) $($sinCsrf.Raw)"
 
 try {
     # --- Crear tres tareas ---
@@ -1214,6 +1276,10 @@ finally {
     [array]::Reverse($objetivoIds)
     foreach ($id in $objetivoIds) { [void](Llamar "DELETE" ($BaseObjetivos + "/" + $id)) }
     Write-Host "Datos de prueba borrados."
+    # Logout al final (despues de limpiar, que necesita la sesion): 204 y luego la API vuelve a responder 401.
+    $salir = Llamar "POST" ($BaseAuth + "/logout")
+    $trasSalir = Llamar "GET" ($Base + "/agenda?fecha=" + $fecha)
+    Verificar "logout: 204 y despues la API responde 401" (($salir.Status -eq 204) -and ($trasSalir.Status -eq 401)) "status $($salir.Status)/$($trasSalir.Status)"
 }
 
 if ($fallos -eq 0) {

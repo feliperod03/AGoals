@@ -8,6 +8,7 @@ import com.agoals.tarea.TareaInvalidaException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -34,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(RecordatorioController.class)
+@AutoConfigureMockMvc(addFilters = false) // la seguridad se prueba aparte (SeguridadIntegracionTest)
 @Import(ApiExceptionHandler.class)
 class RecordatorioControllerTest {
 

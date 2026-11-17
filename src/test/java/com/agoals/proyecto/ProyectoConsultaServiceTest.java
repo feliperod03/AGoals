@@ -50,7 +50,7 @@ class ProyectoConsultaServiceTest {
 	}
 
 	// Guarda de arquitectura: si esta clase depende de otro service (p. ej. ProyectoService o IdeaService),
-	// reaparece un ciclo de beans (idea <-> proyecto). Debe depender SOLO de ProyectoRepository.
+	// reaparece un ciclo de beans (idea <-> proyecto). Debe depender SOLO de ProyectoRepository y UsuarioActual.
 	@Test
 	void dependeUnicamenteDeProyectoRepository() {
 		var constructores = ProyectoConsultaService.class.getConstructors();

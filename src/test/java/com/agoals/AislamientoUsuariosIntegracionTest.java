@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Se verifica por ids propios, nunca por tamaño de lista (la base es la de desarrollo).
  */
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 class AislamientoUsuariosIntegracionTest {
 
 	private static final long INEXISTENTE = 999_999_999L;

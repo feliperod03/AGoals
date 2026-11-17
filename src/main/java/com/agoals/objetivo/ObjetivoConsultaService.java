@@ -8,8 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Consulta de solo lectura que otros módulos (hoy, proyecto) usan para validar un objetivoId.
  *
  * <p>Existe para evitar un ciclo de beans: ProyectoService necesita validar objetivos y ObjetivoService
- * necesita preguntar a ProyectoService si un objetivo tiene proyectos. Por eso esta clase usa SOLO
- * ObjetivoRepository y nunca debe depender de otro service (ni de ObjetivoService). Hay un test que lo vigila.
+ * necesita preguntar a ProyectoService si un objetivo tiene proyectos. Por eso esta clase usa SOLO su
+ * ObjetivoRepository y UsuarioActual (solo lectura de la sesión) y nunca debe depender de otro service (ni de ObjetivoService). Hay un test que lo vigila.
  */
 @Service
 @Transactional(readOnly = true)

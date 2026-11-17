@@ -23,6 +23,9 @@ import com.agoals.tarea.TareaInvalidaException;
 import com.agoals.tarea.TareaNoEncontradaException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -141,6 +144,25 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(SerieEventoConflictoException.class)
 	public ResponseEntity<ErrorResponse> serieConflicto(SerieEventoConflictoException e) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage(), List.of()));
+	}
+
+	// Seguridad (L1b): los filtros de Spring Security delegan aquí sus 401/403 para que salgan con el mismo formato.
+	// Las excepciones propias del login están en usuario.UsuarioExceptionHandler.
+	@ExceptionHandler(AuthenticationException.class)
+	public ResponseEntity<ErrorResponse> sinSesion(AuthenticationException e) {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+				.body(new ErrorResponse("Inicia sesión para continuar", List.of()));
+	}
+
+	@ExceptionHandler(CsrfException.class)
+	public ResponseEntity<ErrorResponse> csrfInvalido(CsrfException e) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(new ErrorResponse("Falta el token CSRF o no es válido", List.of()));
+	}
+
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity<ErrorResponse> accesoDenegado(AccessDeniedException e) {
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse("Acceso denegado", List.of()));
 	}
 
 	// Un parámetro de URL con tipo inválido (p. ej. ?estado=RARO o ?fecha=06-11-2026): 400 con mensaje claro.

@@ -50,7 +50,7 @@ class ObjetivoConsultaServiceTest {
 	}
 
 	// Guarda de arquitectura: si esta clase depende de otro service (p. ej. ProyectoService u ObjetivoService),
-	// reaparece el ciclo de beans proyecto <-> objetivo. Debe depender SOLO de ObjetivoRepository.
+	// reaparece el ciclo de beans proyecto <-> objetivo. Debe depender SOLO de ObjetivoRepository y UsuarioActual.
 	@Test
 	void dependeUnicamenteDeObjetivoRepository() {
 		var constructores = ObjetivoConsultaService.class.getConstructors();

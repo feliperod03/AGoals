@@ -8,8 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Consulta de solo lectura que otros módulos (hoy, idea) usan para validar un proyectoId.
  *
  * <p>Existe por la misma razón que ObjetivoConsultaService: IdeaService necesita validar proyectos y
- * ProyectoService necesita preguntar a IdeaService si un proyecto tiene ideas. Por eso esta clase usa SOLO
- * ProyectoRepository y nunca debe depender de otro service (ni de ProyectoService). Hay un test que lo vigila.
+ * ProyectoService necesita preguntar a IdeaService si un proyecto tiene ideas. Por eso esta clase usa SOLO su
+ * ProyectoRepository y UsuarioActual (solo lectura de la sesión) y nunca debe depender de otro service (ni de ProyectoService). Hay un test que lo vigila.
  */
 @Service
 @Transactional(readOnly = true)
