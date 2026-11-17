@@ -1,5 +1,6 @@
 package com.agoals.evento;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.evento.dto.EventoDeSerie;
 import com.agoals.evento.dto.EventoRequest;
 import com.agoals.evento.dto.EventoResponse;
@@ -13,19 +14,18 @@ import java.util.List;
 @Transactional
 public class EventoService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final EventoRepository repository;
+	private final UsuarioActual usuarioActual;
 
-	public EventoService(EventoRepository repository) {
+	public EventoService(EventoRepository repository, UsuarioActual usuarioActual) {
 		this.repository = repository;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public EventoResponse crear(EventoRequest request) {
 		validar(request);
 		Evento evento = new Evento();
-		evento.setUsuarioId(USUARIO_ID);
+		evento.setUsuarioId(usuarioActual.id());
 		aplicar(evento, request);
 		return aRespuesta(repository.saveAndFlush(evento));
 	}
@@ -38,7 +38,7 @@ public class EventoService {
 	/** Solo lectura, para otros módulos (recordatorio): 400 si el evento no existe, para validar el cuerpo de una petición. */
 	@Transactional(readOnly = true)
 	public void validarExiste(Long id) {
-		if (repository.findByIdAndUsuarioId(id, USUARIO_ID).isEmpty()) {
+		if (repository.findByIdAndUsuarioId(id, usuarioActual.id()).isEmpty()) {
 			throw new EventoInvalidoException("El evento no existe: " + id);
 		}
 	}
@@ -54,7 +54,7 @@ public class EventoService {
 		}
 		// El orden (inicio, id) lo da el repository; aquí solo se descartan los que no se solapan.
 		// isBefore/isAfter comparan instantes, no el desfase con el que se guardó o se pidió cada fecha.
-		return repository.findByUsuarioIdOrderByFechaHoraInicioAscIdAsc(USUARIO_ID).stream()
+		return repository.findByUsuarioIdOrderByFechaHoraInicioAscIdAsc(usuarioActual.id()).stream()
 				.filter(e -> hasta == null || e.getFechaHoraInicio().isBefore(hasta))
 				.filter(e -> desde == null || e.getFechaHoraFin().isAfter(desde))
 				.map(this::aRespuesta)
@@ -87,7 +87,7 @@ public class EventoService {
 				throw new EventoInvalidoException("'fechaHoraFin' debe ser posterior a 'fechaHoraInicio'");
 			}
 			Evento evento = new Evento();
-			evento.setUsuarioId(USUARIO_ID);
+			evento.setUsuarioId(usuarioActual.id());
 			evento.setSerieId(serieId);
 			evento.setTitulo(o.titulo());
 			evento.setDescripcion(o.descripcion() != null ? o.descripcion() : "");
@@ -102,7 +102,7 @@ public class EventoService {
 	@Transactional(readOnly = true)
 	public List<EventoResponse> ocurrenciasDeSerieDesde(Long serieId, OffsetDateTime desde) {
 		return repository.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
-				serieId, USUARIO_ID, desde).stream().map(this::aRespuesta).toList();
+				serieId, usuarioActual.id(), desde).stream().map(this::aRespuesta).toList();
 	}
 
 	/** Reemplaza los datos de una ocurrencia sin tocar su serie_id. */
@@ -123,7 +123,7 @@ public class EventoService {
 	public int eliminarDeSerieDesde(Long serieId, OffsetDateTime desde) {
 		List<Evento> aBorrar = repository
 				.findBySerieIdAndUsuarioIdAndFechaHoraInicioGreaterThanEqualOrderByFechaHoraInicioAscIdAsc(
-						serieId, USUARIO_ID, desde);
+						serieId, usuarioActual.id(), desde);
 		repository.deleteAll(aBorrar);
 		repository.flush();
 		return aBorrar.size();
@@ -131,11 +131,11 @@ public class EventoService {
 
 	@Transactional(readOnly = true)
 	public boolean existenDeSerie(Long serieId) {
-		return repository.existsBySerieIdAndUsuarioId(serieId, USUARIO_ID);
+		return repository.existsBySerieIdAndUsuarioId(serieId, usuarioActual.id());
 	}
 
 	private Evento buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new EventoNoEncontradoException(id));
 	}
 

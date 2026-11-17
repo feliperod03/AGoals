@@ -1,5 +1,6 @@
 package com.agoals.recordatorio;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.evento.EventoService;
 import com.agoals.recordatorio.dto.RecordatorioDeEvento;
 import com.agoals.recordatorio.dto.RecordatorioRequest;
@@ -19,20 +20,19 @@ import java.util.stream.Collectors;
 @Transactional
 public class RecordatorioService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final RecordatorioRepository repository;
 	private final TareaService tareaService;
 	private final EventoService eventoService;
+	private final UsuarioActual usuarioActual;
 
 	// Dependencias en un solo sentido: recordatorio -> tarea / evento, solo a través de sus services.
 	// TareaService y EventoService NO conocen a recordatorio (el borrado en cascada lo hace la base), así que no hay ciclo.
 	public RecordatorioService(RecordatorioRepository repository, TareaService tareaService,
-			EventoService eventoService) {
+			EventoService eventoService, UsuarioActual usuarioActual) {
 		this.repository = repository;
 		this.tareaService = tareaService;
 		this.eventoService = eventoService;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public RecordatorioResponse crear(RecordatorioRequest request) {
@@ -44,7 +44,7 @@ public class RecordatorioService {
 			validarSinRecordatorioDeEvento(request.eventoId());
 		}
 		Recordatorio r = new Recordatorio();
-		r.setUsuarioId(USUARIO_ID);
+		r.setUsuarioId(usuarioActual.id());
 		aplicar(r, request);
 		return aRespuesta(repository.saveAndFlush(r));
 	}
@@ -57,7 +57,7 @@ public class RecordatorioService {
 	/** Filtros opcionales. Un recordatorio no puede ser de tarea y evento a la vez: pedir ambos devuelve lista vacía. */
 	@Transactional(readOnly = true)
 	public List<RecordatorioResponse> listar(Long tareaId, Long eventoId) {
-		return repository.findByUsuarioIdOrderByFechaHoraAscIdAsc(USUARIO_ID).stream()
+		return repository.findByUsuarioIdOrderByFechaHoraAscIdAsc(usuarioActual.id()).stream()
 				.filter(r -> tareaId == null || tareaId.equals(r.getTareaId()))
 				.filter(r -> eventoId == null || eventoId.equals(r.getEventoId()))
 				.map(this::aRespuesta)
@@ -70,7 +70,7 @@ public class RecordatorioService {
 	 */
 	@Transactional(readOnly = true)
 	public List<RecordatorioResponse> vencidos(OffsetDateTime ahora) {
-		return repository.findByUsuarioIdAndEnviadoFalseAndFechaHoraLessThanEqualOrderByFechaHoraAscIdAsc(USUARIO_ID, ahora)
+		return repository.findByUsuarioIdAndEnviadoFalseAndFechaHoraLessThanEqualOrderByFechaHoraAscIdAsc(usuarioActual.id(), ahora)
 				.stream()
 				.map(this::aRespuesta)
 				.toList();
@@ -128,7 +128,7 @@ public class RecordatorioService {
 			return;
 		}
 		Map<Long, Recordatorio> existentes = repository
-				.findByEventoIdInAndUsuarioId(pedidos.stream().map(RecordatorioDeEvento::eventoId).toList(), USUARIO_ID)
+				.findByEventoIdInAndUsuarioId(pedidos.stream().map(RecordatorioDeEvento::eventoId).toList(), usuarioActual.id())
 				.stream().collect(Collectors.toMap(Recordatorio::getEventoId, Function.identity()));
 		for (RecordatorioDeEvento pedido : pedidos) {
 			Recordatorio actual = existentes.get(pedido.eventoId());
@@ -142,7 +142,7 @@ public class RecordatorioService {
 				repository.save(actual);
 			} else if (pedido.fechaHora() != null) {
 				Recordatorio nuevo = new Recordatorio();
-				nuevo.setUsuarioId(USUARIO_ID);
+				nuevo.setUsuarioId(usuarioActual.id());
 				nuevo.setEventoId(pedido.eventoId());
 				nuevo.setFechaHora(pedido.fechaHora());
 				repository.save(nuevo);
@@ -152,7 +152,7 @@ public class RecordatorioService {
 	}
 
 	private Recordatorio buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new RecordatorioNoEncontradoException(id));
 	}
 
@@ -177,13 +177,13 @@ public class RecordatorioService {
 	}
 
 	private void validarSinRecordatorioDeTarea(Long tareaId) {
-		if (repository.existsByTareaIdAndUsuarioId(tareaId, USUARIO_ID)) {
+		if (repository.existsByTareaIdAndUsuarioId(tareaId, usuarioActual.id())) {
 			throw new RecordatorioConflictoException("La tarea " + tareaId + " ya tiene un recordatorio");
 		}
 	}
 
 	private void validarSinRecordatorioDeEvento(Long eventoId) {
-		if (repository.existsByEventoIdAndUsuarioId(eventoId, USUARIO_ID)) {
+		if (repository.existsByEventoIdAndUsuarioId(eventoId, usuarioActual.id())) {
 			throw new RecordatorioConflictoException("El evento " + eventoId + " ya tiene un recordatorio");
 		}
 	}

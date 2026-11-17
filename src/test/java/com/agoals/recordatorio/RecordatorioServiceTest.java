@@ -6,6 +6,8 @@ import com.agoals.recordatorio.dto.RecordatorioRequest;
 import com.agoals.recordatorio.dto.RecordatorioResponse;
 import com.agoals.tarea.TareaInvalidaException;
 import com.agoals.tarea.TareaService;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,12 +27,13 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RecordatorioServiceTest {
 
-	private static final Long U = RecordatorioService.USUARIO_ID;
+	private static final Long U = 42L;
 	private static final String FECHA = "2098-03-10T10:00:00-03:00";
 
 	@Mock
@@ -41,6 +44,14 @@ class RecordatorioServiceTest {
 
 	@Mock
 	EventoService eventoService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	RecordatorioService service;

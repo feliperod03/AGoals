@@ -1,5 +1,6 @@
 package com.agoals.tarea;
 
+import com.agoals.common.UsuarioActualFijo;
 import com.agoals.common.Estado;
 import com.agoals.common.Prioridad;
 import com.agoals.tarea.dto.AgendarRequest;
@@ -24,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // limite=200, y se verifica por ids propios, nunca por tamaño de lista. Cada test hace rollback al terminar.
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(TareaService.class)
+@Import({ TareaService.class, UsuarioActualFijo.class })
 class TareaServiceRecomendacionIntegracionTest {
 
 	private static final LocalDate HOY = LocalDate.of(2097, 3, 10);
@@ -50,7 +51,7 @@ class TareaServiceRecomendacionIntegracionTest {
 
 	private Tarea guardar(String titulo, LocalDate fecha, Prioridad prioridad, Tarea padre) {
 		Tarea t = new Tarea();
-		t.setUsuarioId(TareaService.USUARIO_ID);
+		t.setUsuarioId(1L);
 		t.setTitulo(titulo);
 		t.setFecha(fecha);
 		t.setPrioridad(prioridad);

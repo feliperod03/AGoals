@@ -12,6 +12,8 @@ import com.agoals.serie.dto.SerieEventoCreadaResponse;
 import com.agoals.serie.dto.SerieEventoEdicionRequest;
 import com.agoals.serie.dto.SerieEventoEdicionResponse;
 import com.agoals.serie.dto.SerieEventoRequest;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,13 +40,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 // 2098-03-12 es miércoles. Zona de la serie: Buenos Aires (-03:00).
 @ExtendWith(MockitoExtension.class)
 class SerieEventoServiceTest {
 
-	private static final Long U = SerieEventoService.USUARIO_ID;
+	private static final Long U = 42L;
 	private static final String ZONA = "America/Argentina/Buenos_Aires";
 	private static final long SERIE_ID = 7L;
 
@@ -56,6 +59,14 @@ class SerieEventoServiceTest {
 
 	@Mock
 	RecordatorioService recordatorioService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	SerieEventoService service;

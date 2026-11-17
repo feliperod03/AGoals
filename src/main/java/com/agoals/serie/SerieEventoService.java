@@ -1,5 +1,6 @@
 package com.agoals.serie;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.evento.EventoService;
 import com.agoals.evento.dto.EventoDeSerie;
 import com.agoals.evento.dto.EventoResponse;
@@ -30,18 +31,17 @@ import java.util.List;
 @Transactional
 public class SerieEventoService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final SerieEventoRepository repository;
 	private final EventoService eventoService;
 	private final RecordatorioService recordatorioService;
+	private final UsuarioActual usuarioActual;
 
 	public SerieEventoService(SerieEventoRepository repository, EventoService eventoService,
-			RecordatorioService recordatorioService) {
+			RecordatorioService recordatorioService, UsuarioActual usuarioActual) {
 		this.repository = repository;
 		this.eventoService = eventoService;
 		this.recordatorioService = recordatorioService;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public SerieEventoCreadaResponse crear(SerieEventoRequest r) {
@@ -52,7 +52,7 @@ public class SerieEventoService {
 		List<Ocurrencia> ocurrencias = GeneradorOcurrencias.generar(regla, r.horaInicio(), r.horaFin(), zona, r.ahora());
 
 		SerieEvento serie = new SerieEvento();
-		serie.setUsuarioId(USUARIO_ID);
+		serie.setUsuarioId(usuarioActual.id());
 		serie.setFrecuencia(regla.frecuencia());
 		serie.setDiasSemana(regla.frecuencia() == Frecuencia.SEMANAL ? EnumSet.copyOf(regla.dias()) : null);
 		serie.setIntervaloSemanas(regla.frecuencia() == Frecuencia.SEMANAL ? regla.intervaloSemanas() : null);
@@ -206,7 +206,7 @@ public class SerieEventoService {
 	}
 
 	private SerieEvento buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new SerieEventoNoEncontradaException(id));
 	}
 

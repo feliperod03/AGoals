@@ -1,5 +1,6 @@
 package com.agoals.idea;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.idea.dto.ConcluirRequest;
 import com.agoals.idea.dto.IdeaRequest;
 import com.agoals.idea.dto.IdeaResponse;
@@ -18,27 +19,26 @@ import java.util.Set;
 @Transactional
 public class IdeaService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final IdeaRepository repository;
 	private final ProyectoConsultaService proyectoConsultaService;
 	private final ObjetivoConsultaService objetivoConsultaService;
+	private final UsuarioActual usuarioActual;
 
 	// Dependencias en un solo sentido: idea -> proyecto/objetivo solo a través de sus *ConsultaService,
 	// que usan únicamente su repository. Así ProyectoService y ObjetivoService pueden depender de esta clase
 	// (para el 409 al borrar) sin ciclos de beans.
 	public IdeaService(IdeaRepository repository, ProyectoConsultaService proyectoConsultaService,
-			ObjetivoConsultaService objetivoConsultaService) {
+			ObjetivoConsultaService objetivoConsultaService, UsuarioActual usuarioActual) {
 		this.repository = repository;
 		this.proyectoConsultaService = proyectoConsultaService;
 		this.objetivoConsultaService = objetivoConsultaService;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public IdeaResponse crear(IdeaRequest request) {
 		validar(request);
 		Idea idea = new Idea();
-		idea.setUsuarioId(USUARIO_ID);
+		idea.setUsuarioId(usuarioActual.id());
 		aplicar(idea, request);
 		return aRespuesta(repository.saveAndFlush(idea));
 	}
@@ -54,7 +54,7 @@ public class IdeaService {
 		if (soloLibres && (proyectoId != null || objetivoId != null)) {
 			throw new IdeaInvalidaException("'libres=true' no se puede combinar con proyectoId ni objetivoId");
 		}
-		return repository.listar(USUARIO_ID, estado, proyectoId, objetivoId, soloLibres).stream()
+		return repository.listar(usuarioActual.id(), estado, proyectoId, objetivoId, soloLibres).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -108,10 +108,10 @@ public class IdeaService {
 	public List<Long> idsLigadas(Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
 		Set<Long> ids = new LinkedHashSet<>();
 		if (!proyectoIds.isEmpty()) {
-			repository.findByUsuarioIdAndProyectoIdIn(USUARIO_ID, proyectoIds).forEach(i -> ids.add(i.getId()));
+			repository.findByUsuarioIdAndProyectoIdIn(usuarioActual.id(), proyectoIds).forEach(i -> ids.add(i.getId()));
 		}
 		if (!objetivoIds.isEmpty()) {
-			repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds).forEach(i -> ids.add(i.getId()));
+			repository.findByUsuarioIdAndObjetivoIdIn(usuarioActual.id(), objetivoIds).forEach(i -> ids.add(i.getId()));
 		}
 		return List.copyOf(ids);
 	}
@@ -121,7 +121,7 @@ public class IdeaService {
 		if (ideaIds.isEmpty()) {
 			return;
 		}
-		List<Idea> ideas = repository.findAllById(ideaIds);
+		List<Idea> ideas = repository.findByIdInAndUsuarioId(ideaIds, usuarioActual.id());
 		for (Idea i : ideas) {
 			if (i.getProyectoId() != null && proyectoIds.contains(i.getProyectoId())) {
 				i.setProyectoId(null);
@@ -137,12 +137,12 @@ public class IdeaService {
 		if (ideaIds.isEmpty()) {
 			return;
 		}
-		repository.deleteAll(repository.findAllById(ideaIds));
+		repository.deleteAll(repository.findByIdInAndUsuarioId(ideaIds, usuarioActual.id()));
 		repository.flush();
 	}
 
 	private Idea buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new IdeaNoEncontradaException(id));
 	}
 

@@ -1,5 +1,6 @@
 package com.agoals.objetivo;
 
+import com.agoals.common.UsuarioActual;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,14 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class ObjetivoConsultaService {
 
 	private final ObjetivoRepository repository;
+	private final UsuarioActual usuarioActual;
 
-	public ObjetivoConsultaService(ObjetivoRepository repository) {
+	public ObjetivoConsultaService(ObjetivoRepository repository, UsuarioActual usuarioActual) {
 		this.repository = repository;
+		this.usuarioActual = usuarioActual;
 	}
 
 	/** Lanza ObjetivoInvalidoException (400) si el objetivo no existe: sirve para validar el cuerpo de una petición. */
 	public void validarExiste(Long objetivoId) {
-		if (!repository.existsByIdAndUsuarioId(objetivoId, ObjetivoService.USUARIO_ID)) {
+		if (!repository.existsByIdAndUsuarioId(objetivoId, usuarioActual.id())) {
 			throw new ObjetivoInvalidoException("El objetivo no existe: " + objetivoId);
 		}
 	}

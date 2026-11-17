@@ -12,6 +12,9 @@ public interface IdeaRepository extends JpaRepository<Idea, Long> {
 
 	Optional<Idea> findByIdAndUsuarioId(Long id, Long usuarioId);
 
+	// Para ids que llegan de otro módulo: solo devuelve los del usuario (un id ajeno se comporta como inexistente).
+	List<Idea> findByIdInAndUsuarioId(Collection<Long> ids, Long usuarioId);
+
 	// Para el borrado de proyectos/objetivos (5e). Nunca llamar con una colección vacía: el service lo evita.
 	List<Idea> findByUsuarioIdAndProyectoIdIn(Long usuarioId, Collection<Long> proyectoIds);
 

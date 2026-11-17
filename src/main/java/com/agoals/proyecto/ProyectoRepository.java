@@ -13,6 +13,9 @@ public interface ProyectoRepository extends JpaRepository<Proyecto, Long> {
 
 	Optional<Proyecto> findByIdAndUsuarioId(Long id, Long usuarioId);
 
+	// Para ids que llegan de otro módulo: solo devuelve los del usuario (un id ajeno se comporta como inexistente).
+	List<Proyecto> findByIdInAndUsuarioId(Collection<Long> ids, Long usuarioId);
+
 	boolean existsByIdAndUsuarioId(Long id, Long usuarioId);
 
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);

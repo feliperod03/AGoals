@@ -9,6 +9,8 @@ import com.agoals.tarea.dto.PosponerRequest;
 import com.agoals.tarea.dto.TareaRecomendadaResponse;
 import com.agoals.tarea.dto.TareaRequest;
 import com.agoals.tarea.dto.TareaResponse;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,13 +36,24 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TareaServiceTest {
 
+	private static final Long U = 42L;
+
 	@Mock
 	TareaRepository repository;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	TareaService service;
@@ -51,7 +64,7 @@ class TareaServiceTest {
 
 	private static Tarea tarea(String titulo) {
 		Tarea t = new Tarea();
-		t.setUsuarioId(TareaService.USUARIO_ID);
+		t.setUsuarioId(U);
 		t.setTitulo(titulo);
 		return t;
 	}
@@ -64,7 +77,7 @@ class TareaServiceTest {
 
 		ArgumentCaptor<Tarea> captor = ArgumentCaptor.forClass(Tarea.class);
 		verify(repository).save(captor.capture());
-		assertThat(captor.getValue().getUsuarioId()).isEqualTo(TareaService.USUARIO_ID);
+		assertThat(captor.getValue().getUsuarioId()).isEqualTo(U);
 		assertThat(r.estado()).isEqualTo(Estado.PENDIENTE);
 		assertThat(r.titulo()).isEqualTo("Comprar pan");
 		assertThat(r.prioridad()).isEqualTo(Prioridad.ALTA);
@@ -93,7 +106,7 @@ class TareaServiceTest {
 
 	@Test
 	void crearConPadreInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(99L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(99L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.crear(request(null, null, null, 99L)))
 				.isInstanceOf(TareaInvalidaException.class);
@@ -101,7 +114,7 @@ class TareaServiceTest {
 
 	@Test
 	void crearConPadreExistenteGuardaElPadre() {
-		when(repository.findByIdAndUsuarioId(5L, TareaService.USUARIO_ID)).thenReturn(Optional.of(tarea("padre")));
+		when(repository.findByIdAndUsuarioId(5L, U)).thenReturn(Optional.of(tarea("padre")));
 		when(repository.save(any(Tarea.class))).thenAnswer(inv -> inv.getArgument(0));
 
 		TareaResponse r = service.crear(request(null, null, null, 5L));
@@ -111,28 +124,28 @@ class TareaServiceTest {
 
 	@Test
 	void obtenerExistenteDevuelveRespuesta() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(tarea("a")));
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.of(tarea("a")));
 
 		assertThat(service.obtener(1L).titulo()).isEqualTo("a");
 	}
 
 	@Test
 	void obtenerInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.obtener(1L)).isInstanceOf(TareaNoEncontradaException.class);
 	}
 
 	@Test
 	void validarExisteNoHaceNadaSiLaTareaExiste() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(tarea("a")));
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.of(tarea("a")));
 
 		service.validarExiste(1L);
 	}
 
 	@Test
 	void validarExisteLanza400ConElMensajeDelEstiloDeLosOtrosModulos() {
-		when(repository.findByIdAndUsuarioId(7L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(7L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.validarExiste(7L))
 				.isInstanceOf(TareaInvalidaException.class)
@@ -141,7 +154,7 @@ class TareaServiceTest {
 
 	@Test
 	void listarDevuelveTodasMapeadas() {
-		when(repository.findByUsuarioIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID))
+		when(repository.findByUsuarioIdOrderByFechaAscIdAsc(U))
 				.thenReturn(List.of(tarea("a"), tarea("b")));
 
 		assertThat(service.listar()).extracting(TareaResponse::titulo).containsExactly("a", "b");
@@ -150,7 +163,7 @@ class TareaServiceTest {
 	@Test
 	void actualizarCambiaLosCampos() {
 		Tarea existente = tarea("vieja");
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(existente));
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.of(existente));
 		when(repository.save(existente)).thenReturn(existente);
 
 		TareaResponse r = service.actualizar(1L, request(LocalDate.of(2026, 11, 6), null, null, null));
@@ -161,7 +174,7 @@ class TareaServiceTest {
 
 	@Test
 	void actualizarInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.actualizar(1L, request(null, null, null, null)))
 				.isInstanceOf(TareaNoEncontradaException.class);
@@ -169,7 +182,7 @@ class TareaServiceTest {
 
 	@Test
 	void actualizarConSiMismaComoPadreFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.of(tarea("a")));
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.of(tarea("a")));
 
 		assertThatThrownBy(() -> service.actualizar(1L, request(null, null, null, 1L)))
 				.isInstanceOf(TareaInvalidaException.class);
@@ -185,7 +198,7 @@ class TareaServiceTest {
 	}
 
 	private void hijasDe(Tarea padre, Tarea... hijas) {
-		when(repository.findByPadreIdAndUsuarioId(padre.getId(), TareaService.USUARIO_ID)).thenReturn(List.of(hijas));
+		when(repository.findByPadreIdAndUsuarioId(padre.getId(), U)).thenReturn(List.of(hijas));
 	}
 
 	@Test
@@ -288,7 +301,7 @@ class TareaServiceTest {
 
 	@Test
 	void eliminarInexistenteDa404ConCualquierModo() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		for (ModoSubtareas modo : new ModoSubtareas[] { null, ModoSubtareas.BORRAR, ModoSubtareas.CONSERVAR }) {
 			assertThatThrownBy(() -> service.eliminar(1L, modo)).isInstanceOf(TareaNoEncontradaException.class);
@@ -313,12 +326,12 @@ class TareaServiceTest {
 	}
 
 	private void existe(Tarea t) {
-		when(repository.findByIdAndUsuarioId(t.getId(), TareaService.USUARIO_ID)).thenReturn(Optional.of(t));
+		when(repository.findByIdAndUsuarioId(t.getId(), U)).thenReturn(Optional.of(t));
 	}
 
 	@Test
 	void agendaSeparaConHoraDeSueltasYOrdenaCadaGrupo() {
-		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(TareaService.USUARIO_ID, DIA)).thenReturn(List.of(
+		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(U, DIA)).thenReturn(List.of(
 				agendada(1, "hora 9", DIA, LocalTime.of(9, 0), null, Estado.PENDIENTE),
 				agendada(2, "hora 15", DIA, LocalTime.of(15, 0), null, Estado.PENDIENTE),
 				agendada(3, "sin prioridad", DIA, null, null, Estado.PENDIENTE),
@@ -338,7 +351,7 @@ class TareaServiceTest {
 
 	@Test
 	void agendaDeDiaVacioDevuelveListasVacias() {
-		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(TareaService.USUARIO_ID, DIA))
+		when(repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(U, DIA))
 				.thenReturn(List.of());
 
 		AgendaResponse agenda = service.agendaDelDia(DIA);
@@ -369,7 +382,7 @@ class TareaServiceTest {
 
 	@Test
 	void marcarHechaInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.marcarHecha(1L)).isInstanceOf(TareaNoEncontradaException.class);
 		verify(repository, never()).save(any());
@@ -447,7 +460,7 @@ class TareaServiceTest {
 
 	@Test
 	void posponerInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.posponer(1L, null)).isInstanceOf(TareaNoEncontradaException.class);
 	}
@@ -508,7 +521,7 @@ class TareaServiceTest {
 	@Test
 	void atrasadasOrdenaPorFechaYLuegoPrioridadAltaPrimero() {
 		LocalDate hoy = LocalDate.of(2026, 11, 6);
-		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(TareaService.USUARIO_ID, hoy, ABIERTOS)).thenReturn(List.of(
+		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(U, hoy, ABIERTOS)).thenReturn(List.of(
 				agendada(1, "reciente alta", hoy.minusDays(1), null, Prioridad.ALTA, Estado.PENDIENTE),
 				agendada(2, "vieja baja", hoy.minusDays(5), null, Prioridad.BAJA, Estado.PENDIENTE),
 				agendada(3, "vieja sin prioridad", hoy.minusDays(5), null, null, Estado.EN_PAUSA),
@@ -523,7 +536,7 @@ class TareaServiceTest {
 	@Test
 	void atrasadasSinResultadosDevuelveListaVacia() {
 		LocalDate hoy = LocalDate.of(2026, 11, 6);
-		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(TareaService.USUARIO_ID, hoy, ABIERTOS))
+		when(repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(U, hoy, ABIERTOS))
 				.thenReturn(List.of());
 
 		assertThat(service.atrasadas(hoy)).isEmpty();
@@ -570,7 +583,7 @@ class TareaServiceTest {
 
 	@Test
 	void reabrirInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.reabrir(1L)).isInstanceOf(TareaNoEncontradaException.class);
 	}
@@ -586,7 +599,7 @@ class TareaServiceTest {
 
 	@Test
 	void elMensajeDelPadreInexistenteEstaEnFemenino() {
-		when(repository.findByIdAndUsuarioId(99L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(99L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.crear(request(null, null, null, 99L)))
 				.isInstanceOf(TareaInvalidaException.class)
@@ -675,7 +688,7 @@ class TareaServiceTest {
 
 	@Test
 	void asignarProyectoAUnaTareaInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.asignarProyecto(1L, 7L)).isInstanceOf(TareaNoEncontradaException.class);
 		verify(repository, never()).save(any());
@@ -685,7 +698,7 @@ class TareaServiceTest {
 	void listarPorProyectoDevuelveLasTareasDelRepository() {
 		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
 		t.setProyectoId(7L);
-		when(repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID, 7L))
+		when(repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(U, 7L))
 				.thenReturn(List.of(t));
 
 		assertThat(service.listarPorProyecto(7L)).extracting(TareaResponse::proyectoId).containsExactly(7L);
@@ -717,7 +730,7 @@ class TareaServiceTest {
 
 	@Test
 	void asignarObjetivoAUnaTareaInexistenteFalla() {
-		when(repository.findByIdAndUsuarioId(1L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(1L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.asignarObjetivo(1L, 3L)).isInstanceOf(TareaNoEncontradaException.class);
 		verify(repository, never()).save(any());
@@ -727,7 +740,7 @@ class TareaServiceTest {
 	void listarPorObjetivoDevuelveLasTareasDelRepository() {
 		Tarea t = agendada(1, "a", DIA, null, null, Estado.PENDIENTE);
 		t.setObjetivoId(3L);
-		when(repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(TareaService.USUARIO_ID, 3L))
+		when(repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(U, 3L))
 				.thenReturn(List.of(t));
 
 		assertThat(service.listarPorObjetivo(3L)).extracting(TareaResponse::objetivoId).containsExactly(3L);
@@ -739,8 +752,8 @@ class TareaServiceTest {
 	void idsLigadasUneProyectosYObjetivosSinRepetir() {
 		Tarea a = conPadre(1, "a", null);
 		Tarea b = conPadre(2, "b", null);
-		when(repository.findByUsuarioIdAndProyectoIdIn(TareaService.USUARIO_ID, List.of(7L))).thenReturn(List.of(a, b));
-		when(repository.findByUsuarioIdAndObjetivoIdIn(TareaService.USUARIO_ID, List.of(3L))).thenReturn(List.of(b));
+		when(repository.findByUsuarioIdAndProyectoIdIn(U, List.of(7L))).thenReturn(List.of(a, b));
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(b));
 
 		assertThat(service.idsLigadas(List.of(7L), List.of(3L))).containsExactly(1L, 2L);
 	}
@@ -755,7 +768,7 @@ class TareaServiceTest {
 	@Test
 	void idsLigadasConSoloUnLadoConsultaSoloEseLado() {
 		Tarea a = conPadre(1, "a", null);
-		when(repository.findByUsuarioIdAndObjetivoIdIn(TareaService.USUARIO_ID, List.of(3L))).thenReturn(List.of(a));
+		when(repository.findByUsuarioIdAndObjetivoIdIn(U, List.of(3L))).thenReturn(List.of(a));
 
 		assertThat(service.idsLigadas(List.of(), List.of(3L))).containsExactly(1L);
 		verify(repository, never()).findByUsuarioIdAndProyectoIdIn(any(), any());
@@ -768,7 +781,7 @@ class TareaServiceTest {
 		t.setObjetivoId(3L);
 		t.setFecha(DIA);
 		t.setEstado(Estado.EN_PROGRESO);
-		when(repository.findAllById(List.of(1L))).thenReturn(List.of(t));
+		when(repository.findByIdInAndUsuarioId(List.of(1L), U)).thenReturn(List.of(t));
 
 		service.desligar(List.of(1L), List.of(7L), List.of());
 
@@ -785,7 +798,7 @@ class TareaServiceTest {
 		Tarea t = conPadre(1, "t", null);
 		t.setProyectoId(7L);
 		t.setObjetivoId(3L);
-		when(repository.findAllById(List.of(1L))).thenReturn(List.of(t));
+		when(repository.findByIdInAndUsuarioId(List.of(1L), U)).thenReturn(List.of(t));
 
 		service.desligar(List.of(1L), List.of(7L), List.of(3L));
 
@@ -805,7 +818,7 @@ class TareaServiceTest {
 		Tarea ligada = conPadre(1, "ligada", null);
 		Tarea hija = conPadre(2, "hija no ligada", 1L);
 		Tarea nieta = conPadre(3, "nieta no ligada", 2L);
-		when(repository.findAllById(List.of(1L))).thenReturn(List.of(ligada));
+		when(repository.findByIdInAndUsuarioId(List.of(1L), U)).thenReturn(List.of(ligada));
 		hijasDe(ligada, hija);
 		hijasDe(hija, nieta);
 		hijasDe(nieta);
@@ -823,7 +836,7 @@ class TareaServiceTest {
 		Tarea madre = conPadre(1, "madre ligada", null);
 		Tarea hija = conPadre(2, "hija ligada", 1L);
 		Tarea nieta = conPadre(3, "nieta", 2L);
-		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(madre, hija));
+		when(repository.findByIdInAndUsuarioId(List.of(1L, 2L), U)).thenReturn(List.of(madre, hija));
 		hijasDe(madre, hija);
 		hijasDe(hija, nieta);
 		hijasDe(nieta);
@@ -837,7 +850,7 @@ class TareaServiceTest {
 	void eliminarLigadasConLaHijaListadaPrimeroTambienLaBorraAntesQueLaMadre() {
 		Tarea madre = conPadre(1, "madre ligada", null);
 		Tarea hija = conPadre(2, "hija ligada", 1L);
-		when(repository.findAllById(List.of(2L, 1L))).thenReturn(List.of(hija, madre));
+		when(repository.findByIdInAndUsuarioId(List.of(2L, 1L), U)).thenReturn(List.of(hija, madre));
 		hijasDe(hija);
 		hijasDe(madre, hija);
 
@@ -860,7 +873,7 @@ class TareaServiceTest {
 		Tarea ligada = conPadre(1, "ligada", null);
 		Tarea hija = conPadre(2, "hija no ligada", 1L);
 		Tarea nieta = conPadre(3, "nieta no ligada", 2L);
-		when(repository.findAllById(List.of(1L))).thenReturn(List.of(ligada));
+		when(repository.findByIdInAndUsuarioId(List.of(1L), U)).thenReturn(List.of(ligada));
 		hijasDe(ligada, hija);
 		hijasDe(hija, nieta);
 		hijasDe(nieta);
@@ -875,7 +888,7 @@ class TareaServiceTest {
 		Tarea madre = conPadre(1, "madre ligada", null);
 		Tarea hija = conPadre(2, "hija ligada", 1L);
 		Tarea nieta = conPadre(3, "nieta", 2L);
-		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(madre, hija));
+		when(repository.findByIdInAndUsuarioId(List.of(1L, 2L), U)).thenReturn(List.of(madre, hija));
 		hijasDe(madre, hija);
 		hijasDe(hija, nieta);
 		hijasDe(nieta);
@@ -912,7 +925,7 @@ class TareaServiceTest {
 	}
 
 	private void candidatas(Tarea... tareas) {
-		when(repository.findCandidatasRecomendacion(TareaService.USUARIO_ID, HOY_REC, ABIERTOS))
+		when(repository.findCandidatasRecomendacion(U, HOY_REC, ABIERTOS))
 				.thenReturn(List.of(tareas));
 	}
 
@@ -1115,7 +1128,7 @@ class TareaServiceTest {
 	private static final LocalDate HASTA_REC = HOY_REC.plusDays(7);
 
 	private void futuras(Tarea... tareas) {
-		when(repository.findFuturasRecomendacion(TareaService.USUARIO_ID, HOY_REC, HASTA_REC, ABIERTOS))
+		when(repository.findFuturasRecomendacion(U, HOY_REC, HASTA_REC, ABIERTOS))
 				.thenReturn(List.of(tareas));
 	}
 
@@ -1506,7 +1519,7 @@ class TareaServiceTest {
 
 	@Test
 	void agendarTareaInexistenteLanza404() {
-		when(repository.findByIdAndUsuarioId(99L, TareaService.USUARIO_ID)).thenReturn(Optional.empty());
+		when(repository.findByIdAndUsuarioId(99L, U)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.agendar(99L, agendarReq(true))).isInstanceOf(TareaNoEncontradaException.class);
 	}

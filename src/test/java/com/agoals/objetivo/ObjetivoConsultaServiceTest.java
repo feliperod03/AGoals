@@ -1,5 +1,7 @@
 package com.agoals.objetivo;
 
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,27 +11,38 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ObjetivoConsultaServiceTest {
 
+	private static final Long U = 42L;
+
 	@Mock
 	ObjetivoRepository repository;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	ObjetivoConsultaService service;
 
 	@Test
 	void validarExisteNoHaceNadaSiElObjetivoExiste() {
-		when(repository.existsByIdAndUsuarioId(3L, ObjetivoService.USUARIO_ID)).thenReturn(true);
+		when(repository.existsByIdAndUsuarioId(3L, U)).thenReturn(true);
 
 		assertThatCode(() -> service.validarExiste(3L)).doesNotThrowAnyException();
 	}
 
 	@Test
 	void validarExisteDa400ConElMensajeSiNoExiste() {
-		when(repository.existsByIdAndUsuarioId(77L, ObjetivoService.USUARIO_ID)).thenReturn(false);
+		when(repository.existsByIdAndUsuarioId(77L, U)).thenReturn(false);
 
 		assertThatThrownBy(() -> service.validarExiste(77L))
 				.isInstanceOf(ObjetivoInvalidoException.class)
@@ -43,6 +56,6 @@ class ObjetivoConsultaServiceTest {
 		var constructores = ObjetivoConsultaService.class.getConstructors();
 
 		assertThat(constructores).hasSize(1);
-		assertThat(constructores[0].getParameterTypes()).containsExactly(ObjetivoRepository.class);
+		assertThat(constructores[0].getParameterTypes()).containsExactly(ObjetivoRepository.class, UsuarioActual.class);
 	}
 }

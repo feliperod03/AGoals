@@ -4,6 +4,8 @@ import com.agoals.common.Prioridad;
 import com.agoals.evento.dto.EventoDeSerie;
 import com.agoals.evento.dto.EventoRequest;
 import com.agoals.evento.dto.EventoResponse;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,15 +23,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class EventoServiceTest {
 
-	private static final Long U = EventoService.USUARIO_ID;
+	private static final Long U = 42L;
 
 	@Mock
 	EventoRepository repository;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	EventoService service;

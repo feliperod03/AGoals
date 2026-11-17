@@ -3,6 +3,8 @@ package com.agoals.recordatorio;
 import com.agoals.evento.EventoService;
 import com.agoals.recordatorio.dto.RecordatorioDeEvento;
 import com.agoals.tarea.TareaService;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,13 +21,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 // sincronizarDeEventos: lo usa el módulo serie para dejar el recordatorio de cada ocurrencia como se pidió.
 @ExtendWith(MockitoExtension.class)
 class RecordatorioSincronizacionTest {
 
-	private static final Long U = RecordatorioService.USUARIO_ID;
+	private static final Long U = 42L;
 
 	@Mock
 	RecordatorioRepository repository;
@@ -35,6 +38,14 @@ class RecordatorioSincronizacionTest {
 
 	@Mock
 	EventoService eventoService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	RecordatorioService service;

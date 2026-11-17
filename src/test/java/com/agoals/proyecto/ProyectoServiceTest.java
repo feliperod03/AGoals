@@ -12,6 +12,8 @@ import com.agoals.proyecto.dto.ProyectoRequest;
 import com.agoals.proyecto.dto.ProyectoResponse;
 import com.agoals.tarea.TareaService;
 import com.agoals.tarea.dto.TareaResponse;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -37,12 +39,13 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ProyectoServiceTest {
 
-	private static final Long U = ProyectoService.USUARIO_ID;
+	private static final Long U = 42L;
 
 	@Mock
 	ProyectoRepository repository;
@@ -55,6 +58,14 @@ class ProyectoServiceTest {
 
 	@Mock
 	IdeaService ideaService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	ProyectoService service;
@@ -827,7 +838,7 @@ class ProyectoServiceTest {
 		Proyecto p10 = delObjetivo(10, null, 3L);
 		Proyecto p12 = delObjetivo(12, 10L, null);
 		Proyecto rescatado = delObjetivo(11, 10L, 4L);
-		when(repository.findAllById(any())).thenReturn(List.of(p12, rescatado, p10)); // orden de la base: arbitrario
+		when(repository.findByIdInAndUsuarioId(any(), eq(U))).thenReturn(List.of(p12, rescatado, p10)); // orden de la base: arbitrario
 		Map<Long, Long> rescatados = new LinkedHashMap<>();
 		rescatados.put(11L, 9L);
 
@@ -844,7 +855,7 @@ class ProyectoServiceTest {
 	void desligarDeObjetivoPoneObjetivoNullYGuardaConFlush() {
 		Proyecto a = delObjetivo(7, null, 3L);
 		Proyecto b = delObjetivo(8, 7L, 3L);
-		when(repository.findAllById(List.of(7L, 8L))).thenReturn(List.of(a, b));
+		when(repository.findByIdInAndUsuarioId(List.of(7L, 8L), U)).thenReturn(List.of(a, b));
 
 		service.desligarDeObjetivo(List.of(7L, 8L));
 

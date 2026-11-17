@@ -1,5 +1,6 @@
 package com.agoals.objetivo;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
@@ -22,29 +23,28 @@ import java.util.List;
 @Transactional
 public class ObjetivoService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final ObjetivoRepository repository;
 	private final ProyectoService proyectoService;
 	private final TareaService tareaService;
 	private final IdeaService ideaService;
+	private final UsuarioActual usuarioActual;
 
 	// Dependencias en un solo sentido: objetivo -> proyecto, objetivo -> tarea, objetivo -> idea.
 	// ProyectoService valida objetivos con ObjetivoConsultaService, no con esta clase (evita el ciclo).
 	// IdeaService valida objetivos con ObjetivoConsultaService, tampoco con esta clase.
 	public ObjetivoService(ObjetivoRepository repository, ProyectoService proyectoService,
-			TareaService tareaService, IdeaService ideaService) {
+			TareaService tareaService, IdeaService ideaService, UsuarioActual usuarioActual) {
 		this.repository = repository;
 		this.proyectoService = proyectoService;
 		this.tareaService = tareaService;
 		this.ideaService = ideaService;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public ObjetivoResponse crear(ObjetivoRequest request) {
 		validar(request, null);
 		Objetivo objetivo = new Objetivo();
-		objetivo.setUsuarioId(USUARIO_ID);
+		objetivo.setUsuarioId(usuarioActual.id());
 		aplicar(objetivo, request);
 		return aRespuesta(repository.saveAndFlush(objetivo));
 	}
@@ -56,7 +56,7 @@ public class ObjetivoService {
 
 	@Transactional(readOnly = true)
 	public List<ObjetivoResponse> listar(Estado estado) {
-		return repository.listar(USUARIO_ID, estado).stream()
+		return repository.listar(usuarioActual.id(), estado).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -86,13 +86,13 @@ public class ObjetivoService {
 	AlcanceBorradoObjetivo calcularAlcance(Long id, EleccionesBorradoObjetivo elecciones) {
 		EleccionesBorradoObjetivo e = elecciones != null ? elecciones : EleccionesBorradoObjetivo.NINGUNA;
 		Objetivo raiz = buscar(id);
-		List<Objetivo> hijos = repository.findByPadreIdAndUsuarioId(id, USUARIO_ID);
+		List<Objetivo> hijos = repository.findByPadreIdAndUsuarioId(id, usuarioActual.id());
 		if (!hijos.isEmpty() && e.subobjetivos() == null) {
 			throw conflicto(raiz, "subobjetivos", "borrarlos o conservarlos");
 		}
 		List<Objetivo> aBorrar = e.subobjetivos() == ModoBorrado.BORRAR
 				? Jerarquia.hojasPrimero(List.of(raiz), Objetivo::getId,
-						oid -> repository.findByPadreIdAndUsuarioId(oid, USUARIO_ID), o -> false)
+						oid -> repository.findByPadreIdAndUsuarioId(oid, usuarioActual.id()), o -> false)
 				: List.of(raiz);
 		List<Long> objetivoIds = aBorrar.stream().map(Objetivo::getId).toList();
 
@@ -208,13 +208,13 @@ public class ObjetivoService {
 	}
 
 	private Objetivo buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new ObjetivoNoEncontradoException(id));
 	}
 
 	private void validar(ObjetivoRequest r, Long idActual) {
 		Jerarquia.validarPadre("objetivo", r.padreId(), idActual,
-				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Objetivo::getPadreId,
+				id -> repository.findByIdAndUsuarioId(id, usuarioActual.id()), Objetivo::getPadreId,
 				ObjetivoInvalidoException::new);
 	}
 

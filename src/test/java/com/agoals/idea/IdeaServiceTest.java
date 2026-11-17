@@ -7,6 +7,8 @@ import com.agoals.objetivo.ObjetivoConsultaService;
 import com.agoals.objetivo.ObjetivoInvalidoException;
 import com.agoals.proyecto.ProyectoConsultaService;
 import com.agoals.proyecto.ProyectoInvalidoException;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -26,12 +28,13 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IdeaServiceTest {
 
-	private static final Long U = IdeaService.USUARIO_ID;
+	private static final Long U = 42L;
 
 	@Mock
 	IdeaRepository repository;
@@ -41,6 +44,14 @@ class IdeaServiceTest {
 
 	@Mock
 	ObjetivoConsultaService objetivoConsultaService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	IdeaService service;
@@ -448,7 +459,7 @@ class IdeaServiceTest {
 		delObjetivo.setObjetivoId(5L);
 		Idea deOtroProyecto = idea(3);
 		deOtroProyecto.setProyectoId(99L);
-		when(repository.findAllById(List.of(1L, 2L, 3L))).thenReturn(List.of(delProyecto, delObjetivo, deOtroProyecto));
+		when(repository.findByIdInAndUsuarioId(List.of(1L, 2L, 3L), U)).thenReturn(List.of(delProyecto, delObjetivo, deOtroProyecto));
 
 		service.desligar(List.of(1L, 2L, 3L), List.of(3L), List.of(5L));
 
@@ -470,7 +481,7 @@ class IdeaServiceTest {
 	void eliminarLigadasBorraLasIdeasYHaceFlush() {
 		Idea a = idea(1);
 		Idea b = idea(2);
-		when(repository.findAllById(List.of(1L, 2L))).thenReturn(List.of(a, b));
+		when(repository.findByIdInAndUsuarioId(List.of(1L, 2L), U)).thenReturn(List.of(a, b));
 
 		service.eliminarLigadas(List.of(1L, 2L));
 

@@ -1,5 +1,6 @@
 package com.agoals.tarea;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
 import com.agoals.tarea.dto.AgendaResponse;
@@ -29,19 +30,18 @@ import java.util.stream.Stream;
 @Transactional
 public class TareaService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final TareaRepository repository;
+	private final UsuarioActual usuarioActual;
 
-	public TareaService(TareaRepository repository) {
+	public TareaService(TareaRepository repository, UsuarioActual usuarioActual) {
 		this.repository = repository;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public TareaResponse crear(TareaRequest request) {
 		validar(request, null);
 		Tarea tarea = new Tarea();
-		tarea.setUsuarioId(USUARIO_ID);
+		tarea.setUsuarioId(usuarioActual.id());
 		aplicar(tarea, request);
 		return aRespuesta(repository.save(tarea));
 	}
@@ -54,14 +54,14 @@ public class TareaService {
 	/** Solo lectura, para otros módulos (recordatorio): 400 si la tarea no existe, para validar el cuerpo de una petición. */
 	@Transactional(readOnly = true)
 	public void validarExiste(Long id) {
-		if (repository.findByIdAndUsuarioId(id, USUARIO_ID).isEmpty()) {
+		if (repository.findByIdAndUsuarioId(id, usuarioActual.id()).isEmpty()) {
 			throw new TareaInvalidaException("La tarea no existe: " + id);
 		}
 	}
 
 	@Transactional(readOnly = true)
 	public List<TareaResponse> listar() {
-		return repository.findByUsuarioIdOrderByFechaAscIdAsc(USUARIO_ID).stream()
+		return repository.findByUsuarioIdOrderByFechaAscIdAsc(usuarioActual.id()).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -81,7 +81,7 @@ public class TareaService {
 	 */
 	public void eliminar(Long id, ModoSubtareas modo) {
 		Tarea tarea = buscar(id);
-		List<Tarea> hijas = repository.findByPadreIdAndUsuarioId(id, USUARIO_ID);
+		List<Tarea> hijas = repository.findByPadreIdAndUsuarioId(id, usuarioActual.id());
 		if (hijas.isEmpty()) {
 			repository.delete(tarea);
 			return;
@@ -111,7 +111,7 @@ public class TareaService {
 			niveles.add(actual);
 			List<Tarea> siguiente = new ArrayList<>();
 			for (Tarea t : actual) {
-				for (Tarea h : repository.findByPadreIdAndUsuarioId(t.getId(), USUARIO_ID)) {
+				for (Tarea h : repository.findByPadreIdAndUsuarioId(t.getId(), usuarioActual.id())) {
 					if (visitados.add(h.getId())) {
 						siguiente.add(h);
 					}
@@ -133,7 +133,7 @@ public class TareaService {
 
 	@Transactional(readOnly = true)
 	public AgendaResponse agendaDelDia(LocalDate fecha) {
-		List<Tarea> delDia = repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(USUARIO_ID, fecha);
+		List<Tarea> delDia = repository.findByUsuarioIdAndFechaOrderByHoraInicioAscIdAsc(usuarioActual.id(), fecha);
 		// La consulta ya ordena por hora e id; las que tienen hora conservan ese orden.
 		List<TareaResponse> conHora = delDia.stream()
 				.filter(t -> t.getHoraInicio() != null)
@@ -162,7 +162,7 @@ public class TareaService {
 	 */
 	@Transactional(readOnly = true)
 	public List<TareaResponse> atrasadas(LocalDate fecha) {
-		return repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(USUARIO_ID, fecha, ESTADOS_ABIERTOS).stream()
+		return repository.findByUsuarioIdAndFechaBeforeAndEstadoIn(usuarioActual.id(), fecha, ESTADOS_ABIERTOS).stream()
 				.sorted(ORDEN_ATRASADAS)
 				.map(this::aRespuesta)
 				.toList();
@@ -210,7 +210,7 @@ public class TareaService {
 
 		// Con hasta == fecha el rango está vacío: ni se consulta.
 		List<Tarea> futuras = hasta == null || hasta.equals(fecha) ? List.of()
-				: repository.findFuturasRecomendacion(USUARIO_ID, fecha, hasta, ESTADOS_ABIERTOS);
+				: repository.findFuturasRecomendacion(usuarioActual.id(), fecha, hasta, ESTADOS_ABIERTOS);
 		List<Tarea> futurasVisibles = futurasVisibles(futuras, arbol.porId());
 		Map<Long, Tarea> porId = new HashMap<>(arbol.porId());
 		futurasVisibles.forEach(t -> porId.put(t.getId(), t));
@@ -250,7 +250,7 @@ public class TareaService {
 	}
 
 	private ArbolCandidatas cargarCandidatas(LocalDate hoy) {
-		List<Tarea> candidatas = repository.findCandidatasRecomendacion(USUARIO_ID, hoy, ESTADOS_ABIERTOS);
+		List<Tarea> candidatas = repository.findCandidatasRecomendacion(usuarioActual.id(), hoy, ESTADOS_ABIERTOS);
 		Map<Long, Tarea> porId = new HashMap<>();
 		Map<Long, List<Tarea>> hijasDe = new HashMap<>();
 		for (Tarea t : candidatas) {
@@ -424,7 +424,7 @@ public class TareaService {
 
 	@Transactional(readOnly = true)
 	public List<TareaResponse> listarPorProyecto(Long proyectoId) {
-		return repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(USUARIO_ID, proyectoId).stream()
+		return repository.findByUsuarioIdAndProyectoIdOrderByFechaAscIdAsc(usuarioActual.id(), proyectoId).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -439,7 +439,7 @@ public class TareaService {
 	/** Solo las tareas ligadas directamente al objetivo (objetivo_id), no las que llegan vía sus proyectos. */
 	@Transactional(readOnly = true)
 	public List<TareaResponse> listarPorObjetivo(Long objetivoId) {
-		return repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(USUARIO_ID, objetivoId).stream()
+		return repository.findByUsuarioIdAndObjetivoIdOrderByFechaAscIdAsc(usuarioActual.id(), objetivoId).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -453,10 +453,10 @@ public class TareaService {
 	public List<Long> idsLigadas(Collection<Long> proyectoIds, Collection<Long> objetivoIds) {
 		Set<Long> ids = new LinkedHashSet<>();
 		if (!proyectoIds.isEmpty()) {
-			repository.findByUsuarioIdAndProyectoIdIn(USUARIO_ID, proyectoIds).forEach(t -> ids.add(t.getId()));
+			repository.findByUsuarioIdAndProyectoIdIn(usuarioActual.id(), proyectoIds).forEach(t -> ids.add(t.getId()));
 		}
 		if (!objetivoIds.isEmpty()) {
-			repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds).forEach(t -> ids.add(t.getId()));
+			repository.findByUsuarioIdAndObjetivoIdIn(usuarioActual.id(), objetivoIds).forEach(t -> ids.add(t.getId()));
 		}
 		return List.copyOf(ids);
 	}
@@ -469,7 +469,7 @@ public class TareaService {
 		if (tareaIds.isEmpty()) {
 			return;
 		}
-		List<Tarea> tareas = repository.findAllById(tareaIds);
+		List<Tarea> tareas = repository.findByIdInAndUsuarioId(tareaIds, usuarioActual.id());
 		for (Tarea t : tareas) {
 			if (t.getProyectoId() != null && proyectoIds.contains(t.getProyectoId())) {
 				t.setProyectoId(null);
@@ -505,13 +505,13 @@ public class TareaService {
 
 	// Las tareas con todos sus descendientes, hojas primero. Lo comparten el borrado y su conteo para que no diverjan.
 	private List<Tarea> conSubtareas(Collection<Long> tareaIds) {
-		List<Tarea> raices = repository.findAllById(tareaIds);
+		List<Tarea> raices = repository.findByIdInAndUsuarioId(tareaIds, usuarioActual.id());
 		return Jerarquia.hojasPrimero(raices, Tarea::getId,
-				id -> repository.findByPadreIdAndUsuarioId(id, USUARIO_ID), t -> false);
+				id -> repository.findByPadreIdAndUsuarioId(id, usuarioActual.id()), t -> false);
 	}
 
 	private Tarea buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new TareaNoEncontradaException(id));
 	}
 
@@ -528,7 +528,7 @@ public class TareaService {
 		}
 		// Padre existente y sin ciclos (una tarea no puede quedar como su propia descendiente).
 		Jerarquia.validarPadre("tarea", true, r.padreId(), idActual,
-				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Tarea::getPadreId,
+				id -> repository.findByIdAndUsuarioId(id, usuarioActual.id()), Tarea::getPadreId,
 				TareaInvalidaException::new);
 	}
 

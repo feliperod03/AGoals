@@ -14,6 +14,9 @@ public interface TareaRepository extends JpaRepository<Tarea, Long> {
 
 	Optional<Tarea> findByIdAndUsuarioId(Long id, Long usuarioId);
 
+	// Para ids que llegan de otro módulo: solo devuelve los del usuario (un id ajeno se comporta como inexistente).
+	List<Tarea> findByIdInAndUsuarioId(Collection<Long> ids, Long usuarioId);
+
 	boolean existsByPadreIdAndUsuarioId(Long padreId, Long usuarioId);
 
 	List<Tarea> findByPadreIdAndUsuarioId(Long padreId, Long usuarioId);

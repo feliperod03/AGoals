@@ -13,6 +13,8 @@ import com.agoals.proyecto.PlanBorradoProyectos;
 import com.agoals.proyecto.ProyectoService;
 import com.agoals.tarea.TareaService;
 import com.agoals.tarea.dto.TareaResponse;
+import com.agoals.common.UsuarioActual;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -34,12 +36,13 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ObjetivoServiceTest {
 
-	private static final Long U = ObjetivoService.USUARIO_ID;
+	private static final Long U = 42L;
 
 	@Mock
 	ObjetivoRepository repository;
@@ -52,6 +55,14 @@ class ObjetivoServiceTest {
 
 	@Mock
 	IdeaService ideaService;
+
+	@Mock
+	UsuarioActual usuarioActual;
+
+	@BeforeEach
+	void usuarioActualDePrueba() {
+		lenient().when(usuarioActual.id()).thenReturn(U);
+	}
 
 	@InjectMocks
 	ObjetivoService service;

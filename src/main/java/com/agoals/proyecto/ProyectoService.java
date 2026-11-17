@@ -1,5 +1,6 @@
 package com.agoals.proyecto;
 
+import com.agoals.common.UsuarioActual;
 import com.agoals.common.ConteoBorrado;
 import com.agoals.common.Estado;
 import com.agoals.common.Jerarquia;
@@ -29,29 +30,28 @@ import java.util.function.Predicate;
 @Transactional
 public class ProyectoService {
 
-	// La v1 no tiene login: todo pertenece al usuario creado en V2.
-	static final Long USUARIO_ID = 1L;
-
 	private final ProyectoRepository repository;
 	private final TareaService tareaService;
 	private final ObjetivoConsultaService objetivoConsultaService;
 	private final IdeaService ideaService;
+	private final UsuarioActual usuarioActual;
 
 	// Dependencias en un solo sentido: proyecto -> tarea, proyecto -> objetivo (solo la consulta) y proyecto -> idea.
 	// Se usa ObjetivoConsultaService y no ObjetivoService porque ObjetivoService depende de esta clase.
 	// IdeaService valida proyectos con ProyectoConsultaService, no con esta clase (evita el ciclo).
 	public ProyectoService(ProyectoRepository repository, TareaService tareaService,
-			ObjetivoConsultaService objetivoConsultaService, IdeaService ideaService) {
+			ObjetivoConsultaService objetivoConsultaService, IdeaService ideaService, UsuarioActual usuarioActual) {
 		this.repository = repository;
 		this.tareaService = tareaService;
 		this.objetivoConsultaService = objetivoConsultaService;
 		this.ideaService = ideaService;
+		this.usuarioActual = usuarioActual;
 	}
 
 	public ProyectoResponse crear(ProyectoRequest request) {
 		validar(request, null);
 		Proyecto proyecto = new Proyecto();
-		proyecto.setUsuarioId(USUARIO_ID);
+		proyecto.setUsuarioId(usuarioActual.id());
 		aplicar(proyecto, request);
 		return aRespuesta(repository.saveAndFlush(proyecto));
 	}
@@ -63,7 +63,7 @@ public class ProyectoService {
 
 	@Transactional(readOnly = true)
 	public List<ProyectoResponse> listar(Estado estado, Long objetivoId) {
-		return repository.listar(USUARIO_ID, estado, objetivoId).stream()
+		return repository.listar(usuarioActual.id(), estado, objetivoId).stream()
 				.map(this::aRespuesta)
 				.toList();
 	}
@@ -89,13 +89,13 @@ public class ProyectoService {
 	AlcanceBorradoProyecto calcularAlcance(Long id, EleccionesBorradoProyecto elecciones) {
 		EleccionesBorradoProyecto e = elecciones != null ? elecciones : EleccionesBorradoProyecto.NINGUNA;
 		Proyecto raiz = buscar(id);
-		List<Proyecto> hijos = repository.findByPadreIdAndUsuarioId(id, USUARIO_ID);
+		List<Proyecto> hijos = repository.findByPadreIdAndUsuarioId(id, usuarioActual.id());
 		if (!hijos.isEmpty() && e.subproyectos() == null) {
 			throw conflicto(raiz, "subproyectos", "borrarlos o conservarlos");
 		}
 		List<Proyecto> aBorrar = e.subproyectos() == ModoBorrado.BORRAR
 				? Jerarquia.hojasPrimero(List.of(raiz), Proyecto::getId,
-						pid -> repository.findByPadreIdAndUsuarioId(pid, USUARIO_ID), p -> false)
+						pid -> repository.findByPadreIdAndUsuarioId(pid, usuarioActual.id()), p -> false)
 				: List.of(raiz);
 		List<Long> ids = aBorrar.stream().map(Proyecto::getId).toList();
 
@@ -176,7 +176,7 @@ public class ProyectoService {
 		if (objetivoIds.isEmpty()) {
 			return List.of();
 		}
-		return repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds).stream().map(Proyecto::getId).toList();
+		return repository.findByUsuarioIdAndObjetivoIdIn(usuarioActual.id(), objetivoIds).stream().map(Proyecto::getId).toList();
 	}
 
 	/**
@@ -190,10 +190,10 @@ public class ProyectoService {
 		if (objetivoIds.isEmpty()) {
 			return PlanBorradoProyectos.VACIO;
 		}
-		List<Proyecto> raices = repository.findByUsuarioIdAndObjetivoIdIn(USUARIO_ID, objetivoIds);
+		List<Proyecto> raices = repository.findByUsuarioIdAndObjetivoIdIn(usuarioActual.id(), objetivoIds);
 		Map<Long, List<Proyecto>> hijas = new HashMap<>();
 		Function<Long, List<Proyecto>> hijasDe = pid ->
-				hijas.computeIfAbsent(pid, k -> repository.findByPadreIdAndUsuarioId(k, USUARIO_ID));
+				hijas.computeIfAbsent(pid, k -> repository.findByPadreIdAndUsuarioId(k, usuarioActual.id()));
 		Predicate<Proyecto> rescatado = q -> q.getObjetivoId() != null && !objetivoIds.contains(q.getObjetivoId());
 
 		List<Proyecto> aBorrar = Jerarquia.hojasPrimero(raices, Proyecto::getId, hijasDe, rescatado);
@@ -231,7 +231,7 @@ public class ProyectoService {
 		Set<Long> todos = new HashSet<>(plan.aBorrar());
 		todos.addAll(plan.rescatados().keySet());
 		Map<Long, Proyecto> porId = new HashMap<>();
-		repository.findAllById(todos).forEach(p -> porId.put(p.getId(), p));
+		repository.findByIdInAndUsuarioId(todos, usuarioActual.id()).forEach(p -> porId.put(p.getId(), p));
 
 		if (!plan.rescatados().isEmpty()) {
 			List<Proyecto> salvados = new ArrayList<>();
@@ -251,7 +251,7 @@ public class ProyectoService {
 		if (proyectoIds.isEmpty()) {
 			return;
 		}
-		List<Proyecto> proyectos = repository.findAllById(proyectoIds);
+		List<Proyecto> proyectos = repository.findByIdInAndUsuarioId(proyectoIds, usuarioActual.id());
 		proyectos.forEach(p -> p.setObjetivoId(null));
 		repository.saveAllAndFlush(proyectos);
 	}
@@ -280,13 +280,13 @@ public class ProyectoService {
 	}
 
 	private Proyecto buscar(Long id) {
-		return repository.findByIdAndUsuarioId(id, USUARIO_ID)
+		return repository.findByIdAndUsuarioId(id, usuarioActual.id())
 				.orElseThrow(() -> new ProyectoNoEncontradoException(id));
 	}
 
 	private void validar(ProyectoRequest r, Long idActual) {
 		Jerarquia.validarPadre("proyecto", r.padreId(), idActual,
-				id -> repository.findByIdAndUsuarioId(id, USUARIO_ID), Proyecto::getPadreId,
+				id -> repository.findByIdAndUsuarioId(id, usuarioActual.id()), Proyecto::getPadreId,
 				ProyectoInvalidoException::new);
 		// 400 "El objetivo no existe: N" si no existe. La FK de la base queda como red de seguridad.
 		if (r.objetivoId() != null) {
