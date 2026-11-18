@@ -44,21 +44,120 @@ export function del(path: string, query?: Query): Promise<void> {
   return request<void>(path, { method: 'DELETE', query })
 }
 
-async function request<T>(path: string, { method = 'GET', query, body }: Opciones): Promise<T> {
-  let respuesta: Response
+const MENSAJE_SIN_CONEXION = 'No se pudo conectar con el servidor. Revisa que el backend esté en marcha.'
+
+// --- CSRF ---------------------------------------------------------------------------------------
+// Toda escritura lleva la cabecera X-XSRF-TOKEN con el valor de la cookie XSRF-TOKEN. El login y el
+// logout renuevan esa cookie, así que se lee en CADA petición y nunca se guarda.
+
+const COOKIE_CSRF = 'XSRF-TOKEN'
+const CABECERA_CSRF = 'X-XSRF-TOKEN'
+const RUTA_CSRF = '/api/auth/csrf'
+
+function leerCookie(nombre: string): string | null {
+  for (const parte of document.cookie.split(';')) {
+    const i = parte.indexOf('=')
+    if (i < 0 || parte.slice(0, i).trim() !== nombre) continue
+    const valor = parte.slice(i + 1).trim()
+    if (valor === '') return null
+    try {
+      return decodeURIComponent(valor)
+    } catch {
+      return valor
+    }
+  }
+  return null
+}
+
+let csrfEnCurso: Promise<void> | null = null
+
+/**
+ * Pide al servidor que deje la cookie XSRF-TOKEN (GET /api/auth/csrf, 204). Las llamadas simultáneas
+ * comparten una sola petición; la promesa compartida se libera al resolverse O fallar, para que un
+ * fallo no bloquee las escrituras siguientes.
+ */
+export function pedirCsrf(): Promise<void> {
+  if (csrfEnCurso) return csrfEnCurso
+  const promesa = (async () => {
+    let respuesta: Response
+    try {
+      respuesta = await fetch(RUTA_CSRF, { method: 'GET' })
+    } catch {
+      throw new ApiError(0, MENSAJE_SIN_CONEXION)
+    }
+    if (!respuesta.ok) {
+      throw errorDeRespuesta(respuesta.status, await respuesta.text())
+    }
+  })()
+  csrfEnCurso = promesa
+  // `then` con dos manejadores: libera en ambos casos y no deja un rechazo sin atender.
+  const liberar = () => {
+    if (csrfEnCurso === promesa) csrfEnCurso = null
+  }
+  promesa.then(liberar, liberar)
+  return promesa
+}
+
+// --- Sesión perdida -----------------------------------------------------------------------------
+// `api/` no conoce la app: quien quiera enterarse de un 401 se registra aquí (lo hace VigiaSesion).
+
+type OyentePerdidaDeSesion = () => void
+const oyentesSesion = new Set<OyentePerdidaDeSesion>()
+
+/** Registra un oyente para los 401 de cualquier petición que no sea de `/api/auth/*`. Devuelve cómo darlo de baja. */
+export function alPerderSesion(oyente: OyentePerdidaDeSesion): () => void {
+  oyentesSesion.add(oyente)
+  return () => {
+    oyentesSesion.delete(oyente)
+  }
+}
+
+function avisarSesionPerdida() {
+  for (const oyente of [...oyentesSesion]) oyente()
+}
+
+// --- Petición -----------------------------------------------------------------------------------
+
+async function enviar(url: string, method: string, cuerpo: string | undefined, esEscritura: boolean): Promise<Response> {
+  const headers: Record<string, string> = {}
+  if (cuerpo !== undefined) headers['Content-Type'] = 'application/json'
+  if (esEscritura) {
+    const token = leerCookie(COOKIE_CSRF)
+    if (token !== null) headers[CABECERA_CSRF] = token
+  }
   try {
-    respuesta = await fetch(construirUrl(path, query), {
+    return await fetch(url, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: Object.keys(headers).length === 0 ? undefined : headers,
+      body: cuerpo,
     })
   } catch {
-    throw new ApiError(0, 'No se pudo conectar con el servidor. Revisa que el backend esté en marcha.')
+    throw new ApiError(0, MENSAJE_SIN_CONEXION)
+  }
+}
+
+async function request<T>(path: string, { method = 'GET', query, body }: Opciones): Promise<T> {
+  const url = construirUrl(path, query)
+  const cuerpo = body === undefined ? undefined : JSON.stringify(body)
+  const esEscritura = method !== 'GET'
+
+  if (esEscritura && leerCookie(COOKIE_CSRF) === null) {
+    await pedirCsrf()
+  }
+  let respuesta = await enviar(url, method, cuerpo, esEscritura)
+  // Hoy el backend solo responde 403 por CSRF: se renueva el token y se reintenta UNA vez.
+  if (esEscritura && respuesta.status === 403) {
+    await pedirCsrf()
+    respuesta = await enviar(url, method, cuerpo, esEscritura)
   }
 
   const texto = await respuesta.text()
 
   if (!respuesta.ok) {
+    // Los 401 de /api/auth/* (login con clave mala, /yo sin sesión) los maneja quien los llama.
+    if (respuesta.status === 401 && !path.startsWith('/api/auth/')) {
+      avisarSesionPerdida()
+    }
     throw errorDeRespuesta(respuesta.status, texto)
   }
   // 204 (DELETE) y cualquier respuesta sin cuerpo.

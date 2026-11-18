@@ -1,7 +1,9 @@
-import { Archive, CalendarDays, FolderKanban, Lightbulb, Monitor, Moon, Sun, Target, type LucideIcon } from 'lucide-react'
+import { Archive, CalendarDays, FolderKanban, Lightbulb, LogOut, Monitor, Moon, Sun, Target, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { AvisoVencidos } from '@/features/agenda/AvisoVencidos'
+import { useSalir } from '@/features/sesion/useSalir'
+import { useSesion } from '@/features/sesion/useSesion'
 import { cn } from '@/lib/utils'
 import type { Preferencia } from './tema'
 import { siguientePreferencia } from './tema'
@@ -39,6 +41,29 @@ function BotonTema() {
   )
 }
 
+/** Usuario de la sesión y «Salir». Si el logout falla igual se limpia todo y se va a /login (ver `useSalir`). */
+function CuentaYSalir() {
+  const { data: usuario } = useSesion()
+  const salir = useSalir()
+  const nombre = usuario?.nombreUsuario || usuario?.email
+  return (
+    <div className="flex items-center gap-2 border-t border-line px-5 py-2 md:mt-auto md:py-4">
+      <span title={usuario?.email} className="min-w-0 flex-1 truncate text-xs text-mut">
+        {nombre}
+      </span>
+      <button
+        type="button"
+        onClick={() => salir.mutate()}
+        disabled={salir.isPending}
+        className="flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-mut transition-colors hover:bg-line/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 max-md:h-11"
+      >
+        <LogOut className="size-4" aria-hidden="true" />
+        {salir.isPending ? 'Saliendo…' : 'Salir'}
+      </button>
+    </div>
+  )
+}
+
 /**
  * Marco de la app. Responsive solo con CSS: en pantallas anchas (md+) la barra es
  * una columna fija a la izquierda; en pantallas angostas pasa a ser una franja
@@ -47,7 +72,7 @@ function BotonTema() {
 export function Layout() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b border-line bg-side md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0">
+      <aside className="border-b border-line bg-side md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:border-r md:border-b-0">
         <div className="flex items-center gap-3 px-5 pt-4 md:pt-6">
           <span className="font-serif text-2xl font-semibold text-tx">AGoals</span>
           <BotonTema />
@@ -74,6 +99,7 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <CuentaYSalir />
       </aside>
 
       <main className="min-w-0 flex-1 px-4 py-6 md:px-10 md:py-8">

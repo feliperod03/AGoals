@@ -89,7 +89,7 @@ describe('api/objetivos', () => {
     expect(url).toBe('/api/objetivos/7/tareas/12')
     expect(init.method).toBe('PUT')
     expect(init.body).toBeUndefined()
-    expect(init.headers).toBeUndefined()
+    expect(init.headers).not.toHaveProperty('Content-Type')
   })
 
   it('quitarTarea hace DELETE y tolera el 204 sin cuerpo', async () => {

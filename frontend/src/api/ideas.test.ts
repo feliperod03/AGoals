@@ -56,7 +56,7 @@ describe('api/ideas', () => {
     expect(url).toBe('/api/ideas/7/concluir')
     expect(init.method).toBe('PATCH')
     expect(init.body).toBeUndefined()
-    expect(init.headers).toBeUndefined()
+    expect(init.headers).not.toHaveProperty('Content-Type')
   })
 
   it('reabrirIdea hace PATCH sin cuerpo', async () => {

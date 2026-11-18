@@ -37,7 +37,7 @@ describe('client', () => {
     const init = fetchFalso.mock.calls[0]?.[1] as RequestInit
     expect(init.method).toBe('POST')
     expect(init.body).toBe('{"titulo":"x"}')
-    expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(init.headers).toMatchObject({ 'Content-Type': 'application/json' })
   })
 
   it('un 204 no tiene cuerpo y resuelve sin error', async () => {
