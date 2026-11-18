@@ -1,6 +1,6 @@
 # AGoals: decisiones de diseño del frontend (rebanadas 8 y 9)
 
-> Fijadas el 7/11/2026; actualizadas el 17/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos; login: backend completo (L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`), falta F1; ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
+> Fijadas el 7/11/2026; actualizadas el 17/11/2026 (hecho hasta 5c, 8.3c y los Pulidos 2 y 3; eventos recurrentes completos; login completo (backend L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`; frontend F1 `2147306`); ver el orden de rebanadas). Complementa a `agoals-brief.md`; si se contradicen, avisar.
 
 ## Stack
 - Vite + React + **TypeScript (strict)**.
@@ -120,11 +120,9 @@ Solo frontend, sin dependencias nuevas. Contrato (sin cambios): `POST` y `PUT /a
 - **Dónde se abre (tareas):** ítem «Recordatorio…» del menú y botón en `TareaDialog`, solo en tareas **abiertas** (reusa `esTareaAbierta`). En la tarjeta «Próximos recordatorios» de Hoy: «Nuevo recordatorio» y «Editar» por fila (la tarjeta muestra solo los 3 siguientes sin enviar: un vencido o el cuarto no se edita desde ahí).
 
 ## Mover el recordatorio al posponer (8.5c; commit `e7aa911`)
-Solo frontend, sin dependencias nuevas ni backend.
-- **`PosponerDialog`** consulta el recordatorio (`useRecordatorioDeTarea`, solo con el selector abierto; los botones esperan mientras carga, «Cancelar» no). Hay algo que mover si existe, tiene `enviado=false` y la tarea tiene fecha; si no, no hay casilla. Si la consulta falla: nota «No se pudo consultar el recordatorio de esta tarea: si tiene uno, no se moverá» y se pospone sin mover.
-- **Casilla «Mover también el recordatorio (cae el …)»**, marcada por defecto, para «Mañana» y «Elegir fecha». La ayuda muestra el instante nuevo de cada destino («Con Mañana: …», «Con la fecha elegida: …») y «Seguirá vencido: el aviso saldrá enseguida.» si aun movido queda en el pasado (se mueve igual: una sola regla). Desmarcada: «El recordatorio se queda donde está.». «Dejar sin fecha» nunca lo mueve: la ayuda y el aviso (`mensajeSinFechaConRecordatorio`) lo dicen.
-- **Cómputo (`lib/fechas.ts`):** `diasEntre` y `moverInstanteDias` (`addDays` sobre un `Date` local: conserva la hora de pared aunque cambie el horario). Un aviso puesto un día antes de la tarea sigue un día antes.
-- **Hook (`useAccionesTarea`):** `ejecutar(tipo, tarea, fecha?, recordatorio?)`. En `'posponer'`: PATCH y luego PUT con los cinco campos (`requestMovido`, en `recordatorioForm.ts`); `ejecutarAccion` ignora un recordatorio ya enviado. Si el PUT falla (404/409/500) no se relanza: la tarea queda pospuesta, el selector se cierra y el aviso lleva el mensaje del servidor (`mensajeRecordatorioNoMovido`). Éxito: `mensajeRecordatorioMovido`. Si se pasó un recordatorio se invalida `['recordatorios']`. En `'sinFecha'` solo cambia el texto del aviso. Un guard `useRef` (`enCurso`) protege a todas las acciones del doble clic.
+- **`PosponerDialog`** consulta el recordatorio (`useRecordatorioDeTarea`); si existe, no fue enviado y la tarea tiene fecha, ofrece «Mover también el recordatorio (cae el …)», marcada por defecto, para «Mañana» y «Elegir fecha», con el instante nuevo de cada destino y «Seguirá vencido…» si queda en el pasado (se mueve igual). Desmarcada: «se queda donde está». «Dejar sin fecha» nunca lo mueve y lo avisa. Si la consulta falla, se pospone sin mover y una nota lo dice.
+- **Cómputo:** `diasEntre` y `moverInstanteDias` (`addDays` local: conserva la hora de pared).
+- **`useAccionesTarea.ejecutar(tipo, tarea, fecha?, recordatorio?)`:** PATCH y luego PUT de cinco campos (`requestMovido`); si el PUT falla, la tarea queda pospuesta y el aviso lleva el mensaje del servidor (sin reintento). Guard `enCurso` contra el doble clic.
 
 ## Calendario mensual (9a; commit `26c36bd`)
 Solo frontend, sin dependencias nuevas ni backend. Grilla propia con date-fns, sin librería. Ruta `/calendario`, todo en `features/calendario/`.
@@ -154,20 +152,16 @@ Solo frontend, sin dependencias ni backend. Carpeta `features/eventos/` (`formul
 - **Foco al cerrar:** `dialog.tsx` lo devuelve; estos diálogos conservan su `preventDefault` y `alCerrarFoco` a mano (`DialogosEvento`).
 
 ## Recordatorios de evento (9d; commit `1da4b2e`)
-Solo frontend, sin dependencias nuevas ni backend. Reusa el `RecordatorioDialog` de 8.5b con el destino `{ tipo: 'evento', evento }`, que lleva el evento GUARDADO (no lo escrito en el formulario).
-- **Una sola entrada:** botón «Recordatorio…» en las acciones de `EventoDialog`, solo en edición (cubre fila, bloque y chips, que abren la edición). Se abre ENCIMA, así que el formulario no se desmonta y lo escrito se conserva. Crear un evento no lo ofrece. La etiqueta es «Recordatorio…» o «Recordatorio: <fecha y hora corta>»: la edición consulta el recordatorio (`useRecordatorioDeEvento`) con un envoltorio, porque el hook no puede llamarse condicionalmente; mientras la consulta carga o falla, el botón sigue habilitado. Tamaño por defecto (40 px; `max-sm:h-11` = 44 px y ancho completo en móvil), nunca `sm`.
-- **Componente compartido:** `ContenidoTarea` y `ContenidoEvento` son envoltorios de ~8 líneas sobre `ContenidoConsultado` (textos en la tabla `TEXTOS`; `ConsultaRecordatorio` en `recordatorioForm.ts` es el tipo común de los dos hooks). El diálogo acepta `alCerrarFoco` (el foco vuelve a `disparadorRecordatorio`). El estado de apertura está en `useAccionesEvento` y el diálogo se monta en `DialogosEvento`. Escape cierra solo el de arriba.
-- **Hora por defecto** (`valorInicialEvento`): con hora, `MINUTOS_AVISO_EVENTO` = 60 minutos antes del inicio (puede caer el día anterior); de días completos, su primer día a las 09:00 (la constante vive solo en `recordatorioForm.ts`). Bajo la descripción, `mensajeEventoEmpieza` («El evento empieza el …» o «El evento es <lapso>»).
-- **Capas:** `eventos/` importa de `agenda/`; ningún archivo de `agenda/` importa de `eventos/` ni de `calendario/` (`RecordatorioDialog` solo usa el tipo `Evento`).
+- Reusa `RecordatorioDialog` (8.5b) con el destino `{ tipo: 'evento', evento }` (el evento GUARDADO). Única entrada: «Recordatorio…» en `EventoDialog`, solo en edición, abierto ENCIMA (lo escrito se conserva); la etiqueta muestra el aviso existente («Recordatorio: <fecha>»). 40 px (44 en móvil).
+- `ContenidoTarea` y `ContenidoEvento` envuelven a `ContenidoConsultado` (`ConsultaRecordatorio` es el tipo común de los dos hooks). Estado en `useAccionesEvento`, montaje en `DialogosEvento`, foco de vuelta a `disparadorRecordatorio`.
+- **Hora por defecto** (`valorInicialEvento`): `MINUTOS_AVISO_EVENTO` = 60 min antes; de días completos, su primer día a las 09:00.
+- **Capas:** `eventos/` importa de `agenda/`; nunca al revés.
 
 ## Mover el recordatorio al mover el evento (9e; commit `d949a6b`)
-Solo frontend, sin dependencias nuevas ni backend. Modelo: 8.5c (`PosponerDialog`).
-- **Cuándo se ofrece:** al guardar un evento en edición cuyo INICIO cambió (se comparan instantes, no textos; si solo cambia el fin, no) y que tiene un recordatorio con `enviado = false`. Con uno ya enviado no hay casilla (se edita a mano desde «Recordatorio…»).
-- **Casilla** «Mover también el recordatorio (cae el <actual>)», marcada por defecto, entre «Fin» y «Recordatorio…». Ayuda: «Quedará el <instante>.» (+ «Seguirá vencido: el aviso saldrá enseguida.» si ya pasó; se mueve igual) o, desmarcada, «El recordatorio se queda donde está.». Si se desmarca, se respeta aunque la casilla se oculte y vuelva a aparecer (D2). Con «Todo el día» el instante se recalcula antes de guardar.
-- **Qué se conserva:** la DISTANCIA al inicio. `instanteMovido(recordatorio, inicioViejo, inicioNuevo)` (`eventos/moverRecordatorio.ts`) = recordatorio + (inicio nuevo − inicio viejo); `null` si ya fue enviado, el instante no cambió o hay datos inválidos. Los segundos se descartan. `inicioIso(valores)` (`formularioEvento.ts`) es la única definición del inicio: lo que muestra la casilla es lo que se manda.
-- **Guardar:** `guardar(request, recordatorio?)` en `useAccionesEvento`: PUT del evento y DESPUÉS PUT del recordatorio con los cinco campos (`requestMovido`, el mismo de 8.5c); si el segundo falla, el evento queda guardado, el diálogo se cierra y el aviso lleva el mensaje del servidor, sin reintento. El guard `enCurso` cubre las dos llamadas (doble clic = un PUT de cada uno). Invalida `['eventos']` siempre y `['recordatorios']` solo si intentó mover. Mensajes en `lib/fechas.ts`: `mensajeEventoGuardadoConRecordatorio` y `mensajeEventoRecordatorioNoMovido`.
-- **Consulta del recordatorio** (la misma de «Recordatorio…»): `Guardar` espera solo si el inicio cambió y la consulta está cargando. Si falla (incluso con datos viejos), se guarda el evento sin mover y el diálogo lo avisa antes con `notaRecordatorioEventoNoConsultado` (D1); nunca se escribe a ciegas.
-- **Recordatorio creado con un inicio sin guardar:** se crea con el inicio GUARDADO; al volver, la casilla muestra el instante coherente con el inicio nuevo.
+- Al guardar un evento cuyo INICIO cambió (instantes, no textos) con un recordatorio no enviado: casilla «Mover también el recordatorio (cae el …)», marcada por defecto, con «Quedará el …» (y «Seguirá vencido…» si ya pasó). Si se desmarca, se respeta (D2).
+- Conserva la DISTANCIA al inicio: `instanteMovido` (`eventos/moverRecordatorio.ts`); `inicioIso(valores)` es la única definición del inicio.
+- `guardar(request, recordatorio?)`: PUT del evento y DESPUÉS PUT del recordatorio (`requestMovido`); fallo parcial sin reintento, con el mensaje en el aviso. Invalida `['eventos']` y, si intentó mover, `['recordatorios']`.
+- `Guardar` espera la consulta solo si cambió el inicio; si falla, guarda sin mover y lo avisa antes (D1).
 
 ## Pulido 2a: aspecto y tema (commit `eed9465`)
 Solo frontend, sin dependencias ni backend. 1358 tests (88 archivos).
@@ -216,12 +210,21 @@ Entran en la v1. Una serie guarda la regla y MATERIALIZA eventos reales desde ho
 - **`guardarSerieDesde`:** guard `enCurso`; éxito → invalida `['eventos']` y `['recordatorios']`, cierra, `mensajeSerieEditada` (persistente con omitidos: el backend NO borra ni mueve el pendiente cuyo nuevo instante ya pasó, «quedó como estaba») y `alGuardar(eventos[0])`; 404 → «ya no existía»; 409 (no alcanzable desde la UI, solo simulado) → `serieId: null`, `avisoYaNoEsDeSerieAlEditar` y el diálogo sigue abierto en «solo este».
 - **Notas:** `diasPrevios` pasó de `useRef` a `useState` (lint `react-hooks/refs`); se asume que la zona de la serie es la del navegador; `EventoDialog.tsx` creció a 651 líneas (si sigue, extraer `useAlcanceEdicion`). Manuales 7–12 OK (datos `ZZ-recfb` borrados); sigue H-41 (40 px en «Guardar todos»).
 
+## Login en el frontend (F1; commit `2147306`)
+Sobre el backend L1a/L1b/L2 (contrato en el brief y `CLAUDE.md`). Sin dependencias ni backend. 1791 tests (109 archivos).
+- **`api/client.ts`:** toda escritura lleva `X-XSRF-TOKEN` leído de `document.cookie` en cada petición; sin cookie, antes `pedirCsrf()` (GET `/api/auth/csrf`, una promesa compartida que se libera al resolverse o fallar). Un 403 en una escritura: `pedirCsrf` y reintento UNA vez (P2). Un 401 fuera de `/api/auth/*` avisa a los oyentes de `alPerderSesion` y lanza el `ApiError` (P3). `api/auth.ts` (login, logout, yo, csrf), `types/usuario.ts`.
+- **`features/sesion/`:** `useSesion` (`['sesion']` → `/yo`; un 401 es `null`, no error; `staleTime` infinito); `RequiereSesion` envuelve al `Layout` y no monta páginas hasta que `/yo` responda (carga → `PantallaCargando`; `null` → `/login?volver=`; red/5xx → «Reintentar», P6); `VigiaSesion` (en `App`, fuera de las rutas) se suscribe a `alPerderSesion` y llama a `cerrarSesionLocal`; `limpiar.ts`: `limpiarDatos` (como `clear()` pero conserva `['sesion']`, P5) y la marca de «salida voluntaria» para que «Salir» no deje `?volver=`; `volver.ts` (`volverSeguro`: ruta interna, sin `//`, `/\` ni `/login`).
+- **`LoginPage` (`/login`, fuera del Layout):** email (`autoFocus`, `autocomplete=username`), contraseña, «Recordarme» marcada por defecto (P1, «30 días»), «Entrar»/«Entrando…»; error del servidor con `ErrorEnLinea`. 401 → vacía la contraseña y la enfoca (P4); 429 conserva todo y el foco vuelve a «Entrar». Al entrar: `limpiarDatos`, `['sesion']` y `volver` validado.
+- **«Salir»** en la barra lateral (nombre o email, `max-md:h-11`): logout y, salga bien o mal, limpia y va a `/login`. En móvil es una fila bajo la navegación (revisar en la fase móvil).
+- **Tests:** `src/test/setup.ts` fija una cookie `XSRF-TOKEN` de prueba (`test/csrf.ts`) porque 7 tests de `api/` usan el cliente real; `test/sesion.ts` (`conSesion`) siembra la sesión en `App.test`. Manuales con Playwright OK (`.playwright-mcp/informe-f1.md`).
+- **Pendiente conocido:** un 401 tardío de una petición anterior al login podría cerrar la sesión nueva (ventana de segundos).
+
 ## Orden de rebanadas
 - Hechas (con su commit): 8.0 `07c1c25`; 8.1 `e9ba44d`; 8.2a `58d3df1`; 8.2b `fadac2b`; 8.3 `f2d0052`; 8.2c `2a78695`; refactor previo al cofre `1e3256f`; 8.3b Cofre `a33fcce`; 8.2d `ceab9d9`; 5d (backend) `dc6c3c1`; 8.2e `be0913b`; 8.2f `f195a8b`; 8.2g `c6afad8`; Pulido 1 (P1a `1642c9a`, P1b `4ff8cc8`); 8.4a `a388d07`; 8.4a2 `0655bf0`; 5e (backend) `f17aa98` (semántica en el brief); 5f (backend) `43ecec5`; 8.4a3 `9fd2703`; 8.4b `0417230`; 8.4c `3548350`; 8.4d `8c447ca`; 8.5a `76719fd`; 8.5b `2780858`; 8.5c `e7aa911`; 9a `26c36bd`; 9b `7f10dce`; 9c `ffa1562`; 9d `1da4b2e`; 9e `d949a6b` (con ella queda completa la fase 9); 5c (backend) + 8.3c `c3ff1dc` y `7a3dd9e`.
 - Pulido 2: 2a `eed9465`; 2b `fea13c6`, `6666020`; 2c `c56d5ad`, `f9ec6bc`.
 - Pulido 3 Revisión de usabilidad: hecha (p2d `69d5fcf`, p3a `646228b`, p3b `0bd4cf1`, p3c `df3310c`). 1534 tests de frontend (97 archivos).
 - Eventos recurrentes (completos): backend `5417722` (845 tests de backend); frontend A `f5a79cb` y B `3e5749a` (1704 tests de frontend, 102 archivos).
-- Login y multiusuario (17/11; detalle en el brief y `CLAUDE.md`): backend hecho (L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`: recordarme y freno 429); sigue F1 ← (frontend: `/login` con «Recordarme», guard, «Salir», CSRF con `GET /api/auth/csrf` y 401/429 en `api/client.ts`). Luego despliegue, móvil y PWA.
+- Login y multiusuario (17/11; detalle en el brief y `CLAUDE.md`): completo: backend L1a `6a2ec6e`, L1b `56fb197`, L2 `57c33da`; frontend F1 `2147306` (1791 tests, 109 archivos). Sigue el despliegue ← (conversación de diseño), luego móvil y PWA.
 - Opcional: 9f Vista de día (ver «Pulido 2»).
 
 Sesiones con Sonnet; `/clear` entre rebanadas. Escritorio primero, móvil después (layout responsive desde el inicio, PWA más adelante).
@@ -267,5 +270,5 @@ Boceto de referencia: canvas "AGoals — Pantalla Hoy (claro y oscuro)" en claud
   - Mostrar el proyecto/objetivo en las filas de Hoy (8.4b lo dejó fuera); filtro de vínculo del Cofre con búsqueda si la lista de proyectos crece.
   - `useCofre` y `useRecomendacion` siguen con la consulta directa de `['proyectos']`/`['objetivos']` (2c los dejó fuera a propósito); pasarlos a `useListasVinculo` si se toca alguno.
   - Foco a `body` cuando la acción elimina el control usado: el Pulido 3 lo cubrió en Hoy, Cofre, Ideas, vínculos y recordatorios; revisar el resto al tocarlo. El retorno desde «⋯» depende de que el diálogo se monte en el mismo ciclo que el `onSelect`.
-  - Hallazgos de usabilidad pendientes, móvil y «Entendido todos»: ver Pulido 3.
+  - Hallazgos de usabilidad pendientes, móvil y «Entendido todos»: ver Pulido 3. En móvil, además, la fila «usuario · Salir» de F1.
 - **Descartado (12/11):** selector de hora propio (basta el input nativo); % de progreso en objetivos (exige un endpoint); hora del aviso parametrizable; crear un evento con su recordatorio en un paso (dos llamadas no atómicas); campana de recordatorio en el calendario; el literal «N» del interruptor de 8.3c (corregido luego en p3b); la tarjeta «Próximos» limitada a 3 (intencional).
